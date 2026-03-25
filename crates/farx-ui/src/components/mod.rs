@@ -11,3 +11,5 @@ pub mod info_panel;
 pub mod search;
 pub mod markdown;
 pub mod tree_panel;
+pub mod syntax;
+pub mod feedback;

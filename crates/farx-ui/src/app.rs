@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crossterm::event::KeyEvent;
 use ratatui::layout::{Constraint, Direction, Layout};
@@ -11,23 +11,20 @@ use farx_core::SortField;
 use crate::components::ai_bar::{render_ai_bar, AiBarAction, AiBarState};
 use crate::components::dialog::{render_dialog, DialogResult, DialogState};
 use crate::components::editor::{render_editor, EditorAction, EditorState};
+use crate::components::feedback::{render_feedback, ConfirmAction, FeedbackResult, FeedbackState};
 use crate::components::help::{render_help, HelpState};
 use crate::components::info_panel::{render_info_panel, InfoPanelData};
 use crate::components::menu::{render_menu, MenuAction, MenuState};
 use crate::components::search::{render_search, SearchAction, SearchState};
 use crate::components::tree_panel::render_tree_panel;
 use crate::components::viewer::{render_viewer, ViewerAction, ViewerState};
-use crate::components::{command_line, fn_bar, panel};
+use crate::components::{command_line, fn_bar};
 use crate::components::command_line::CommandLineState;
 use crate::theme::Theme;
 
-/// Tracks which dialog-triggering action opened the current dialog,
-/// so we know what file operation to perform when the user confirms.
+/// Pending operation for input dialogs (MkDir, Rename, CreateFile).
 #[derive(Debug, Clone)]
 enum PendingOperation {
-    Copy { sources: Vec<PathBuf>, dest_dir: PathBuf },
-    Move { sources: Vec<PathBuf>, dest_dir: PathBuf },
-    Delete { targets: Vec<PathBuf> },
     MkDir { parent: PathBuf },
     Rename { original: PathBuf },
     CreateFile { parent: PathBuf },
@@ -77,10 +74,20 @@ pub struct App {
     pub show_info_panel: bool,
     /// Command output to display.
     pub command_output: Option<String>,
+    /// Inline feedback system (replaces modal dialogs for messages/confirms).
+    pub feedback: FeedbackState,
+    /// Tick counter for debounce timing.
+    tick_count: u64,
+    /// Pending typeahead suggestion response.
+    suggestion_rx: Option<tokio::sync::oneshot::Receiver<Option<String>>>,
+    /// The input text the pending suggestion was requested for.
+    suggestion_request_input: String,
     /// Tree view state for the left panel.
     pub left_tree: TreeState,
     /// Tree view state for the right panel.
     pub right_tree: TreeState,
+    /// If set, a newer version is available for update.
+    pub update_available: Option<String>,
 }
 
 impl App {
@@ -132,6 +139,10 @@ impl App {
             search: None,
             show_info_panel: false,
             command_output: None,
+            feedback: FeedbackState::new(),
+            tick_count: 0,
+            suggestion_rx: None,
+            suggestion_request_input: String::new(),
             left_tree: {
                 let mut t = TreeState::new(cwd2);
                 t.show_hidden = show_hidden;
@@ -142,6 +153,7 @@ impl App {
                 t.show_hidden = show_hidden;
                 t
             },
+            update_available: None,
         })
     }
 
@@ -176,6 +188,22 @@ impl App {
         }
     }
 
+    /// Get the active tree (immutable).
+    fn active_tree_ref(&self) -> &TreeState {
+        match self.active_panel {
+            PanelSide::Left => &self.left_tree,
+            PanelSide::Right => &self.right_tree,
+        }
+    }
+
+    /// Get the inactive tree's root directory.
+    fn inactive_tree_root(&self) -> PathBuf {
+        match self.active_panel {
+            PanelSide::Left => self.right_tree.root.clone(),
+            PanelSide::Right => self.left_tree.root.clone(),
+        }
+    }
+
     /// Get a reference to the currently active panel.
     pub fn active_panel_ref(&self) -> &PanelState {
         match self.active_panel {
@@ -192,44 +220,34 @@ impl App {
         }
     }
 
-    /// Collect the paths of selected files (or the current file if nothing is selected).
-    /// Skips the ".." entry.
+    /// Collect paths from tree selection (or current node).
     fn collect_selected_paths(&self) -> Vec<PathBuf> {
-        let panel = self.active_panel_ref();
-        let selected = panel.selected_entries();
-        if selected.is_empty() {
-            // Use current entry if nothing is selected
-            if let Some(entry) = panel.current_entry() {
-                if entry.name != ".." {
-                    return vec![entry.path.clone()];
-                }
+        let tree = self.active_tree_ref();
+        if tree.selected.is_empty() {
+            if let Some(node) = tree.current_node() {
+                return vec![node.entry.path.clone()];
             }
             Vec::new()
         } else {
-            selected
-                .into_iter()
-                .filter(|e| e.name != "..")
-                .map(|e| e.path.clone())
+            tree.selected.iter()
+                .filter_map(|&i| tree.visible_nodes.get(i))
+                .map(|n| n.entry.path.clone())
                 .collect()
         }
     }
 
-    /// Collect display names for the selected/current files.
+    /// Collect display names from tree selection.
     fn collect_selected_names(&self) -> Vec<String> {
-        let panel = self.active_panel_ref();
-        let selected = panel.selected_entries();
-        if selected.is_empty() {
-            if let Some(entry) = panel.current_entry() {
-                if entry.name != ".." {
-                    return vec![entry.name.clone()];
-                }
+        let tree = self.active_tree_ref();
+        if tree.selected.is_empty() {
+            if let Some(node) = tree.current_node() {
+                return vec![node.entry.name.clone()];
             }
             Vec::new()
         } else {
-            selected
-                .into_iter()
-                .filter(|e| e.name != "..")
-                .map(|e| e.name.clone())
+            tree.selected.iter()
+                .filter_map(|&i| tree.visible_nodes.get(i))
+                .map(|n| n.entry.name.clone())
                 .collect()
         }
     }
@@ -257,6 +275,20 @@ impl App {
                 ViewerAction::None => {}
             }
             return Action::Noop;
+        }
+
+        // Inline feedback (confirmations, output panels)
+        match self.feedback.handle_key(key) {
+            FeedbackResult::Confirmed(_) => {
+                if let Some(action) = self.feedback.take_confirm() {
+                    self.execute_confirm(action);
+                }
+                return Action::Noop;
+            }
+            FeedbackResult::Rejected | FeedbackResult::Consumed => {
+                return Action::Noop;
+            }
+            FeedbackResult::NotHandled => {}
         }
 
         // Help screen
@@ -323,6 +355,12 @@ impl App {
         // If command line has input, intercept some keys for command line editing
         if !self.command_line.input.is_empty() {
             use crossterm::event::{KeyCode, KeyModifiers};
+            // Tab: accept suggestion if available, otherwise switch panel
+            if key.code == KeyCode::Tab && self.command_line.suggestion.is_some() {
+                self.command_line.accept_suggestion();
+                self.command_line.last_typed_tick = self.tick_count;
+                return Action::Noop;
+            }
             match (key.code, key.modifiers) {
                 (KeyCode::Up, KeyModifiers::NONE) => return Action::CommandLineHistoryUp,
                 (KeyCode::Down, KeyModifiers::NONE) => return Action::CommandLineHistoryDown,
@@ -419,8 +457,91 @@ impl App {
         });
     }
 
+    /// Called when the background update check finds a newer version.
+    pub fn set_update_available(&mut self, version: String) {
+        self.feedback.info(
+            format!("Update available: v{version} — run `farx --update` to install"),
+        );
+        self.update_available = Some(version);
+    }
+
     /// Check for completed AI responses (called from tick).
-    pub fn check_ai_response(&mut self) {
+    pub fn tick(&mut self) {
+        self.tick_count += 1;
+        self.feedback.tick();
+        self.check_ai_response();
+        self.check_suggestion_response();
+
+        // Debounced typeahead: request suggestion after 3 ticks (~750ms) of no typing
+        if !self.command_line.input.is_empty()
+            && !self.command_line.suggestion_pending
+            && self.command_line.suggestion.is_none()
+            && self.command_line.last_typed_tick > 0
+            && self.tick_count - self.command_line.last_typed_tick >= 3
+        {
+            self.request_suggestion();
+        }
+    }
+
+    /// Request a typeahead suggestion from the LLM.
+    fn request_suggestion(&mut self) {
+        let input = self.command_line.input.clone();
+        if input.len() < 2 {
+            return; // Don't suggest for very short input
+        }
+        self.command_line.suggestion_pending = true;
+        self.command_line.suggestion_for = input.clone();
+        self.suggestion_request_input = input.clone();
+
+        let dir = self.active_tree_ref().root.clone();
+        let entries: Vec<(String, bool, u64)> = self.active_tree_ref()
+            .visible_nodes.iter()
+            .take(20) // only send a few for speed
+            .map(|n| (n.entry.name.clone(), n.entry.is_dir, n.entry.size))
+            .collect();
+        let files_context = farx_ai::AiAgent::build_files_context(&entries);
+
+        let agent = farx_ai::AiAgent::new(
+            &self.config.ai.provider,
+            self.ai_agent.base_url().to_string(),
+            self.ai_agent.model().to_string(),
+            self.ai_agent.max_tokens(),
+            &self.config.ai.api_key_env,
+        );
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.suggestion_rx = Some(rx);
+
+        tokio::spawn(async move {
+            let result = agent.suggest(&input, &dir, &files_context).await;
+            let _ = tx.send(result.unwrap_or(None));
+        });
+    }
+
+    /// Check for completed suggestion responses.
+    fn check_suggestion_response(&mut self) {
+        if let Some(ref mut rx) = self.suggestion_rx {
+            match rx.try_recv() {
+                Ok(suggestion) => {
+                    // Only apply if input hasn't changed since request
+                    if self.command_line.input == self.suggestion_request_input {
+                        self.command_line.suggestion = suggestion;
+                    }
+                    self.command_line.suggestion_pending = false;
+                    self.suggestion_rx = None;
+                }
+                Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
+                    // Still waiting
+                }
+                Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                    self.command_line.suggestion_pending = false;
+                    self.suggestion_rx = None;
+                }
+            }
+        }
+    }
+
+    fn check_ai_response(&mut self) {
         if let Some(ref mut rx) = self.ai_pending_response {
             match rx.try_recv() {
                 Ok(response) => {
@@ -482,15 +603,22 @@ impl App {
                         format!("{}\n{}", stdout, stderr)
                     };
                     let result = result.trim().to_string();
-                    if !result.is_empty() {
-                        self.dialog = Some(DialogState::new_message("Command Output", result));
+                    if result.lines().count() <= 1 {
+                        // Short output — show as inline info
+                        if !result.is_empty() {
+                            self.feedback.info(result);
+                        }
+                    } else {
+                        // Multi-line — show as scrollable output panel
+                        self.feedback.show_output("Output", result);
                     }
                 }
                 Err(e) => {
-                    self.show_error("Command Error", &format!("{}", e));
+                    self.feedback.error(format!("Command: {}", e));
                 }
             }
-            self.refresh_both_panels();
+            self.left_tree.rebuild();
+            self.right_tree.rebuild();
         } else {
             // Natural language — route to AI bar
             self.ai_bar = Some(AiBarState::new());
@@ -578,36 +706,9 @@ impl App {
         }
     }
 
-    /// Execute the file operation associated with a confirmed dialog.
+    /// Execute the file operation associated with a confirmed input dialog.
     fn execute_pending_operation(&mut self, op: PendingOperation, input_value: Option<String>) {
         let result = match op {
-            PendingOperation::Copy { sources, dest_dir } => {
-                let mut last_err = None;
-                for source in &sources {
-                    if let Err(e) = farx_fs::copy_entry(source, &dest_dir) {
-                        last_err = Some(e);
-                    }
-                }
-                last_err.map(Err).unwrap_or(Ok(()))
-            }
-            PendingOperation::Move { sources, dest_dir } => {
-                let mut last_err = None;
-                for source in &sources {
-                    if let Err(e) = farx_fs::move_entry(source, &dest_dir) {
-                        last_err = Some(e);
-                    }
-                }
-                last_err.map(Err).unwrap_or(Ok(()))
-            }
-            PendingOperation::Delete { targets } => {
-                let mut last_err = None;
-                for target in &targets {
-                    if let Err(e) = farx_fs::delete_entry(target, false) {
-                        last_err = Some(e);
-                    }
-                }
-                last_err.map(Err).unwrap_or(Ok(()))
-            }
             PendingOperation::MkDir { parent } => {
                 if let Some(name) = input_value {
                     let name = name.trim();
@@ -661,19 +762,73 @@ impl App {
             }
         };
 
-        // Refresh panels after any file operation
-        self.refresh_both_panels();
+        // Refresh trees after file operation
+        self.left_tree.rebuild();
+        self.right_tree.rebuild();
 
-        // Show error dialog if the operation failed
-        if let Err(e) = result {
-            self.show_error("Error", &format!("{e}"));
+        match result {
+            Ok(()) => self.feedback.success("Done"),
+            Err(e) => self.feedback.error(format!("{e}")),
         }
     }
 
     /// Show an error dialog.
     fn show_error(&mut self, title: &str, message: &str) {
-        self.dialog = Some(DialogState::new_error(title, message));
-        self.pending_op = None;
+        self.feedback.error(format!("{}: {}", title, message));
+    }
+
+    /// Execute a confirmed file operation.
+    fn execute_confirm(&mut self, action: ConfirmAction) {
+        match action {
+            ConfirmAction::Copy { sources, dest } => {
+                let mut ok = 0;
+                let mut fail = 0;
+                for source in &sources {
+                    match farx_fs::copy_entry(source, &dest) {
+                        Ok(()) => ok += 1,
+                        Err(_) => fail += 1,
+                    }
+                }
+                if fail == 0 {
+                    self.feedback.success(format!("Copied {} file(s)", ok));
+                } else {
+                    self.feedback.warning(format!("Copied {}, failed {}", ok, fail));
+                }
+            }
+            ConfirmAction::Move { sources, dest } => {
+                let mut ok = 0;
+                let mut fail = 0;
+                for source in &sources {
+                    match farx_fs::move_entry(source, &dest) {
+                        Ok(()) => ok += 1,
+                        Err(_) => fail += 1,
+                    }
+                }
+                if fail == 0 {
+                    self.feedback.success(format!("Moved {} file(s)", ok));
+                } else {
+                    self.feedback.warning(format!("Moved {}, failed {}", ok, fail));
+                }
+            }
+            ConfirmAction::Delete { targets } => {
+                let mut ok = 0;
+                let mut fail = 0;
+                for target in &targets {
+                    match farx_fs::delete_entry(target, false) {
+                        Ok(()) => ok += 1,
+                        Err(_) => fail += 1,
+                    }
+                }
+                if fail == 0 {
+                    self.feedback.success(format!("Deleted {} file(s)", ok));
+                } else {
+                    self.feedback.warning(format!("Deleted {}, failed {}", ok, fail));
+                }
+            }
+        }
+        // Refresh both trees
+        self.left_tree.rebuild();
+        self.right_tree.rebuild();
     }
 
     /// Execute an action, updating application state accordingly.
@@ -700,24 +855,32 @@ impl App {
             }
             Action::EnterDirectory | Action::CommandLineEnterOrDir => {
                 if matches!(action, Action::CommandLineEnterOrDir) && !self.command_line.input.is_empty() {
-                    // Command line has input — execute it
                     self.smart_execute_command();
                     return;
                 }
-                // Enter on tree node: toggle expand/collapse dirs, open files
-                let tree = self.active_tree();
-                if let Some(node) = tree.current_node() {
-                    if node.entry.is_dir {
-                        if node.expanded {
-                            tree.collapse();
+                // Read what we need from the tree node first
+                let node_info = self.active_tree_ref().current_node().map(|n| {
+                    (n.entry.is_dir, n.expanded, n.entry.path.clone(), n.entry.name.clone())
+                });
+                if let Some((is_dir, expanded, path, name)) = node_info {
+                    if is_dir {
+                        if expanded {
+                            self.active_tree().collapse();
                         } else {
-                            tree.expand();
+                            self.active_tree().expand();
                         }
                     } else {
-                        let path = node.entry.path.clone();
-                        match ViewerState::open(&path) {
-                            Ok(vs) => { self.viewer = Some(vs); }
-                            Err(e) => { self.show_error("View", &format!("{}", e)); }
+                        // Smart open: text in editor, binary with system app
+                        if is_text_file(&path) {
+                            match EditorState::open(&path) {
+                                Ok(es) => { self.editor = Some(es); }
+                                Err(e) => { self.show_error("Edit", &format!("{}", e)); }
+                            }
+                        } else {
+                            match open::that(&path) {
+                                Ok(()) => self.feedback.info(format!("Opened: {}", name)),
+                                Err(e) => self.feedback.error(format!("Open: {}", e)),
+                            }
                         }
                     }
                 }
@@ -819,52 +982,38 @@ impl App {
             // ── File operation dialogs ───────────────────────────────────
             Action::CopyDialog => {
                 let sources = self.collect_selected_paths();
+                if sources.is_empty() { return; }
                 let names = self.collect_selected_names();
-                if sources.is_empty() {
-                    return;
-                }
-                let dest_dir = self.inactive_panel().current_dir.clone();
-                let count = sources.len();
-                let message = format!(
-                    "Copy {} file(s) to {}?",
-                    count,
-                    dest_dir.display()
+                let dest = self.inactive_tree_root();
+                let detail = format!("{} → {}", names.join(", "), dest.display());
+                self.feedback.ask_confirm(
+                    "Copy?",
+                    detail,
+                    ConfirmAction::Copy { sources, dest },
                 );
-                self.pending_op = Some(PendingOperation::Copy {
-                    sources,
-                    dest_dir,
-                });
-                self.dialog = Some(DialogState::new_confirm("Copy", message, names));
             }
             Action::MoveDialog => {
                 let sources = self.collect_selected_paths();
+                if sources.is_empty() { return; }
                 let names = self.collect_selected_names();
-                if sources.is_empty() {
-                    return;
-                }
-                let dest_dir = self.inactive_panel().current_dir.clone();
-                let count = sources.len();
-                let message = format!(
-                    "Move {} file(s) to {}?",
-                    count,
-                    dest_dir.display()
+                let dest = self.inactive_tree_root();
+                let detail = format!("{} → {}", names.join(", "), dest.display());
+                self.feedback.ask_confirm(
+                    "Move?",
+                    detail,
+                    ConfirmAction::Move { sources, dest },
                 );
-                self.pending_op = Some(PendingOperation::Move {
-                    sources,
-                    dest_dir,
-                });
-                self.dialog = Some(DialogState::new_confirm("Move", message, names));
             }
             Action::DeleteDialog => {
                 let targets = self.collect_selected_paths();
+                if targets.is_empty() { return; }
                 let names = self.collect_selected_names();
-                if targets.is_empty() {
-                    return;
-                }
-                let count = targets.len();
-                let message = format!("Delete {} file(s)?", count);
-                self.pending_op = Some(PendingOperation::Delete { targets });
-                self.dialog = Some(DialogState::new_confirm("Delete", message, names));
+                let detail = names.join(", ");
+                self.feedback.ask_confirm(
+                    "Delete?",
+                    detail,
+                    ConfirmAction::Delete { targets },
+                );
             }
             Action::MkDirDialog => {
                 let parent = self.active_panel_ref().current_dir.clone();
@@ -907,8 +1056,10 @@ impl App {
             }
             Action::CommandLineInput(ch) => {
                 self.command_line.input_char(ch);
+                self.command_line.last_typed_tick = self.tick_count;
             }
             Action::CommandLineBackspace => {
+                self.command_line.last_typed_tick = self.tick_count;
                 self.command_line.backspace();
             }
             // CommandLineEnterOrDir is handled in the tree block above
@@ -1008,25 +1159,27 @@ impl App {
             );
         }
 
-        // Render command line
-        let active_dir = match self.active_panel {
-            PanelSide::Left => &self.left_panel.current_dir,
-            PanelSide::Right => &self.right_panel.current_dir,
-        };
-        command_line::render_command_line(
-            frame,
-            main_chunks[1],
-            &self.command_line,
-            active_dir,
-            &self.theme,
-        );
+        // Render command line / feedback area
+        // Feedback (messages, confirmations) replaces the command line when active
+        if self.feedback.has_content() {
+            render_feedback(frame, main_chunks[1], &self.feedback);
+        } else {
+            let active_dir = self.active_tree_ref().root.clone();
+            command_line::render_command_line(
+                frame,
+                main_chunks[1],
+                &self.command_line,
+                &active_dir,
+                &self.theme,
+            );
+        }
 
         // Render function key bar
         if self.config.ui.show_fn_bar {
             fn_bar::render_fn_bar(frame, main_chunks[2], &self.theme);
         }
 
-        // Render overlays on top: menu > search > AI bar > dialog
+        // Overlays: menu > search > AI bar > dialog (only for text input)
         if let Some(ref menu) = self.menu {
             render_menu(frame, menu, &self.theme);
         }
@@ -1039,8 +1192,94 @@ impl App {
             render_ai_bar(frame, ai_bar, &self.theme);
         }
 
+        // Dialog only for text input (MkDir, Rename, CreateFile)
         if let Some(ref dialog) = self.dialog {
             render_dialog(frame, dialog, &self.theme);
+        }
+
+        // Scrollable output panel (from feedback) renders on top of panels
+        if self.feedback.output_visible {
+            let output_area = main_chunks[0]; // render over the panel area
+            render_feedback(frame, output_area, &self.feedback);
+        }
+    }
+}
+
+/// Determine if a file should be opened in the built-in editor (text)
+/// or with the system default application (binary/media).
+fn is_text_file(path: &Path) -> bool {
+    let ext = path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase());
+
+    match ext.as_deref() {
+        // Definitely text — open in editor
+        Some(
+            "rs" | "py" | "js" | "ts" | "jsx" | "tsx" | "go" | "c" | "h" | "cpp" | "cc"
+            | "hpp" | "java" | "kt" | "swift" | "rb" | "pl" | "pm" | "lua" | "php"
+            | "sh" | "bash" | "zsh" | "fish" | "ps1" | "bat" | "cmd"
+            | "html" | "htm" | "css" | "scss" | "less" | "sass"
+            | "xml" | "svg" | "json" | "jsonc" | "yaml" | "yml" | "toml" | "ini" | "cfg"
+            | "conf" | "env" | "properties"
+            | "md" | "markdown" | "txt" | "text" | "log" | "csv" | "tsv"
+            | "sql" | "graphql" | "gql"
+            | "dockerfile" | "makefile" | "cmake"
+            | "gitignore" | "gitattributes" | "editorconfig"
+            | "lock" | "sum"  // Cargo.lock, go.sum etc
+            | "r" | "R" | "jl" | "ex" | "exs" | "erl" | "hrl" | "elm"
+            | "zig" | "nim" | "v" | "d" | "pas" | "pp"
+            | "tf" | "hcl" | "nix" | "dhall"
+            | "proto" | "thrift" | "avsc"
+            | "vue" | "svelte" | "astro"
+        ) => true,
+
+        // Definitely binary — open with system app
+        Some(
+            "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods" | "odp"
+            | "png" | "jpg" | "jpeg" | "gif" | "bmp" | "ico" | "tiff" | "tif" | "webp"
+            | "heic" | "heif" | "raw" | "cr2" | "nef" | "svg"  // svg as image
+            | "mp3" | "wav" | "flac" | "aac" | "ogg" | "wma" | "m4a"
+            | "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v"
+            | "zip" | "tar" | "gz" | "bz2" | "xz" | "7z" | "rar" | "zst" | "lz"
+            | "dmg" | "iso" | "img" | "pkg" | "deb" | "rpm" | "msi" | "exe" | "app"
+            | "so" | "dylib" | "dll" | "a" | "lib" | "o" | "obj"
+            | "class" | "jar" | "war" | "pyc" | "pyo" | "wasm"
+            | "ttf" | "otf" | "woff" | "woff2" | "eot"
+            | "db" | "sqlite" | "sqlite3"
+            | "psd" | "ai" | "sketch" | "fig" | "xd"
+        ) => false,
+
+        // No extension — try to detect by reading first bytes
+        None => {
+            // Check if the filename itself is a known text file
+            let name = path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+            matches!(name.to_lowercase().as_str(),
+                "makefile" | "dockerfile" | "vagrantfile" | "gemfile" | "rakefile"
+                | "procfile" | "brewfile" | "justfile" | "taskfile"
+                | ".gitignore" | ".gitattributes" | ".editorconfig" | ".env"
+                | ".bashrc" | ".zshrc" | ".profile" | ".vimrc"
+                | "license" | "readme" | "changelog" | "authors" | "todo"
+            ) || {
+                // Heuristic: try reading first 512 bytes, check for null bytes
+                std::fs::read(path)
+                    .map(|bytes| {
+                        let check = &bytes[..bytes.len().min(512)];
+                        !check.contains(&0) // no null bytes = likely text
+                    })
+                    .unwrap_or(false)
+            }
+        }
+
+        // Unknown extension — try binary detection
+        Some(_) => {
+            std::fs::read(path)
+                .map(|bytes| {
+                    let check = &bytes[..bytes.len().min(512)];
+                    !check.contains(&0)
+                })
+                .unwrap_or(false)
         }
     }
 }

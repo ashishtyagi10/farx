@@ -22,6 +22,14 @@ pub struct CommandLineState {
     history_index: Option<usize>,
     /// Saved input before history browsing started.
     saved_input: String,
+    /// LLM typeahead suggestion (ghost text shown after cursor).
+    pub suggestion: Option<String>,
+    /// Snapshot of input when suggestion was requested (to discard stale ones).
+    pub suggestion_for: String,
+    /// Whether a suggestion request is in-flight.
+    pub suggestion_pending: bool,
+    /// Tick counter for debounce (request after N ticks of no typing).
+    pub last_typed_tick: u64,
 }
 
 impl CommandLineState {
@@ -34,6 +42,10 @@ impl CommandLineState {
             history: Vec::new(),
             history_index: None,
             saved_input: String::new(),
+            suggestion: None,
+            suggestion_for: String::new(),
+            suggestion_pending: false,
+            last_typed_tick: 0,
         }
     }
 
@@ -41,6 +53,7 @@ impl CommandLineState {
     pub fn input_char(&mut self, ch: char) {
         self.input.insert(self.cursor_pos, ch);
         self.cursor_pos += ch.len_utf8();
+        self.invalidate_suggestion();
     }
 
     /// Delete the character before the cursor.
@@ -53,6 +66,7 @@ impl CommandLineState {
                 .unwrap_or(0);
             self.input.remove(prev);
             self.cursor_pos = prev;
+            self.invalidate_suggestion();
         }
     }
 
@@ -60,6 +74,27 @@ impl CommandLineState {
     pub fn clear(&mut self) {
         self.input.clear();
         self.cursor_pos = 0;
+        self.suggestion = None;
+        self.suggestion_pending = false;
+    }
+
+    /// Accept the current suggestion (Tab key).
+    pub fn accept_suggestion(&mut self) -> bool {
+        if let Some(suggestion) = self.suggestion.take() {
+            self.input.push_str(&suggestion);
+            self.cursor_pos = self.input.len();
+            self.suggestion_pending = false;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Mark suggestion as stale after typing.
+    fn invalidate_suggestion(&mut self) {
+        self.suggestion = None;
+        self.suggestion_pending = false;
+        self.last_typed_tick = 0; // will be set by tick()
     }
 
     /// Take the current input, clearing the state, and return it.
@@ -229,21 +264,57 @@ pub fn render_command_line(
     let prompt = "> ";
     let input_width = inner.width.saturating_sub(2) as usize; // 2 for "> "
 
-    let line = Line::from(vec![
-        Span::styled(prompt, prompt_style),
-        Span::styled(
-            format!("{:<width$}", state.input, width = input_width),
-            input_style,
-        ),
-    ]);
+    // Ghost text (suggestion) shown after the input in dim color
+    let ghost = state.suggestion.as_deref().unwrap_or("");
+    let ghost_style = Style::default()
+        .fg(Color::Indexed(240))
+        .bg(if has_input { Color::Indexed(235) } else { Color::Black });
 
-    frame.render_widget(Paragraph::new(line), inner);
+    let combined = format!("{}{}", state.input, ghost);
+    let display = if combined.len() >= input_width {
+        combined[..input_width].to_string()
+    } else {
+        format!("{:<width$}", combined, width = input_width)
+    };
+
+    // Split display into input part and ghost part
+    let input_len = state.input.len().min(input_width);
+    let mut spans = vec![
+        Span::styled(prompt, prompt_style),
+        Span::styled(display[..input_len].to_string(), input_style),
+    ];
+    if input_len < display.len() {
+        spans.push(Span::styled(display[input_len..].to_string(), ghost_style));
+    }
+
+    // Add Tab hint if suggestion is available
+    if state.suggestion.is_some() {
+        // Show on the title_bottom or as a subtle indicator
+    }
+
+    frame.render_widget(Paragraph::new(Line::from(spans)), inner);
 
     // Show cursor
     if has_input {
         let cursor_x = inner.x + 2 + state.cursor_pos as u16;
         if cursor_x < inner.x + inner.width {
             frame.set_cursor_position((cursor_x, inner.y));
+        }
+    }
+
+    // Show Tab hint when suggestion is available
+    if state.suggestion.is_some() && has_input {
+        let hint_text = " Tab↹ ";
+        let hint_x = inner.x + 2 + state.input.len() as u16 + ghost.len() as u16 + 1;
+        if hint_x + hint_text.len() as u16 <= inner.x + inner.width {
+            let hint_area = Rect::new(hint_x, inner.y, hint_text.len() as u16, 1);
+            frame.render_widget(
+                Paragraph::new(Span::styled(
+                    hint_text,
+                    Style::default().fg(Color::Rgb(220, 170, 60)).bg(Color::Indexed(236)),
+                )),
+                hint_area,
+            );
         }
     }
 }

@@ -18,3 +18,5 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 crossterm = { workspace = true }
 ratatui = { workspace = true }
+self_update = { workspace = true }
+semver = { workspace = true }

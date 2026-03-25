@@ -1,12 +1,12 @@
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use crate::theme::Theme;
 
-/// The function-key labels shown at the bottom of the screen, in classic FAR
-/// Manager order.
+/// The function-key labels shown at the bottom of the screen.
 const FN_ITEMS: &[(u8, &str)] = &[
     (1, "Help"),
     (2, "Menu"),
@@ -20,46 +20,44 @@ const FN_ITEMS: &[(u8, &str)] = &[
     (10, "Quit"),
 ];
 
-/// Render the FAR Manager function key bar as a single line.
-///
-/// Each item renders the key number in the `fn_bar_key` style (black on cyan)
-/// and the label in `fn_bar_label` style (cyan on black).
+/// Render the function key bar.
+/// Format: " F1 Help  F2 Menu  F3 View ..." with key highlighted and label in normal style.
 pub fn render_fn_bar(frame: &mut Frame, area: Rect, theme: &Theme) {
     let total_width = area.width as usize;
     let item_count = FN_ITEMS.len();
-    // Each slot gets an equal share of the width
     let slot_width = if item_count > 0 {
         total_width / item_count
     } else {
         0
     };
 
-    let mut spans: Vec<Span<'_>> = Vec::with_capacity(item_count * 2);
+    let mut spans: Vec<Span<'_>> = Vec::with_capacity(item_count * 3);
 
     for (i, &(num, label)) in FN_ITEMS.iter().enumerate() {
-        let num_str = format!("{num}");
-        let num_len = num_str.len();
+        let key_text = format!(" F{} ", num);
+        let label_text = format!("{} ", label);
 
-        // Determine label width: fill the slot minus the number width
-        let label_width = if i < item_count - 1 {
-            slot_width.saturating_sub(num_len)
+        let this_slot = if i < item_count - 1 {
+            slot_width
         } else {
-            // Last item gets the remaining width
-            total_width.saturating_sub(slot_width * (item_count - 1) + num_len)
+            total_width.saturating_sub(slot_width * (item_count - 1))
         };
 
-        // Pad or truncate the label to fill its slot
-        let padded_label = if label.len() >= label_width {
-            label[..label_width].to_string()
-        } else {
-            format!("{label}{}", " ".repeat(label_width - label.len()))
-        };
+        // Key + label both highlighted
+        spans.push(Span::styled(key_text.clone(), theme.fn_bar_key));
+        spans.push(Span::styled(label_text.clone(), theme.fn_bar_key));
 
-        spans.push(Span::styled(num_str, theme.fn_bar_key));
-        spans.push(Span::styled(padded_label, theme.fn_bar_label));
+        // Gap between items
+        let used = key_text.len() + label_text.len();
+        let gap = this_slot.saturating_sub(used);
+        if gap > 0 {
+            spans.push(Span::styled(
+                " ".repeat(gap),
+                Style::default().bg(theme.fn_bar_bg),
+            ));
+        }
     }
 
     let line = Line::from(spans);
-    let bar = Paragraph::new(line);
-    frame.render_widget(bar, area);
+    frame.render_widget(Paragraph::new(line), area);
 }

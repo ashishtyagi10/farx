@@ -122,11 +122,7 @@ pub fn render_panel(
         let row_index = idx - panel.scroll_offset;
 
         // Zebra stripe background
-        let row_bg = if row_index % 2 == 1 {
-            theme.panel_bg_alt
-        } else {
-            theme.panel_bg
-        };
+        let row_bg = if row_index % 2 == 1 { theme.panel_bg_alt } else { theme.panel_bg };
 
         // File type / selection icon
         let marker_icon = if is_selected { "◆" } else if entry.is_dir { "▸" } else { " " };
@@ -186,7 +182,7 @@ pub fn render_panel(
             Style::default().fg(theme.panel_fg).bg(row_bg)
         };
 
-        // Grid separator style — inherits cursor/selected bg when on that row
+        // Grid separator style — vertical column dividers
         let sep_style = if is_cursor {
             Style::default()
                 .fg(theme.grid_style.fg.unwrap_or(theme.panel_fg))
@@ -208,16 +204,12 @@ pub fn render_panel(
         lines.push(line);
     }
 
-    // Fill remaining rows
+    // Fill remaining empty rows with zebra
     for i in lines.len()..list_height {
-        let row_bg = if i % 2 == 1 {
-            theme.panel_bg_alt
-        } else {
-            theme.panel_bg
-        };
+        let bg = if i % 2 == 1 { theme.panel_bg_alt } else { theme.panel_bg };
         lines.push(Line::from(Span::styled(
             " ".repeat(total_width),
-            Style::default().bg(row_bg),
+            Style::default().bg(bg),
         )));
     }
 

@@ -4,6 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
+use crate::components::syntax::{highlight_line, Language};
 use crate::theme::Theme;
 
 pub struct ViewerState {
@@ -175,23 +176,29 @@ pub fn render_viewer(frame: &mut Frame, state: &ViewerState, _theme: &Theme) {
 
     let visible_height = inner.height as usize;
 
-    // Build visible lines
+    // Detect language from file extension
+    let ext = state.file_path.extension().and_then(|e| e.to_str());
+    let lang = Language::from_extension(ext);
+    let bg = Color::Rgb(22, 22, 26);
+
+    // Build visible lines with syntax highlighting
     let mut text_lines: Vec<Line> = Vec::new();
     for i in state.scroll_offset..(state.scroll_offset + visible_height).min(state.total_lines) {
         if i < state.lines.len() {
             let line_num = format!("{:>6} ", i + 1);
             let content = &state.lines[i];
 
-            text_lines.push(Line::from(vec![
-                Span::styled(
-                    line_num,
-                    Style::default().fg(Color::DarkGray).bg(Color::Rgb(22, 22, 26)),
-                ),
-                Span::styled(
-                    content.as_str(),
-                    Style::default().fg(Color::Rgb(200, 200, 210)).bg(Color::Rgb(22, 22, 26)),
-                ),
-            ]));
+            let mut spans = vec![
+                Span::styled(line_num, Style::default().fg(Color::DarkGray).bg(bg)),
+            ];
+
+            if state.hex_mode {
+                spans.push(Span::styled(content.as_str(), Style::default().fg(Color::Rgb(200, 200, 210)).bg(bg)));
+            } else {
+                spans.extend(highlight_line(content, lang, bg));
+            }
+
+            text_lines.push(Line::from(spans));
         }
     }
 

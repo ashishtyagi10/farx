@@ -57,11 +57,7 @@ pub fn render_tree_panel(
         let is_selected = tree.selected.contains(&idx);
         let row_index = idx - tree.scroll_offset;
 
-        let row_bg = if row_index % 2 == 1 {
-            theme.panel_bg_alt
-        } else {
-            theme.panel_bg
-        };
+        let row_bg = if row_index % 2 == 1 { theme.panel_bg_alt } else { theme.panel_bg };
 
         // Tree indent with guide lines
         let indent: String = (0..node.depth)
@@ -160,10 +156,10 @@ pub fn render_tree_panel(
 
     // Fill empty rows
     for i in lines.len()..list_height {
-        let row_bg = if i % 2 == 1 { theme.panel_bg_alt } else { theme.panel_bg };
+        let bg = if i % 2 == 1 { theme.panel_bg_alt } else { theme.panel_bg };
         lines.push(Line::from(Span::styled(
             " ".repeat(total_width),
-            Style::default().bg(row_bg),
+            Style::default().bg(bg),
         )));
     }
 

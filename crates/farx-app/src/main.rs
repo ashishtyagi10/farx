@@ -2,6 +2,7 @@ use std::io;
 use std::time::Duration;
 
 use anyhow::Result;
+use clap::Parser;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
@@ -10,16 +11,71 @@ use crossterm::{
 use ratatui::prelude::*;
 
 mod keydebug;
+mod update;
 
 use farx_core::AppConfig;
 use farx_ui::app::App;
 use farx_ui::event::{Event, EventHandler};
 
+#[derive(Parser)]
+#[command(name = "farx", version, about = "Next-generation cross-platform file manager")]
+struct Cli {
+    /// Update farx to the latest release
+    #[arg(long)]
+    update: bool,
+
+    /// Check if a newer version is available
+    #[arg(long)]
+    check_update: bool,
+
+    /// Print version
+    #[arg(long)]
+    keydebug: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Key debug mode: cargo run -- --keydebug
-    if std::env::args().any(|a| a == "--keydebug") {
+    let cli = Cli::parse();
+
+    // --keydebug: interactive key event debugger
+    if cli.keydebug {
         keydebug::run_key_debug();
+        return Ok(());
+    }
+
+    // --update: download and install the latest version, then exit
+    if cli.update {
+        println!("farx — checking for updates...");
+        match update::perform_update()? {
+            self_update::Status::UpToDate(v) => {
+                println!("Already up to date (v{v}).");
+            }
+            self_update::Status::Updated(v) => {
+                println!("Updated to v{v}! Restart farx to use the new version.");
+            }
+        }
+        return Ok(());
+    }
+
+    // --check-update: just print whether an update exists
+    if cli.check_update {
+        update::print_version();
+        let rx = update::check_for_updates_async();
+        match rx.recv() {
+            Ok(update::UpdateStatus::Available(v)) => {
+                println!("New version available: v{v}");
+                println!("Run `farx --update` to install it.");
+            }
+            Ok(update::UpdateStatus::UpToDate) => {
+                println!("You are on the latest version.");
+            }
+            Ok(update::UpdateStatus::Failed(e)) => {
+                eprintln!("Could not check for updates: {e}");
+            }
+            Err(_) => {
+                eprintln!("Update check did not complete.");
+            }
+        }
         return Ok(());
     }
 
@@ -31,6 +87,9 @@ async fn main() -> Result<()> {
         )
         .with_writer(io::stderr)
         .init();
+
+    // Kick off a background update check (non-blocking)
+    let update_rx = update::check_for_updates_async();
 
     // Load config
     let config = AppConfig::load();
@@ -48,11 +107,22 @@ async fn main() -> Result<()> {
     let mut events = EventHandler::new(tick_rate);
 
     // Main loop
+    let mut update_checked = false;
     while app.running {
         // Render
         terminal.draw(|frame| {
             app.render(frame);
         })?;
+
+        // Check if the background update result has arrived
+        if !update_checked {
+            if let Ok(status) = update_rx.try_recv() {
+                update_checked = true;
+                if let update::UpdateStatus::Available(v) = status {
+                    app.set_update_available(v);
+                }
+            }
+        }
 
         // Handle events
         match events.next().await {
@@ -67,8 +137,7 @@ async fn main() -> Result<()> {
                 // Terminal will re-render on next loop iteration
             }
             Some(Event::Tick) => {
-                // Check for completed AI responses
-                app.check_ai_response();
+                app.tick();
             }
             Some(Event::Mouse(_)) => {
                 // Mouse support later

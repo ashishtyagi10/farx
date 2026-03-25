@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use crate::components::syntax::{highlight_line, Language};
 use crate::theme::Theme;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -426,7 +427,11 @@ pub fn render_editor(frame: &mut Frame, state: &EditorState, _theme: &Theme) {
     let gutter_width = 6u16;
     let text_width = inner.width.saturating_sub(gutter_width) as usize;
 
-    // Build visible lines
+    // Detect language from file extension
+    let ext = state.file_path.extension().and_then(|e| e.to_str());
+    let lang = Language::from_extension(ext);
+
+    // Build visible lines with syntax highlighting
     let mut text_lines: Vec<Line> = Vec::new();
     for i in state.scroll_offset..(state.scroll_offset + visible_height).min(state.lines.len()) {
         let line_num = format!("{:>5} ", i + 1);
@@ -439,20 +444,31 @@ pub fn render_editor(frame: &mut Frame, state: &EditorState, _theme: &Theme) {
             .collect();
 
         let is_cursor_line = i == state.cursor_line;
-        let line_num_style = Style::default()
-            .fg(Color::DarkGray)
-            .bg(if is_cursor_line { Color::Indexed(236) } else { Color::Rgb(22, 22, 26) });
-        let text_style = Style::default()
-            .fg(Color::Rgb(200, 200, 210))
-            .bg(if is_cursor_line { Color::Indexed(236) } else { Color::Rgb(22, 22, 26) });
+        let bg = if is_cursor_line { Color::Indexed(236) } else { Color::Rgb(22, 22, 26) };
+        let line_num_style = Style::default().fg(Color::DarkGray).bg(bg);
 
-        text_lines.push(Line::from(vec![
-            Span::styled(line_num, line_num_style),
-            Span::styled(
+        let mut spans = vec![Span::styled(line_num, line_num_style)];
+
+        // Syntax highlight the visible portion
+        let highlighted = highlight_line(&visible_text, lang, bg);
+        if highlighted.is_empty() {
+            spans.push(Span::styled(
                 format!("{:<width$}", visible_text, width = text_width),
-                text_style,
-            ),
-        ]));
+                Style::default().fg(Color::Rgb(200, 200, 210)).bg(bg),
+            ));
+        } else {
+            spans.extend(highlighted);
+            // Pad remaining width with background
+            let used: usize = visible_text.len();
+            if used < text_width {
+                spans.push(Span::styled(
+                    " ".repeat(text_width - used),
+                    Style::default().bg(bg),
+                ));
+            }
+        }
+
+        text_lines.push(Line::from(spans));
     }
 
     // Fill remaining lines
