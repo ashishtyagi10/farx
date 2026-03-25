@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Farx — Next-Gen Terminal File Manager</title>
+  <meta name="description" content="A blazing-fast, cross-platform terminal file manager with dual panels, built-in editor, AI assistant, and beautiful themes. Built in Rust." />
+  <meta property="og:title" content="Farx — Next-Gen Terminal File Manager" />
+  <meta property="og:description" content="Dual-panel file manager with AI assistant. Built in Rust. Runs everywhere." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://ashishtyagi10.github.io/farx/" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ==================== NAV ==================== -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <span class="logo-bracket">[</span>farx<span class="logo-bracket">]</span>
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#ai">AI</a>
+      <a href="#themes">Themes</a>
+      <a href="https://github.com/ashishtyagi10/farx" target="_blank" class="nav-github">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ==================== HERO ==================== -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-badge">Built with Rust &middot; MIT Licensed</div>
+    <h1 class="hero-title">
+      The file manager<br/>
+      <span class="gradient-text">your terminal deserves.</span>
+    </h1>
+    <p class="hero-sub">
+      Dual-panel navigation, built-in editor &amp; viewer, AI assistant, 5 themes,
+      and auto-updates &mdash; all in a single binary that runs on
+      <strong>macOS</strong>, <strong>Linux</strong>, and <strong>Windows</strong>.
+    </p>
+    <div class="hero-actions">
+      <a href="#install" class="btn btn-primary">Install Now</a>
+      <a href="https://github.com/ashishtyagi10/farx" target="_blank" class="btn btn-ghost">View Source</a>
+    </div>
+
+    <!-- Terminal mockup -->
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">farx</span>
+      </div>
+      <pre class="terminal-body"><span class="t-header">   Name             Size     Modified          Name             Size     Modified   </span>
+<span class="t-dir"> /..                &lt;DIR&gt;    2026-03-20  </span><span class="t-sep">|</span><span class="t-dir"> /..                &lt;DIR&gt;    2026-03-20  </span>
+<span class="t-dir"> /src               &lt;DIR&gt;    2026-03-25  </span><span class="t-sep">|</span><span class="t-dir"> /docs              &lt;DIR&gt;    2026-03-25  </span>
+<span class="t-dir"> /tests             &lt;DIR&gt;    2026-03-22  </span><span class="t-sep">|</span><span class="t-dir"> /config            &lt;DIR&gt;    2026-03-18  </span>
+<span class="t-sel"> /target            &lt;DIR&gt;    2026-03-25  </span><span class="t-sep">|</span><span class="t-file"> Cargo.toml         2.1K     2026-03-25  </span>
+<span class="t-file"> Cargo.toml         2.1K     2026-03-25  </span><span class="t-sep">|</span><span class="t-file"> README.md          8.4K     2026-03-25  </span>
+<span class="t-exec"> install.sh         1.8K     2026-03-25  </span><span class="t-sep">|</span><span class="t-file"> LICENSE            1.1K     2026-03-18  </span>
+<span class="t-file"> .gitignore           42      2026-03-18  </span><span class="t-sep">|</span><span class="t-file"> .gitignore           42      2026-03-18  </span>
+<span class="t-prompt">~/code/farx$</span> <span class="t-cursor">_</span>
+<span class="t-fnbar"> F1 Help  F3 View  F4 Edit  F5 Copy  F6 Move  F7 MkDir  F8 Del  F9 Menu  F10 Quit </span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FEATURES ==================== -->
+<section id="features" class="section">
+  <div class="container">
+    <h2 class="section-title">Everything you need. <span class="gradient-text">Nothing you don't.</span></h2>
+    <p class="section-sub">Power-user features in a single, dependency-free binary.</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">&#9776;</div>
+        <h3>Dual-Panel Navigation</h3>
+        <p>Side-by-side panels with tree view, file previews, and one-key copy/move between directories.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9998;</div>
+        <h3>Built-in Editor</h3>
+        <p>Syntax highlighting, undo/redo, search &amp; replace. Edit files without leaving the manager.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128270;</div>
+        <h3>Powerful Search</h3>
+        <p>Find files by name pattern or content across entire directory trees. Jump to results instantly.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9881;</div>
+        <h3>Fully Configurable</h3>
+        <p>TOML-based config for keymaps, themes, sorting, hidden files, external editors, and more.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128640;</div>
+        <h3>Blazing Fast</h3>
+        <p>Written in Rust with zero garbage collection. Instant startup, smooth 60fps rendering.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#127760;</div>
+        <h3>Cross-Platform</h3>
+        <p>One binary for macOS, Linux, and Windows. Native terminal rendering via Crossterm.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#129302;</div>
+        <h3>AI Assistant</h3>
+        <p>Ask questions in plain English. Supports OpenRouter, Anthropic, OpenAI, and local Ollama.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#8635;</div>
+        <h3>Auto-Updates</h3>
+        <p>Install once, stay current forever. Background update checks with one-command upgrades.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== INSTALL ==================== -->
+<section id="install" class="section section-dark">
+  <div class="container">
+    <h2 class="section-title">Up and running in <span class="gradient-text">10 seconds.</span></h2>
+
+    <div class="install-grid">
+      <div class="install-card">
+        <h3>macOS &amp; Linux</h3>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <code>curl -sSfL https://raw.githubusercontent.com/ashishtyagi10/farx/main/install.sh | sh</code>
+        </div>
+      </div>
+
+      <div class="install-card">
+        <h3>Build from Source</h3>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <code>git clone https://github.com/ashishtyagi10/farx.git
+cd farx &amp;&amp; cargo build --release</code>
+        </div>
+      </div>
+
+      <div class="install-card">
+        <h3>Update</h3>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <code>farx --update</code>
+        </div>
+      </div>
+
+      <div class="install-card">
+        <h3>GitHub Releases</h3>
+        <p class="install-desc">Pre-built binaries for every platform:</p>
+        <div class="platform-tags">
+          <span class="tag">macOS Intel</span>
+          <span class="tag">macOS ARM</span>
+          <span class="tag">Linux x86_64</span>
+          <span class="tag">Linux ARM64</span>
+          <span class="tag">Windows x64</span>
+        </div>
+        <a href="https://github.com/ashishtyagi10/farx/releases" target="_blank" class="btn btn-small">Download</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== KEYBINDINGS ==================== -->
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">Keyboard-driven. <span class="gradient-text">Mouse optional.</span></h2>
+    <p class="section-sub">FAR Manager keybindings you already know — or learn in minutes.</p>
+
+    <div class="keys-grid">
+      <div class="key-group">
+        <h4>Navigation</h4>
+        <div class="key-row"><kbd>Tab</kbd> <span>Switch panels</span></div>
+        <div class="key-row"><kbd>Enter</kbd> <span>Open / enter directory</span></div>
+        <div class="key-row"><kbd>Ctrl+\</kbd> <span>Go to root</span></div>
+        <div class="key-row"><kbd>Ctrl+O</kbd> <span>Toggle console</span></div>
+      </div>
+      <div class="key-group">
+        <h4>File Operations</h4>
+        <div class="key-row"><kbd>F3</kbd> <span>View</span></div>
+        <div class="key-row"><kbd>F4</kbd> <span>Edit</span></div>
+        <div class="key-row"><kbd>F5</kbd> <span>Copy</span></div>
+        <div class="key-row"><kbd>F6</kbd> <span>Move / Rename</span></div>
+        <div class="key-row"><kbd>F7</kbd> <span>New directory</span></div>
+        <div class="key-row"><kbd>F8</kbd> <span>Delete</span></div>
+      </div>
+      <div class="key-group">
+        <h4>Selection</h4>
+        <div class="key-row"><kbd>Space</kbd> <span>Toggle select</span></div>
+        <div class="key-row"><kbd>Ctrl+A</kbd> <span>Select all</span></div>
+        <div class="key-row"><kbd>Ctrl+D</kbd> <span>Deselect all</span></div>
+      </div>
+      <div class="key-group">
+        <h4>Sorting</h4>
+        <div class="key-row"><kbd>Ctrl+F3</kbd> <span>By name</span></div>
+        <div class="key-row"><kbd>Ctrl+F4</kbd> <span>By extension</span></div>
+        <div class="key-row"><kbd>Ctrl+F5</kbd> <span>By size</span></div>
+        <div class="key-row"><kbd>Ctrl+F6</kbd> <span>By date</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== AI ==================== -->
+<section id="ai" class="section section-dark">
+  <div class="container">
+    <h2 class="section-title">Your files. <span class="gradient-text">Your AI.</span></h2>
+    <p class="section-sub">Press <kbd>Ctrl+Space</kbd> and ask anything in plain English.</p>
+
+    <div class="ai-demo">
+      <div class="terminal terminal-small">
+        <div class="terminal-bar">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-title">AI Assistant</span>
+        </div>
+        <pre class="terminal-body"><span class="t-prompt">AI&gt;</span> find all files larger than 100MB modified this week
+
+<span class="t-ai">Scanning current directory tree...</span>
+
+<span class="t-file">  ./backups/db-dump-2026-03-24.sql      248 MB</span>
+<span class="t-file">  ./logs/app-2026-03-23.log             142 MB</span>
+<span class="t-file">  ./data/export-full.csv                118 MB</span>
+
+<span class="t-ai">Found 3 files totaling 508 MB.</span></pre>
+      </div>
+    </div>
+
+    <div class="ai-providers">
+      <h3>Works with your favorite provider</h3>
+      <div class="provider-grid">
+        <div class="provider-card">
+          <div class="provider-name">OpenRouter</div>
+          <div class="provider-detail">Free tier available</div>
+        </div>
+        <div class="provider-card">
+          <div class="provider-name">Anthropic</div>
+          <div class="provider-detail">Claude models</div>
+        </div>
+        <div class="provider-card">
+          <div class="provider-name">OpenAI</div>
+          <div class="provider-detail">GPT models</div>
+        </div>
+        <div class="provider-card">
+          <div class="provider-name">Ollama</div>
+          <div class="provider-detail">100% local &amp; private</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== THEMES ==================== -->
+<section id="themes" class="section">
+  <div class="container">
+    <h2 class="section-title">Five themes. <span class="gradient-text">Your vibe.</span></h2>
+    <p class="section-sub">Switch with one line in your config.</p>
+
+    <div class="themes-grid">
+      <div class="theme-card" style="--bg: #00002a; --fg: #00d4d4; --accent: #ffff00; --header: #e0e000;">
+        <div class="theme-label">far-classic</div>
+        <div class="theme-preview">
+          <span style="color: var(--header);">Name          Size</span><br/>
+          <span style="color: var(--fg);">/src         &lt;DIR&gt;</span><br/>
+          <span style="color: var(--accent);">Cargo.toml   2.1K</span><br/>
+          <span style="color: var(--fg);">README.md    8.4K</span>
+        </div>
+      </div>
+      <div class="theme-card" style="--bg: #101012; --fg: #bebab2; --accent: #dcaa3c; --header: #dcaa3c;">
+        <div class="theme-label">tokyo-night</div>
+        <div class="theme-preview">
+          <span style="color: var(--header);">Name          Size</span><br/>
+          <span style="color: #c8a050;">/src         &lt;DIR&gt;</span><br/>
+          <span style="color: var(--fg);">Cargo.toml   2.1K</span><br/>
+          <span style="color: var(--fg);">README.md    8.4K</span>
+        </div>
+      </div>
+      <div class="theme-card" style="--bg: #1e1e2e; --fg: #cdd6f4; --accent: #89b4fa; --header: #89b4fa;">
+        <div class="theme-label">catppuccin</div>
+        <div class="theme-preview">
+          <span style="color: var(--header);">Name          Size</span><br/>
+          <span style="color: #a6e3a1;">/src         &lt;DIR&gt;</span><br/>
+          <span style="color: var(--fg);">Cargo.toml   2.1K</span><br/>
+          <span style="color: var(--fg);">README.md    8.4K</span>
+        </div>
+      </div>
+      <div class="theme-card" style="--bg: #282a36; --fg: #f8f8f2; --accent: #bd93f9; --header: #bd93f9;">
+        <div class="theme-label">dracula</div>
+        <div class="theme-preview">
+          <span style="color: var(--header);">Name          Size</span><br/>
+          <span style="color: #50fa7b;">/src         &lt;DIR&gt;</span><br/>
+          <span style="color: var(--fg);">Cargo.toml   2.1K</span><br/>
+          <span style="color: var(--fg);">README.md    8.4K</span>
+        </div>
+      </div>
+      <div class="theme-card" style="--bg: #282828; --fg: #ebdbb2; --accent: #fabd2f; --header: #fabd2f;">
+        <div class="theme-label">gruvbox</div>
+        <div class="theme-preview">
+          <span style="color: var(--header);">Name          Size</span><br/>
+          <span style="color: #b8bb26;">/src         &lt;DIR&gt;</span><br/>
+          <span style="color: var(--fg);">Cargo.toml   2.1K</span><br/>
+          <span style="color: var(--fg);">README.md    8.4K</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="theme-config">
+      <div class="code-block">
+        <code># ~/.config/farx/config.toml
+[ui]
+theme = "catppuccin"</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== CTA ==================== -->
+<section class="section section-cta">
+  <div class="container">
+    <h2 class="section-title">Ready to upgrade your terminal?</h2>
+    <p class="section-sub">One command. All platforms. Auto-updates forever.</p>
+    <div class="cta-code">
+      <div class="code-block code-block-large">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <code>curl -sSfL https://raw.githubusercontent.com/ashishtyagi10/farx/main/install.sh | sh</code>
+      </div>
+    </div>
+    <div class="hero-actions">
+      <a href="https://github.com/ashishtyagi10/farx" target="_blank" class="btn btn-primary">Star on GitHub</a>
+      <a href="https://github.com/ashishtyagi10/farx/releases" target="_blank" class="btn btn-ghost">Download</a>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-logo">
+      <span class="logo-bracket">[</span>farx<span class="logo-bracket">]</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/ashishtyagi10/farx" target="_blank">GitHub</a>
+      <a href="https://github.com/ashishtyagi10/farx/releases" target="_blank">Releases</a>
+      <a href="https://github.com/ashishtyagi10/farx/issues" target="_blank">Issues</a>
+    </div>
+    <div class="footer-copy">MIT or Apache-2.0</div>
+  </div>
+</footer>
+
+<script>
+function copyCode(btn) {
+  const code = btn.parentElement.querySelector('code');
+  const text = code.innerText.replace(/&amp;/g, '&');
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+</script>
+
+</body>
+</html>
