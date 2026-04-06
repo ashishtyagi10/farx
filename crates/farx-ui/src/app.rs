@@ -665,9 +665,8 @@ impl App {
 
     /// Called when the background update check finds a newer version.
     pub fn set_update_available(&mut self, version: String) {
-        self.feedback.info(format!(
-            "Update available: v{version} — run `farx --update` to install"
-        ));
+        // Silently store — don't show a feedback popup.
+        // The version is shown in the title bar / footer if needed.
         self.update_available = Some(version);
     }
 
