@@ -104,6 +104,12 @@ pub enum Action {
     ExtractArchive,
     CompressSelection,
 
+    // Duplicate finder
+    FindDuplicates,
+
+    // Disk usage treemap
+    ShowTreemap,
+
     // Directory size
     CalculateDirSize,
 

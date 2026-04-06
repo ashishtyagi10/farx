@@ -755,6 +755,64 @@ impl App {
         }
     }
 
+    /// Show a text-based treemap of disk usage for the current directory.
+    fn show_treemap(&mut self) {
+        let root = self.active_tree_ref().root.clone();
+        let mut entries: Vec<(String, u64)> = Vec::new();
+
+        if let Ok(rd) = std::fs::read_dir(&root) {
+            for entry in rd.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with('.') {
+                    continue;
+                }
+                let path = entry.path();
+                let size = if path.is_dir() {
+                    dir_size_recursive(&path)
+                } else {
+                    entry.metadata().map(|m| m.len()).unwrap_or(0)
+                };
+                if size > 0 {
+                    entries.push((name, size));
+                }
+            }
+        }
+
+        if entries.is_empty() {
+            self.feedback.info("Directory is empty".to_string());
+            return;
+        }
+
+        entries.sort_by(|a, b| b.1.cmp(&a.1));
+        let total: u64 = entries.iter().map(|(_, s)| *s).sum();
+
+        let mut lines = Vec::new();
+        lines.push(format!("Disk Usage: {} total", format_size_human(total)));
+        lines.push(String::new());
+
+        // Text-based bar chart
+        let bar_width = 40usize;
+        for (name, size) in entries.iter().take(30) {
+            let pct = *size as f64 / total as f64;
+            let filled = (pct * bar_width as f64).round() as usize;
+            let bar: String = "█".repeat(filled) + &"░".repeat(bar_width.saturating_sub(filled));
+            lines.push(format!(
+                "{} {:>5.1}% {:>9}  {}",
+                bar,
+                pct * 100.0,
+                format_size_human(*size),
+                name
+            ));
+        }
+
+        if entries.len() > 30 {
+            lines.push(format!("  ... and {} more entries", entries.len() - 30));
+        }
+
+        self.feedback
+            .show_output("Disk Usage Treemap", lines.join("\n"));
+    }
+
     /// Calculate the size of the directory (or selected items) under the cursor.
     fn calculate_dir_size(&mut self) {
         let tree = self.active_tree_ref();
@@ -1000,6 +1058,12 @@ impl App {
             }
             "/find-file" | "/ff" => {
                 self.dispatch(Action::ShowFuzzyFinder);
+            }
+            "/duplicates" | "/dupes" => {
+                self.dispatch(Action::FindDuplicates);
+            }
+            "/treemap" | "/usage" => {
+                self.dispatch(Action::ShowTreemap);
             }
             "/rename-batch" | "/bulk-rename" => {
                 self.dispatch(Action::BatchRename);
@@ -1981,6 +2045,49 @@ impl App {
                         }
                     }
                 }
+            }
+            Action::FindDuplicates => {
+                let root = self.active_tree_ref().root.clone();
+                self.feedback.info("Scanning for duplicates...".to_string());
+                match farx_fs::find_duplicates(&root, 8) {
+                    Ok(groups) => {
+                        if groups.is_empty() {
+                            self.feedback.info("No duplicate files found".to_string());
+                        } else {
+                            let total_waste: u64 = groups
+                                .iter()
+                                .map(|g| g.size * (g.paths.len() as u64 - 1))
+                                .sum();
+                            let mut lines = Vec::new();
+                            lines.push(format!(
+                                "{} duplicate groups, {} reclaimable",
+                                groups.len(),
+                                format_size_human(total_waste)
+                            ));
+                            lines.push(String::new());
+                            for (i, group) in groups.iter().take(50).enumerate() {
+                                lines.push(format!(
+                                    "Group {} — {} each, {} copies:",
+                                    i + 1,
+                                    format_size_human(group.size),
+                                    group.paths.len()
+                                ));
+                                for path in &group.paths {
+                                    lines.push(format!("  {}", path.display()));
+                                }
+                                lines.push(String::new());
+                            }
+                            self.feedback
+                                .show_output("Duplicate Files", lines.join("\n"));
+                        }
+                    }
+                    Err(e) => {
+                        self.feedback.error(format!("Duplicates: {}", e));
+                    }
+                }
+            }
+            Action::ShowTreemap => {
+                self.show_treemap();
             }
             Action::CalculateDirSize => {
                 self.calculate_dir_size();

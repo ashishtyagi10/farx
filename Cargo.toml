@@ -38,6 +38,9 @@ walkdir = "2"
 dirs = "5"
 trash = "5"
 
+# Hashing
+sha2 = "0.10"
+
 # Archives
 zip = { version = "2", default-features = false, features = ["deflate"] }
 tar = "0.4"

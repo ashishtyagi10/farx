@@ -176,6 +176,15 @@ impl KeyMap {
             Action::ShowFuzzyFinder,
         );
 
+        // ── Duplicate finder ──────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('d'), KeyModifiers::ALT),
+            Action::FindDuplicates,
+        );
+
+        // ── Disk usage treemap ──────────────────────────────────────────
+        panel.insert((KeyCode::Char('t'), KeyModifiers::ALT), Action::ShowTreemap);
+
         // ── Archives ─────────────────────────────────────────────────────
         panel.insert(
             (KeyCode::Char('e'), KeyModifiers::ALT),
