@@ -207,6 +207,16 @@ impl KeyMap {
             Action::CompressSelection,
         );
 
+        // ── Select/Deselect by mask ────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('+'), KeyModifiers::ALT),
+            Action::SelectByMaskDialog,
+        );
+        panel.insert(
+            (KeyCode::Char('-'), KeyModifiers::ALT),
+            Action::DeselectByMaskDialog,
+        );
+
         // ── Sort modes (Ctrl+F3..F6) ────────────────────────────────────
         panel.insert((KeyCode::F(3), KeyModifiers::CONTROL), Action::SortByName);
         panel.insert(

@@ -36,6 +36,8 @@ enum PendingOperation {
     MkDir { parent: PathBuf },
     Rename { original: PathBuf },
     CreateFile { parent: PathBuf },
+    SelectByMask,
+    DeselectByMask,
 }
 
 /// A recorded file operation that can be undone.
@@ -822,6 +824,33 @@ impl App {
         }
     }
 
+    /// Select or deselect files matching a glob pattern in the active tree.
+    fn apply_mask_selection(&mut self, pattern: &str, select: bool) {
+        // Convert simple glob pattern to a match function
+        // Supports: * (any chars), ? (single char), and literal matching
+        let pat = pattern.to_lowercase();
+        let tree = self.active_tree();
+        let mut count = 0usize;
+        for i in 0..tree.visible_nodes.len() {
+            let name = &tree.visible_nodes[i].entry.name;
+            if name == ".." {
+                continue;
+            }
+            if glob_match(&pat, &name.to_lowercase()) {
+                if select {
+                    if tree.selected.insert(i) {
+                        count += 1;
+                    }
+                } else if tree.selected.remove(&i) {
+                    count += 1;
+                }
+            }
+        }
+        let verb = if select { "Selected" } else { "Deselected" };
+        self.feedback
+            .info(format!("{} {} file(s) matching '{}'", verb, count, pattern));
+    }
+
     /// Toggle sort: if already sorted by this field, flip asc/desc; otherwise set field and reset to ascending.
     fn toggle_sort(&mut self, field: SortField) {
         let panel = self.active_panel_mut();
@@ -1337,6 +1366,20 @@ impl App {
             "/info" => {
                 self.show_info_panel = !self.show_info_panel;
             }
+            "/select" => {
+                if args.is_empty() {
+                    self.dispatch(Action::SelectByMaskDialog);
+                } else {
+                    self.apply_mask_selection(args, true);
+                }
+            }
+            "/deselect" => {
+                if args.is_empty() {
+                    self.dispatch(Action::DeselectByMaskDialog);
+                } else {
+                    self.apply_mask_selection(args, false);
+                }
+            }
             _ => {
                 // Try plugin commands: /cmd_name → plugin "cmd_name"
                 let plugin_cmd = cmd.trim_start_matches('/');
@@ -1547,6 +1590,22 @@ impl App {
 
     /// Execute the file operation associated with a confirmed input dialog.
     fn execute_pending_operation(&mut self, op: PendingOperation, input_value: Option<String>) {
+        // Handle selection operations (no filesystem change)
+        match &op {
+            PendingOperation::SelectByMask | PendingOperation::DeselectByMask => {
+                let selecting = matches!(op, PendingOperation::SelectByMask);
+                if let Some(pattern) = input_value {
+                    let pattern = pattern.trim();
+                    if pattern.is_empty() {
+                        return;
+                    }
+                    self.apply_mask_selection(pattern, selecting);
+                }
+                return;
+            }
+            _ => {}
+        }
+
         let result = match op {
             PendingOperation::MkDir { parent } => {
                 if let Some(name) = input_value {
@@ -1608,6 +1667,8 @@ impl App {
                     return;
                 }
             }
+            // Already handled above; included for exhaustiveness
+            PendingOperation::SelectByMask | PendingOperation::DeselectByMask => return,
         };
 
         // Refresh trees after file operation
@@ -2007,6 +2068,22 @@ impl App {
                     "Create file",
                     "Enter file name:",
                     "",
+                ));
+            }
+            Action::SelectByMaskDialog => {
+                self.pending_op = Some(PendingOperation::SelectByMask);
+                self.dialog = Some(DialogState::new_input(
+                    "Select by mask",
+                    "Enter pattern (e.g. *.rs, test*):",
+                    "*",
+                ));
+            }
+            Action::DeselectByMaskDialog => {
+                self.pending_op = Some(PendingOperation::DeselectByMask);
+                self.dialog = Some(DialogState::new_input(
+                    "Deselect by mask",
+                    "Enter pattern (e.g. *.rs, test*):",
+                    "*",
                 ));
             }
             Action::QuickSearch(ch) => {
@@ -2629,6 +2706,39 @@ fn format_size_human(size: u64) -> String {
     } else {
         format!("{:.2} GB", size as f64 / 1_073_741_824.0)
     }
+}
+
+/// Simple glob pattern matcher supporting `*` (any chars) and `?` (single char).
+fn glob_match(pattern: &str, text: &str) -> bool {
+    let p: Vec<char> = pattern.chars().collect();
+    let t: Vec<char> = text.chars().collect();
+    glob_match_impl(&p, &t)
+}
+
+fn glob_match_impl(pattern: &[char], text: &[char]) -> bool {
+    let (mut pi, mut ti) = (0, 0);
+    let (mut star_pi, mut star_ti) = (usize::MAX, 0);
+
+    while ti < text.len() {
+        if pi < pattern.len() && (pattern[pi] == '?' || pattern[pi] == text[ti]) {
+            pi += 1;
+            ti += 1;
+        } else if pi < pattern.len() && pattern[pi] == '*' {
+            star_pi = pi;
+            star_ti = ti;
+            pi += 1;
+        } else if star_pi != usize::MAX {
+            pi = star_pi + 1;
+            star_ti += 1;
+            ti = star_ti;
+        } else {
+            return false;
+        }
+    }
+    while pi < pattern.len() && pattern[pi] == '*' {
+        pi += 1;
+    }
+    pi == pattern.len()
 }
 
 fn is_text_file(path: &Path) -> bool {
