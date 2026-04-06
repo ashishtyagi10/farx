@@ -164,6 +164,12 @@ impl KeyMap {
         // ── Undo ─────────────────────────────────────────────────────────
         panel.insert((KeyCode::Char('z'), KeyModifiers::CONTROL), Action::Undo);
 
+        // ── Batch rename ────────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('m'), KeyModifiers::CONTROL),
+            Action::BatchRename,
+        );
+
         // ── Archives ─────────────────────────────────────────────────────
         panel.insert(
             (KeyCode::Char('e'), KeyModifiers::ALT),

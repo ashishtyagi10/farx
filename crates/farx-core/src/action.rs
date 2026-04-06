@@ -93,6 +93,9 @@ pub enum Action {
     // Undo
     Undo,
 
+    // Batch rename
+    BatchRename,
+
     // Archives
     ViewArchive,
     ExtractArchive,

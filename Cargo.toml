@@ -57,6 +57,9 @@ clap = { version = "4", features = ["derive"] }
 # Clipboard
 arboard = "3"
 
+# Regex
+regex = "1"
+
 # Scripting
 mlua = { version = "0.10", features = ["lua54", "vendored"] }
 

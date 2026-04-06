@@ -9,6 +9,7 @@ use farx_core::{Action, AppConfig, KeyMap, PanelSide, PanelState, TreeState};
 use farx_core::SortField;
 
 use crate::components::ai_bar::{render_ai_bar, AiBarAction, AiBarState};
+use crate::components::batch_rename::{render_batch_rename, BatchRenameAction, BatchRenameState};
 use crate::components::bookmarks::{
     load_bookmarks, render_bookmarks, save_bookmarks, Bookmark, BookmarkAction, BookmarkState,
 };
@@ -121,6 +122,8 @@ pub struct App {
     pub plugin_engine: Option<farx_plugin::PluginEngine>,
     /// Undo stack for file operations.
     undo_stack: Vec<UndoEntry>,
+    /// Batch rename dialog state.
+    pub batch_rename: Option<BatchRenameState>,
 }
 
 impl App {
@@ -201,6 +204,7 @@ impl App {
                 }
             },
             undo_stack: Vec::new(),
+            batch_rename: None,
         })
     }
 
@@ -390,6 +394,44 @@ impl App {
                 panel.scroll_offset = 0;
                 panel.selected.clear();
                 Self::refresh_panel(panel, show_hidden);
+            }
+            return Action::Noop;
+        }
+
+        // Batch rename dialog
+        if let Some(ref mut br) = self.batch_rename {
+            match br.handle_key_event(key) {
+                BatchRenameAction::Close => {
+                    self.batch_rename = None;
+                }
+                BatchRenameAction::Apply(renames) => {
+                    self.batch_rename = None;
+                    let mut ok = 0;
+                    let mut fail = 0;
+                    for (old_path, new_name) in &renames {
+                        if let Some(parent) = old_path.parent() {
+                            let new_path = parent.join(new_name);
+                            match farx_fs::rename_entry(old_path, &new_path) {
+                                Ok(()) => {
+                                    self.undo_stack.push(UndoEntry::Rename {
+                                        old: old_path.clone(),
+                                        new: new_path,
+                                    });
+                                    ok += 1;
+                                }
+                                Err(_) => fail += 1,
+                            }
+                        }
+                    }
+                    if fail == 0 {
+                        self.feedback.success(format!("Renamed {} file(s)", ok));
+                    } else {
+                        self.feedback
+                            .warning(format!("Renamed {}, failed {}", ok, fail));
+                    }
+                    self.active_tree().rebuild();
+                }
+                BatchRenameAction::None => {}
             }
             return Action::Noop;
         }
@@ -932,6 +974,9 @@ impl App {
             }
             "/yank" | "/copy-path" => {
                 self.dispatch(Action::CopyPathToClipboard);
+            }
+            "/rename-batch" | "/bulk-rename" => {
+                self.dispatch(Action::BatchRename);
             }
             "/undo" => {
                 self.dispatch(Action::Undo);
@@ -1743,6 +1788,29 @@ impl App {
                     }
                 }
             }
+            Action::BatchRename => {
+                let tree = self.active_tree_ref();
+                let files: Vec<(PathBuf, String)> = if !tree.selected.is_empty() {
+                    tree.selected
+                        .iter()
+                        .filter_map(|&i| tree.visible_nodes.get(i))
+                        .filter(|n| !n.entry.is_dir)
+                        .map(|n| (n.entry.path.clone(), n.entry.name.clone()))
+                        .collect()
+                } else {
+                    // Use all non-dir files in current view
+                    tree.visible_nodes
+                        .iter()
+                        .filter(|n| !n.entry.is_dir && n.depth == 0)
+                        .map(|n| (n.entry.path.clone(), n.entry.name.clone()))
+                        .collect()
+                };
+                if files.is_empty() {
+                    self.feedback.error("No files to rename".to_string());
+                } else {
+                    self.batch_rename = Some(BatchRenameState::new(files));
+                }
+            }
             Action::Undo => {
                 if let Some(entry) = self.undo_stack.pop() {
                     match entry {
@@ -2013,6 +2081,11 @@ impl App {
         // Bookmarks panel
         if let Some(ref bm_panel) = self.bookmarks_panel {
             render_bookmarks(frame, bm_panel, &self.theme);
+        }
+
+        // Batch rename dialog
+        if let Some(ref br) = self.batch_rename {
+            render_batch_rename(frame, br, &self.theme);
         }
 
         // Dialog only for text input (MkDir, Rename, CreateFile)
