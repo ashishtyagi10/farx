@@ -9,6 +9,9 @@ use farx_core::{Action, AppConfig, KeyMap, PanelSide, PanelState, TreeState};
 use farx_core::SortField;
 
 use crate::components::ai_bar::{render_ai_bar, AiBarAction, AiBarState};
+use crate::components::bookmarks::{
+    load_bookmarks, render_bookmarks, save_bookmarks, Bookmark, BookmarkAction, BookmarkState,
+};
 use crate::components::command_line::CommandLineState;
 use crate::components::dialog::{render_dialog, DialogResult, DialogState};
 use crate::components::editor::{render_editor, EditorAction, EditorState};
@@ -88,6 +91,14 @@ pub struct App {
     pub right_tree: TreeState,
     /// If set, a newer version is available for update.
     pub update_available: Option<String>,
+    /// Bookmarks panel state (Ctrl+B).
+    pub bookmarks_panel: Option<BookmarkState>,
+    /// Persisted bookmarks list.
+    pub bookmarks: Vec<Bookmark>,
+    /// Filter state for narrowing directory listing.
+    pub filter_active: bool,
+    /// Current filter pattern.
+    pub filter_pattern: String,
 }
 
 impl App {
@@ -154,6 +165,10 @@ impl App {
                 t
             },
             update_available: None,
+            bookmarks_panel: None,
+            bookmarks: load_bookmarks(),
+            filter_active: false,
+            filter_pattern: String::new(),
         })
     }
 
@@ -343,6 +358,32 @@ impl App {
                 panel.scroll_offset = 0;
                 panel.selected.clear();
                 Self::refresh_panel(panel, show_hidden);
+            }
+            return Action::Noop;
+        }
+
+        // Bookmarks panel
+        if let Some(ref mut bm_panel) = self.bookmarks_panel {
+            match bm_panel.handle_key_event(key) {
+                BookmarkAction::Close => {
+                    self.bookmarks_panel = None;
+                }
+                BookmarkAction::GoTo(path) => {
+                    self.bookmarks_panel = None;
+                    if path.is_dir() {
+                        self.navigate_to(path);
+                    } else {
+                        self.feedback
+                            .error("Bookmark path no longer exists".to_string());
+                    }
+                }
+                BookmarkAction::Delete(idx) => {
+                    if idx < self.bookmarks.len() {
+                        self.bookmarks.remove(idx);
+                        save_bookmarks(&self.bookmarks);
+                    }
+                }
+                BookmarkAction::None => {}
             }
             return Action::Noop;
         }
@@ -575,6 +616,23 @@ impl App {
         }
     }
 
+    /// Calculate the size of the directory (or selected items) under the cursor.
+    fn calculate_dir_size(&mut self) {
+        let tree = self.active_tree_ref();
+        if let Some(node) = tree.current_node() {
+            let path = node.entry.path.clone();
+            let name = node.entry.name.clone();
+            if path.is_dir() {
+                let size = dir_size_recursive(&path);
+                self.feedback
+                    .info(format!("{}: {}", name, format_size_human(size)));
+            } else {
+                self.feedback
+                    .info(format!("{}: {}", name, format_size_human(node.entry.size)));
+            }
+        }
+    }
+
     fn check_ai_response(&mut self) {
         if let Some(ref mut rx) = self.ai_pending_response {
             match rx.try_recv() {
@@ -765,6 +823,14 @@ impl App {
             }
             "/menu" => {
                 self.menu = Some(MenuState::new());
+            }
+            "/bookmark" | "/bm" => {
+                if args.is_empty() {
+                    self.bookmarks_panel = Some(BookmarkState::new(self.bookmarks.clone()));
+                } else {
+                    // /bookmark add — add current dir
+                    self.dispatch(Action::AddBookmark);
+                }
             }
             "/info" => {
                 self.show_info_panel = !self.show_info_panel;
@@ -1358,6 +1424,37 @@ impl App {
             Action::CommandLineClear => {
                 self.command_line.clear();
             }
+            Action::ShowBookmarks => {
+                self.bookmarks_panel = Some(BookmarkState::new(self.bookmarks.clone()));
+            }
+            Action::AddBookmark => {
+                let dir = self.active_tree_ref().root.clone();
+                let name = dir
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "/".to_string());
+                // Check for duplicates
+                if self.bookmarks.iter().any(|b| b.path == dir) {
+                    self.feedback.info("Already bookmarked".to_string());
+                } else {
+                    self.bookmarks.push(Bookmark {
+                        name,
+                        path: dir.clone(),
+                    });
+                    save_bookmarks(&self.bookmarks);
+                    self.feedback.info(format!("Bookmarked: {}", dir.display()));
+                }
+            }
+            Action::ToggleFilter => {
+                self.filter_active = !self.filter_active;
+                if !self.filter_active {
+                    self.filter_pattern.clear();
+                    self.active_tree().rebuild();
+                }
+            }
+            Action::CalculateDirSize => {
+                self.calculate_dir_size();
+            }
             _ => {
                 // Other actions not yet implemented
             }
@@ -1475,6 +1572,11 @@ impl App {
             render_ai_bar(frame, ai_bar, &self.theme);
         }
 
+        // Bookmarks panel
+        if let Some(ref bm_panel) = self.bookmarks_panel {
+            render_bookmarks(frame, bm_panel, &self.theme);
+        }
+
         // Dialog only for text input (MkDir, Rename, CreateFile)
         if let Some(ref dialog) = self.dialog {
             render_dialog(frame, dialog, &self.theme);
@@ -1490,6 +1592,36 @@ impl App {
 
 /// Determine if a file should be opened in the built-in editor (text)
 /// or with the system default application (binary/media).
+/// Recursively calculate the total size of a directory.
+fn dir_size_recursive(path: &Path) -> u64 {
+    let mut total = 0u64;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_dir() {
+                    total += dir_size_recursive(&entry.path());
+                } else {
+                    total += meta.len();
+                }
+            }
+        }
+    }
+    total
+}
+
+/// Format a byte count into a human-readable size string.
+fn format_size_human(size: u64) -> String {
+    if size < 1_000 {
+        format!("{} B", size)
+    } else if size < 1_000_000 {
+        format!("{:.1} KB", size as f64 / 1_024.0)
+    } else if size < 1_000_000_000 {
+        format!("{:.1} MB", size as f64 / 1_048_576.0)
+    } else {
+        format!("{:.2} GB", size as f64 / 1_073_741_824.0)
+    }
+}
+
 fn is_text_file(path: &Path) -> bool {
     let ext = path
         .extension()

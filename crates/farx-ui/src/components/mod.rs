@@ -1,4 +1,5 @@
 pub mod ai_bar;
+pub mod bookmarks;
 pub mod command_line;
 pub mod dialog;
 pub mod editor;

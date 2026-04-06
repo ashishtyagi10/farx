@@ -76,6 +76,16 @@ pub enum Action {
     QuickSearch(char),
     QuickSearchClear,
 
+    // Bookmarks
+    ShowBookmarks,
+    AddBookmark,
+
+    // Filter
+    ToggleFilter,
+
+    // Directory size
+    CalculateDirSize,
+
     // AI
     AiQuery(String),
 

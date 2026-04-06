@@ -132,6 +132,25 @@ impl KeyMap {
             Action::ShowAiBar,
         );
 
+        // ── Bookmarks ────────────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('b'), KeyModifiers::CONTROL),
+            Action::ShowBookmarks,
+        );
+        panel.insert((KeyCode::Char('b'), KeyModifiers::ALT), Action::AddBookmark);
+
+        // ── Filter ──────────────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('f'), KeyModifiers::CONTROL),
+            Action::ToggleFilter,
+        );
+
+        // ── Directory size ──────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('s'), KeyModifiers::ALT),
+            Action::CalculateDirSize,
+        );
+
         // ── Sort modes (Ctrl+F3..F6) ────────────────────────────────────
         panel.insert((KeyCode::F(3), KeyModifiers::CONTROL), Action::SortByName);
         panel.insert(
