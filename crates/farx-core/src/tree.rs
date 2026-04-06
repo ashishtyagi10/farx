@@ -77,6 +77,27 @@ impl TreeState {
     /// Rebuild the flattened visible_nodes from the tree structure
     pub fn rebuild(&mut self) {
         self.visible_nodes.clear();
+
+        // Add ".." entry at top if not at filesystem root
+        if let Some(parent) = self.root.parent() {
+            self.visible_nodes.push(TreeNode {
+                entry: FileEntry {
+                    name: "..".to_string(),
+                    path: parent.to_path_buf(),
+                    is_dir: true,
+                    is_symlink: false,
+                    is_hidden: false,
+                    size: 0,
+                    modified: None,
+                    extension: None,
+                    readonly: false,
+                },
+                depth: 0,
+                expanded: false,
+                has_children: true,
+            });
+        }
+
         self.build_tree(&self.root.clone(), 0);
         // Clamp cursor
         if self.cursor >= self.visible_nodes.len() {
@@ -277,6 +298,13 @@ impl TreeState {
 
     pub fn toggle_select(&mut self) {
         if self.cursor < self.visible_nodes.len() {
+            // Skip ".." from selection
+            if self.visible_nodes[self.cursor].entry.name == ".." {
+                if self.cursor + 1 < self.visible_nodes.len() {
+                    self.cursor += 1;
+                }
+                return;
+            }
             if self.selected.contains(&self.cursor) {
                 self.selected.remove(&self.cursor);
             } else {
