@@ -2,7 +2,16 @@
 
 You are an autonomous enhancement agent for the Farx terminal file manager. Your job is to analyze, research, plan, implement, and document improvements.
 
-Mode: $ARGUMENTS (default: "interactive" — use "auto" to skip user confirmation and implement top 3, use "loop" for fully autonomous continuous enhancement)
+Mode: $ARGUMENTS
+
+Supported modes:
+- (empty or "interactive") — show top 10 ideas, ask user to pick
+- "auto" — pick top 3 automatically, implement, release (one cycle)
+- "loop" — alias for "loop 3" (3 iterations)
+- "loop N" — run N iterations (e.g. "loop 5" = 5 cycles = ~15 features)
+- "loop Nh" — run for approximately N hours (e.g. "loop 2h" = ~2 hours)
+
+Parse the argument: if it starts with "loop", extract the count or duration after it. Default to 3 iterations if just "loop" with no number.
 
 ## Phase 1: Understand Current Capabilities
 
@@ -102,19 +111,54 @@ After all enhancements are implemented and documentation is updated:
    - Title: `vX.Y.Z`
    - Release notes summarizing the enhancements implemented in this run (keybindings, slash commands, features)
 
-## Phase 7: Loop (if mode is "loop")
+## Phase 7: Loop (if mode starts with "loop")
 
-If mode is "loop", after completing Phase 6 (release), **immediately restart from Phase 1** and repeat the entire cycle. Each iteration:
+After completing Phase 6 (release), check whether to loop again.
 
-1. Re-reads the codebase to understand what was added in prior iterations
-2. Researches fresh enhancement ideas (excluding everything already implemented)
-3. Picks the top 3 unimplemented enhancements automatically
-4. Implements, documents, and releases a new version
-5. Then loops again
+### Iteration control
 
-Continue looping until explicitly stopped by the user. Each loop produces one version bump and release with 3 new enhancements.
+Parse the loop argument to determine the limit:
+- `loop` or `loop 3` → run exactly 3 iterations total
+- `loop N` (e.g. `loop 5`) → run exactly N iterations total
+- `loop Nh` (e.g. `loop 2h`) → run for approximately N hours (estimate ~20-30 min per iteration)
+- Maximum cap: 10 iterations per invocation (safety limit)
 
-Between iterations, output a brief status line: `--- Loop N complete: released vX.Y.Z with [feature1, feature2, feature3]. Starting next iteration... ---`
+Track the current iteration number starting at 1.
+
+### Each iteration
+
+1. Re-read the codebase to understand what was added in prior iterations
+2. Research fresh enhancement ideas (excluding everything already implemented)
+3. Pick the top 3 unimplemented enhancements automatically
+4. Implement, document, and release a new version
+5. Output a status line:
+   ```
+   --- Iteration N/M complete: released vX.Y.Z with [feature1, feature2, feature3] ---
+   ```
+6. If iterations remain, continue to next iteration from Phase 1
+7. If iterations are exhausted, output a final summary and stop
+
+### Final summary (after all iterations complete)
+
+Output a summary table showing all iterations:
+```
+## /farx loop complete
+| Iteration | Version | Features |
+|-----------|---------|----------|
+| 1 | v0.0.7 | feature1, feature2, feature3 |
+| 2 | v0.0.8 | feature4, feature5, feature6 |
+...
+Total: N versions released, M features added.
+```
+
+### Safety guardrails (unattended operation)
+
+Since the user may walk away or sleep while this runs:
+- If `cargo check` fails 3 times in a row on the same enhancement, **skip it** and move to the next. Do not get stuck in a fix loop.
+- If an entire iteration fails to produce any working enhancement, **stop the loop** and output what happened.
+- Never force-push or run destructive git commands.
+- If `git push` fails (e.g. network issue), commit locally, report the failure, and stop the loop gracefully.
+- If `gh release create` fails, the code is still pushed — just note the release wasn't created and continue.
 
 ## Rules
 
