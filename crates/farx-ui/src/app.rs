@@ -1185,6 +1185,9 @@ impl App {
             "/yank" | "/copy-path" => {
                 self.dispatch(Action::CopyPathToClipboard);
             }
+            "/checksum" | "/sha256" => {
+                self.dispatch(Action::ShowChecksums);
+            }
             "/actions" => {
                 self.dispatch(Action::ShowQuickActions);
             }
@@ -2291,6 +2294,52 @@ impl App {
                     Err(e) => {
                         self.feedback.error(format!("SSH: {}", e));
                     }
+                }
+            }
+            Action::ShowChecksums => {
+                let tree = self.active_tree_ref();
+                let files: Vec<(String, std::path::PathBuf)> = if !tree.selected.is_empty() {
+                    tree.selected
+                        .iter()
+                        .filter_map(|&i| tree.visible_nodes.get(i))
+                        .filter(|n| !n.entry.is_dir)
+                        .map(|n| (n.entry.name.clone(), n.entry.path.clone()))
+                        .collect()
+                } else if let Some(node) = tree.current_node() {
+                    if !node.entry.is_dir {
+                        vec![(node.entry.name.clone(), node.entry.path.clone())]
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    Vec::new()
+                };
+                if files.is_empty() {
+                    self.feedback.error("No files selected".to_string());
+                } else {
+                    use sha2::{Digest, Sha256};
+                    let mut lines = Vec::new();
+                    for (name, path) in &files {
+                        match std::fs::read(path) {
+                            Ok(data) => {
+                                let mut hasher = Sha256::new();
+                                hasher.update(&data);
+                                let hash = format!("{:x}", hasher.finalize());
+                                lines.push(format!("SHA-256: {}", hash));
+                                lines.push(format!("  File: {}", name));
+                                lines.push(format!(
+                                    "  Size: {}",
+                                    format_size_human(data.len() as u64)
+                                ));
+                                lines.push(String::new());
+                            }
+                            Err(e) => {
+                                lines.push(format!("{}: error — {}", name, e));
+                                lines.push(String::new());
+                            }
+                        }
+                    }
+                    self.feedback.show_output("Checksums", lines.join("\n"));
                 }
             }
             Action::FindDuplicates => {

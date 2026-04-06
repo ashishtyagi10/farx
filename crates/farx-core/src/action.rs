@@ -115,6 +115,9 @@ pub enum Action {
     // Duplicate finder
     FindDuplicates,
 
+    // Checksums
+    ShowChecksums,
+
     // Disk usage treemap
     ShowTreemap,
 

@@ -191,6 +191,12 @@ impl KeyMap {
         // ── Disk usage treemap ──────────────────────────────────────────
         panel.insert((KeyCode::Char('t'), KeyModifiers::ALT), Action::ShowTreemap);
 
+        // ── Checksums ─────────────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('k'), KeyModifiers::ALT),
+            Action::ShowChecksums,
+        );
+
         // ── Archives ─────────────────────────────────────────────────────
         panel.insert(
             (KeyCode::Char('e'), KeyModifiers::ALT),
