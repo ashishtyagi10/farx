@@ -6,6 +6,7 @@ pub mod dialog;
 pub mod editor;
 pub mod feedback;
 pub mod fn_bar;
+pub mod fuzzy_finder;
 pub mod help;
 pub mod info_panel;
 pub mod markdown;

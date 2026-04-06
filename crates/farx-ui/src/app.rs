@@ -17,6 +17,7 @@ use crate::components::command_line::CommandLineState;
 use crate::components::dialog::{render_dialog, DialogResult, DialogState};
 use crate::components::editor::{render_editor, EditorAction, EditorState};
 use crate::components::feedback::{render_feedback, ConfirmAction, FeedbackResult, FeedbackState};
+use crate::components::fuzzy_finder::{render_fuzzy_finder, FuzzyAction, FuzzyFinderState};
 use crate::components::help::{render_help, HelpState};
 use crate::components::info_panel::{render_info_panel, InfoPanelData};
 use crate::components::menu::{render_menu, MenuAction, MenuState};
@@ -124,6 +125,8 @@ pub struct App {
     undo_stack: Vec<UndoEntry>,
     /// Batch rename dialog state.
     pub batch_rename: Option<BatchRenameState>,
+    /// Fuzzy finder dialog state.
+    pub fuzzy_finder: Option<FuzzyFinderState>,
 }
 
 impl App {
@@ -205,6 +208,7 @@ impl App {
             },
             undo_stack: Vec::new(),
             batch_rename: None,
+            fuzzy_finder: None,
         })
     }
 
@@ -394,6 +398,25 @@ impl App {
                 panel.scroll_offset = 0;
                 panel.selected.clear();
                 Self::refresh_panel(panel, show_hidden);
+            }
+            return Action::Noop;
+        }
+
+        // Fuzzy finder
+        if let Some(ref mut ff) = self.fuzzy_finder {
+            match ff.handle_key_event(key) {
+                FuzzyAction::Close => {
+                    self.fuzzy_finder = None;
+                }
+                FuzzyAction::GoTo(path) => {
+                    self.fuzzy_finder = None;
+                    if path.is_dir() {
+                        self.navigate_to(path);
+                    } else if let Some(parent) = path.parent() {
+                        self.navigate_to(parent.to_path_buf());
+                    }
+                }
+                FuzzyAction::None => {}
             }
             return Action::Noop;
         }
@@ -974,6 +997,9 @@ impl App {
             }
             "/yank" | "/copy-path" => {
                 self.dispatch(Action::CopyPathToClipboard);
+            }
+            "/find-file" | "/ff" => {
+                self.dispatch(Action::ShowFuzzyFinder);
             }
             "/rename-batch" | "/bulk-rename" => {
                 self.dispatch(Action::BatchRename);
@@ -1788,6 +1814,10 @@ impl App {
                     }
                 }
             }
+            Action::ShowFuzzyFinder => {
+                let root = self.active_tree_ref().root.clone();
+                self.fuzzy_finder = Some(FuzzyFinderState::new(root));
+            }
             Action::BatchRename => {
                 let tree = self.active_tree_ref();
                 let files: Vec<(PathBuf, String)> = if !tree.selected.is_empty() {
@@ -2081,6 +2111,11 @@ impl App {
         // Bookmarks panel
         if let Some(ref bm_panel) = self.bookmarks_panel {
             render_bookmarks(frame, bm_panel, &self.theme);
+        }
+
+        // Fuzzy finder
+        if let Some(ref ff) = self.fuzzy_finder {
+            render_fuzzy_finder(frame, ff, &self.theme);
         }
 
         // Batch rename dialog

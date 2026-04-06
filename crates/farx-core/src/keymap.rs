@@ -170,6 +170,12 @@ impl KeyMap {
             Action::BatchRename,
         );
 
+        // ── Fuzzy finder ──────────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('p'), KeyModifiers::CONTROL),
+            Action::ShowFuzzyFinder,
+        );
+
         // ── Archives ─────────────────────────────────────────────────────
         panel.insert(
             (KeyCode::Char('e'), KeyModifiers::ALT),

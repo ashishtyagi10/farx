@@ -96,6 +96,9 @@ pub enum Action {
     // Batch rename
     BatchRename,
 
+    // Fuzzy finder
+    ShowFuzzyFinder,
+
     // Archives
     ViewArchive,
     ExtractArchive,
