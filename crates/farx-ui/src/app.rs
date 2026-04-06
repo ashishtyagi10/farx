@@ -20,7 +20,7 @@ use crate::components::help::{render_help, HelpState};
 use crate::components::info_panel::{render_info_panel, InfoPanelData};
 use crate::components::menu::{render_menu, MenuAction, MenuState};
 use crate::components::search::{render_search, SearchAction, SearchState};
-use crate::components::tree_panel::{render_tree_panel, render_tree_panel_with_filter};
+use crate::components::tree_panel::render_tree_panel_with_filter;
 use crate::components::viewer::{render_viewer, ViewerAction, ViewerState};
 use crate::components::{command_line, fn_bar};
 use crate::theme::Theme;
@@ -661,6 +661,38 @@ impl App {
     /// Calculate the size of the directory (or selected items) under the cursor.
     fn calculate_dir_size(&mut self) {
         let tree = self.active_tree_ref();
+
+        // If there are selected items, calculate total for selection
+        if !tree.selected.is_empty() {
+            let mut total: u64 = 0;
+            let mut count = 0usize;
+            let mut dir_count = 0usize;
+            for &idx in &tree.selected {
+                if let Some(node) = tree.visible_nodes.get(idx) {
+                    count += 1;
+                    if node.entry.is_dir {
+                        dir_count += 1;
+                        total += dir_size_recursive(&node.entry.path);
+                    } else {
+                        total += node.entry.size;
+                    }
+                }
+            }
+            let desc = if dir_count > 0 {
+                format!(
+                    "{} items ({} dirs): {}",
+                    count,
+                    dir_count,
+                    format_size_human(total)
+                )
+            } else {
+                format!("{} files: {}", count, format_size_human(total))
+            };
+            self.feedback.info(desc);
+            return;
+        }
+
+        // Single item under cursor
         if let Some(node) = tree.current_node() {
             let path = node.entry.path.clone();
             let name = node.entry.name.clone();
@@ -865,6 +897,9 @@ impl App {
             }
             "/menu" => {
                 self.menu = Some(MenuState::new());
+            }
+            "/size" => {
+                self.calculate_dir_size();
             }
             "/filter" => {
                 if args.is_empty() {
