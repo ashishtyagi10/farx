@@ -161,6 +161,16 @@ impl KeyMap {
             Action::CalculateDirSize,
         );
 
+        // ── Archives ─────────────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('e'), KeyModifiers::ALT),
+            Action::ExtractArchive,
+        );
+        panel.insert(
+            (KeyCode::Char('c'), KeyModifiers::ALT),
+            Action::CompressSelection,
+        );
+
         // ── Sort modes (Ctrl+F3..F6) ────────────────────────────────────
         panel.insert((KeyCode::F(3), KeyModifiers::CONTROL), Action::SortByName);
         panel.insert(

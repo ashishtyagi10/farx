@@ -901,6 +901,12 @@ impl App {
             "/yank" | "/copy-path" => {
                 self.dispatch(Action::CopyPathToClipboard);
             }
+            "/extract" => {
+                self.dispatch(Action::ExtractArchive);
+            }
+            "/compress" | "/zip" => {
+                self.dispatch(Action::CompressSelection);
+            }
             "/back" => {
                 self.dispatch(Action::HistoryBack);
             }
@@ -1300,6 +1306,9 @@ impl App {
                     if is_dir {
                         // Enter changes into the directory (new root)
                         self.navigate_to(path);
+                    } else if farx_fs::is_archive(&path) {
+                        // Archive: browse contents
+                        self.dispatch(Action::ViewArchive);
                     } else {
                         // Smart open: text in editor, binary with system app
                         if is_text_file(&path) {
@@ -1609,6 +1618,81 @@ impl App {
                     },
                     Err(e) => {
                         self.feedback.error(format!("Clipboard: {}", e));
+                    }
+                }
+            }
+            Action::ViewArchive => {
+                if let Some(node) = self.active_tree_ref().current_node() {
+                    let path = node.entry.path.clone();
+                    match farx_fs::list_archive(&path) {
+                        Ok(entries) => {
+                            let lines: Vec<String> = entries
+                                .iter()
+                                .map(|e| {
+                                    if e.is_dir {
+                                        format!("[DIR]  {}", e.name)
+                                    } else {
+                                        format!("{:>8}  {}", format_size_human(e.size), e.name)
+                                    }
+                                })
+                                .collect();
+                            let title =
+                                format!("Archive: {} ({} entries)", node.entry.name, entries.len());
+                            self.feedback.show_output(&title, lines.join("\n"));
+                        }
+                        Err(e) => {
+                            self.feedback.error(format!("Archive: {}", e));
+                        }
+                    }
+                }
+            }
+            Action::ExtractArchive => {
+                if let Some(node) = self.active_tree_ref().current_node() {
+                    let path = node.entry.path.clone();
+                    if !farx_fs::is_archive(&path) {
+                        self.feedback.error("Not a supported archive".to_string());
+                    } else {
+                        let dest = self.inactive_tree_root();
+                        match farx_fs::extract_archive(&path, &dest) {
+                            Ok(count) => {
+                                self.feedback.success(format!(
+                                    "Extracted {} entries to {}",
+                                    count,
+                                    dest.display()
+                                ));
+                                self.left_tree.rebuild();
+                                self.right_tree.rebuild();
+                            }
+                            Err(e) => {
+                                self.feedback.error(format!("Extract: {}", e));
+                            }
+                        }
+                    }
+                }
+            }
+            Action::CompressSelection => {
+                let paths = self.collect_selected_paths();
+                if paths.is_empty() {
+                    self.feedback
+                        .error("No files selected to compress".to_string());
+                } else {
+                    let names = self.collect_selected_names();
+                    let archive_name = if names.len() == 1 {
+                        format!("{}.zip", names[0])
+                    } else {
+                        "archive.zip".to_string()
+                    };
+                    let dest = self.active_tree_ref().root.join(&archive_name);
+                    let refs: Vec<&std::path::Path> = paths.iter().map(|p| p.as_path()).collect();
+                    match farx_fs::compress_to_zip(&refs, &dest) {
+                        Ok(count) => {
+                            self.feedback
+                                .success(format!("Compressed {} files to {}", count, archive_name));
+                            self.active_tree().rebuild();
+                        }
+                        Err(e) => {
+                            self.feedback.error(format!("Compress: {}", e));
+                        }
                     }
                 }
             }

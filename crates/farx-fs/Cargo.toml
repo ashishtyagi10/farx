@@ -12,3 +12,6 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 trash = { workspace = true }
+zip = { workspace = true }
+tar = { workspace = true }
+flate2 = { workspace = true }

@@ -90,6 +90,11 @@ pub enum Action {
     // Filter
     ToggleFilter,
 
+    // Archives
+    ViewArchive,
+    ExtractArchive,
+    CompressSelection,
+
     // Directory size
     CalculateDirSize,
 

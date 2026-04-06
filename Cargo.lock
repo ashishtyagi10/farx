@@ -645,11 +645,14 @@ dependencies = [
  "anyhow",
  "chrono",
  "farx-core",
+ "flate2",
+ "tar",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
  "trash",
  "walkdir",
+ "zip",
 ]
 
 [[package]]
@@ -3390,10 +3393,12 @@ dependencies = [
  "crc32fast",
  "crossbeam-utils",
  "displaydoc",
+ "flate2",
  "indexmap",
  "memchr",
  "thiserror 2.0.18",
  "time",
+ "zopfli",
 ]
 
 [[package]]
@@ -3412,6 +3417,18 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[package]]
+name = "zopfli"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edfc5ee405f504cd4984ecc6f14d02d55cfda60fa4b689434ef4102aae150cd7"
+dependencies = [
+ "bumpalo",
+ "crc32fast",
+ "log",
+ "simd-adler32",
+]
 
 [[package]]
 name = "zune-core"
