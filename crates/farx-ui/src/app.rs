@@ -371,6 +371,9 @@ impl App {
                 (KeyCode::Up, KeyModifiers::NONE) => return Action::CommandLineHistoryUp,
                 (KeyCode::Down, KeyModifiers::NONE) => return Action::CommandLineHistoryDown,
                 (KeyCode::Esc, _) => return Action::CommandLineClear,
+                (KeyCode::Char(' '), KeyModifiers::NONE) => {
+                    return Action::CommandLineInput(' ');
+                }
                 (KeyCode::Left, KeyModifiers::NONE) => {
                     self.command_line.cursor_pos = self.command_line.cursor_pos.saturating_sub(1);
                     return Action::Noop;
@@ -994,21 +997,14 @@ impl App {
                     return;
                 }
                 // Read what we need from the tree node first
-                let node_info = self.active_tree_ref().current_node().map(|n| {
-                    (
-                        n.entry.is_dir,
-                        n.expanded,
-                        n.entry.path.clone(),
-                        n.entry.name.clone(),
-                    )
-                });
-                if let Some((is_dir, expanded, path, name)) = node_info {
+                let node_info = self
+                    .active_tree_ref()
+                    .current_node()
+                    .map(|n| (n.entry.is_dir, n.entry.path.clone(), n.entry.name.clone()));
+                if let Some((is_dir, path, name)) = node_info {
                     if is_dir {
-                        if expanded {
-                            self.active_tree().collapse();
-                        } else {
-                            self.active_tree().expand();
-                        }
+                        // Enter changes into the directory (new root)
+                        self.active_tree().set_root(path);
                     } else {
                         // Smart open: text in editor, binary with system app
                         if is_text_file(&path) {
@@ -1031,7 +1027,15 @@ impl App {
                 return;
             }
             Action::ParentDirectory => {
-                self.active_tree().collapse();
+                // Go up to the parent directory
+                let parent = self
+                    .active_tree_ref()
+                    .root
+                    .parent()
+                    .map(|p| p.to_path_buf());
+                if let Some(parent_path) = parent {
+                    self.active_tree().set_root(parent_path);
+                }
                 return;
             }
             Action::ToggleSelect => {
