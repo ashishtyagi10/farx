@@ -127,6 +127,8 @@ farx --keydebug       # Debug terminal key events
 | `Alt+F7` | Search files |
 | `Alt+S` | Calculate directory / selection size |
 | `Ctrl+Y` | Copy file path(s) to clipboard |
+| `Alt+E` | Extract archive to other panel |
+| `Alt+C` | Compress selection to zip |
 
 ## Built-in Editor
 
@@ -223,6 +225,35 @@ By default, deleted files are moved to the system trash (Recycle Bin on Windows,
 ## Clipboard
 
 Press `Ctrl+Y` to copy the path of the file under the cursor to the system clipboard. If files are selected, all selected paths are copied (one per line). Use `/yank` from the command line.
+
+## Git Status Overlay
+
+When browsing inside a git repository, files show colored status indicators at the end of each filename:
+- **M** (orange) — modified
+- **S** (green) — staged
+- **?** (gray) — untracked
+- **!** (red) — conflict
+- **D** (red) — deleted
+- **R** (blue) — renamed
+
+Status is refreshed automatically on directory navigation.
+
+## Archives
+
+Press `Enter` on a `.zip`, `.tar`, `.tar.gz`, or `.tgz` file to browse its contents. Use `Alt+E` to extract the archive under the cursor to the other panel, or `Alt+C` to compress selected files into a zip archive. Slash commands: `/extract`, `/compress`, `/zip`.
+
+## Plugins
+
+Farx supports Lua plugins. Place `.lua` files in `~/.config/farx/plugins/`. Plugins register commands that become available as slash commands:
+
+```lua
+-- ~/.config/farx/plugins/hello.lua
+farx.register_command("hello", "Say hello", [[
+    farx.message("Hello from Farx plugin!")
+]])
+```
+
+Use `/plugin` to list loaded commands, or `/hello` to run the example above.
 
 ## Themes
 
