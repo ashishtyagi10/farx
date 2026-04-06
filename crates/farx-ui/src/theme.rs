@@ -131,11 +131,11 @@ impl Theme {
             grid_style: Style::default().fg(Color::Rgb(40, 40, 42)).bg(bg),
             panel_cursor: Style::default().fg(Color::Rgb(240, 235, 220)).bg(cursor_bg),
             panel_selected: Style::default()
-                .fg(accent)
-                .bg(Color::Rgb(40, 38, 30))
+                .fg(Color::Rgb(255, 220, 80))
+                .bg(Color::Rgb(50, 45, 25))
                 .add_modifier(Modifier::BOLD),
             panel_cursor_selected: Style::default()
-                .fg(accent)
+                .fg(Color::Rgb(255, 220, 80))
                 .bg(cursor_bg)
                 .add_modifier(Modifier::BOLD),
             panel_dir: Style::default()
@@ -193,7 +193,7 @@ impl Theme {
             panel_cursor: Style::default().fg(base).bg(blue),
             panel_selected: Style::default()
                 .fg(yellow)
-                .bg(surface0)
+                .bg(Color::Rgb(55, 55, 75))
                 .add_modifier(Modifier::BOLD),
             panel_cursor_selected: Style::default()
                 .fg(yellow)
@@ -252,7 +252,7 @@ impl Theme {
             panel_cursor: Style::default().fg(bg).bg(purple),
             panel_selected: Style::default()
                 .fg(yellow)
-                .bg(current_line)
+                .bg(Color::Rgb(75, 78, 100))
                 .add_modifier(Modifier::BOLD),
             panel_cursor_selected: Style::default()
                 .fg(yellow)
@@ -312,7 +312,7 @@ impl Theme {
             panel_cursor: Style::default().fg(bg).bg(yellow),
             panel_selected: Style::default()
                 .fg(orange)
-                .bg(bg_highlight)
+                .bg(Color::Rgb(70, 65, 55))
                 .add_modifier(Modifier::BOLD),
             panel_cursor_selected: Style::default()
                 .fg(orange)
