@@ -90,6 +90,9 @@ pub enum Action {
     // Filter
     ToggleFilter,
 
+    // Undo
+    Undo,
+
     // Archives
     ViewArchive,
     ExtractArchive,

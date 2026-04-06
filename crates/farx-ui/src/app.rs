@@ -33,6 +33,24 @@ enum PendingOperation {
     CreateFile { parent: PathBuf },
 }
 
+/// A recorded file operation that can be undone.
+#[derive(Debug, Clone)]
+enum UndoEntry {
+    /// Files were deleted (moved to trash). Record paths for feedback.
+    Delete { paths: Vec<PathBuf> },
+    /// Files were moved from sources to dest dir.
+    Move {
+        sources: Vec<PathBuf>,
+        dest: PathBuf,
+    },
+    /// A file was renamed from old to new.
+    Rename { old: PathBuf, new: PathBuf },
+    /// A directory was created.
+    MkDir { path: PathBuf },
+    /// A file was created.
+    CreateFile { path: PathBuf },
+}
+
 /// Main application state that owns panels, config, and the render loop.
 pub struct App {
     /// Whether the application is still running.
@@ -101,6 +119,8 @@ pub struct App {
     pub filter_pattern: String,
     /// Plugin engine for Lua extensions.
     pub plugin_engine: Option<farx_plugin::PluginEngine>,
+    /// Undo stack for file operations.
+    undo_stack: Vec<UndoEntry>,
 }
 
 impl App {
@@ -180,6 +200,7 @@ impl App {
                     Err(_) => None,
                 }
             },
+            undo_stack: Vec::new(),
         })
     }
 
@@ -912,6 +933,9 @@ impl App {
             "/yank" | "/copy-path" => {
                 self.dispatch(Action::CopyPathToClipboard);
             }
+            "/undo" => {
+                self.dispatch(Action::Undo);
+            }
             "/extract" => {
                 self.dispatch(Action::ExtractArchive);
             }
@@ -1223,7 +1247,16 @@ impl App {
                     }
                     if let Some(parent) = original.parent() {
                         let new_path = parent.join(new_name);
-                        farx_fs::rename_entry(&original, &new_path)
+                        let old_clone = original.clone();
+                        let new_clone = new_path.clone();
+                        let result = farx_fs::rename_entry(&original, &new_path);
+                        if result.is_ok() {
+                            self.undo_stack.push(UndoEntry::Rename {
+                                old: old_clone,
+                                new: new_clone,
+                            });
+                        }
+                        result
                     } else {
                         return;
                     }
@@ -1293,11 +1326,18 @@ impl App {
             ConfirmAction::Move { sources, dest } => {
                 let mut ok = 0;
                 let mut fail = 0;
+                let moved_sources = sources.clone();
                 for source in &sources {
                     match farx_fs::move_entry(source, &dest) {
                         Ok(()) => ok += 1,
                         Err(_) => fail += 1,
                     }
+                }
+                if ok > 0 {
+                    self.undo_stack.push(UndoEntry::Move {
+                        sources: moved_sources,
+                        dest: dest.clone(),
+                    });
                 }
                 if fail == 0 {
                     self.feedback.success(format!("Moved {} file(s)", ok));
@@ -1315,6 +1355,11 @@ impl App {
                         Ok(()) => ok += 1,
                         Err(_) => fail += 1,
                     }
+                }
+                if ok > 0 && use_trash {
+                    self.undo_stack.push(UndoEntry::Delete {
+                        paths: targets.clone(),
+                    });
                 }
                 let verb = if use_trash { "Trashed" } else { "Deleted" };
                 if fail == 0 {
@@ -1696,6 +1741,72 @@ impl App {
                     Err(e) => {
                         self.feedback.error(format!("Clipboard: {}", e));
                     }
+                }
+            }
+            Action::Undo => {
+                if let Some(entry) = self.undo_stack.pop() {
+                    match entry {
+                        UndoEntry::Delete { paths } => {
+                            // Can't programmatically restore from trash in a cross-platform way,
+                            // but we can inform the user what was deleted
+                            let names: Vec<String> = paths
+                                .iter()
+                                .filter_map(|p| {
+                                    p.file_name().map(|n| n.to_string_lossy().to_string())
+                                })
+                                .collect();
+                            self.feedback.info(format!(
+                                "Undo: check system trash for: {}",
+                                names.join(", ")
+                            ));
+                        }
+                        UndoEntry::Move { sources, dest } => {
+                            let mut ok = 0;
+                            for source in &sources {
+                                let name = source
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().to_string())
+                                    .unwrap_or_default();
+                                let moved_to = dest.join(&name);
+                                let original_dir =
+                                    source.parent().unwrap_or(std::path::Path::new("/"));
+                                if farx_fs::move_entry(&moved_to, original_dir).is_ok() {
+                                    ok += 1;
+                                }
+                            }
+                            self.feedback
+                                .success(format!("Undo: moved {} file(s) back", ok));
+                            self.left_tree.rebuild();
+                            self.right_tree.rebuild();
+                        }
+                        UndoEntry::Rename { old, new } => match farx_fs::rename_entry(&new, &old) {
+                            Ok(()) => {
+                                self.feedback.success("Undo: rename reversed".to_string());
+                                self.active_tree().rebuild();
+                            }
+                            Err(e) => {
+                                self.feedback.error(format!("Undo rename: {}", e));
+                            }
+                        },
+                        UndoEntry::MkDir { path } => {
+                            if path.exists() && path.is_dir() {
+                                let _ = std::fs::remove_dir(&path);
+                                self.feedback
+                                    .success("Undo: removed created directory".to_string());
+                                self.active_tree().rebuild();
+                            }
+                        }
+                        UndoEntry::CreateFile { path } => {
+                            if path.exists() && path.is_file() {
+                                let _ = std::fs::remove_file(&path);
+                                self.feedback
+                                    .success("Undo: removed created file".to_string());
+                                self.active_tree().rebuild();
+                            }
+                        }
+                    }
+                } else {
+                    self.feedback.info("Nothing to undo".to_string());
                 }
             }
             Action::ViewArchive => {

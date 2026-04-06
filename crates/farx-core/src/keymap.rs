@@ -161,6 +161,9 @@ impl KeyMap {
             Action::CalculateDirSize,
         );
 
+        // ── Undo ─────────────────────────────────────────────────────────
+        panel.insert((KeyCode::Char('z'), KeyModifiers::CONTROL), Action::Undo);
+
         // ── Archives ─────────────────────────────────────────────────────
         panel.insert(
             (KeyCode::Char('e'), KeyModifiers::ALT),
