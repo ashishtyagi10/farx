@@ -196,6 +196,21 @@ impl App {
         }
     }
 
+    /// Navigate the active panel to a new directory.
+    /// Updates both the tree root and the panel's current_dir.
+    fn navigate_to(&mut self, path: PathBuf) {
+        match self.active_panel {
+            PanelSide::Left => {
+                self.left_tree.set_root(path.clone());
+                self.left_panel.current_dir = path;
+            }
+            PanelSide::Right => {
+                self.right_tree.set_root(path.clone());
+                self.right_panel.current_dir = path;
+            }
+        }
+    }
+
     /// Get the inactive tree's root directory.
     fn inactive_tree_root(&self) -> PathBuf {
         match self.active_panel {
@@ -476,6 +491,12 @@ impl App {
         self.update_available = Some(version);
     }
 
+    pub fn set_update_applied(&mut self, version: String) {
+        self.feedback
+            .success(format!("Updated to v{version} — restart farx to use it"));
+        self.update_available = None;
+    }
+
     /// Check for completed AI responses (called from tick).
     pub fn tick(&mut self) {
         self.tick_count += 1;
@@ -590,6 +611,14 @@ impl App {
         // Save to history regardless
         self.command_line.history.push(input.clone());
 
+        // Slash commands: /exit, /quit, /help, /refresh, /hidden, /sort, /search, /ai, /cd
+        if input.starts_with('/') {
+            if self.handle_slash_command(&input) {
+                return;
+            }
+            // Unknown slash command — fall through to shell/AI
+        }
+
         if Self::looks_like_shell_command(&input) {
             // Execute as shell command
             let output = if cfg!(windows) {
@@ -642,6 +671,107 @@ impl App {
             }
             self.submit_ai_query(input);
         }
+    }
+
+    /// Handle a slash command. Returns true if the command was recognized.
+    fn handle_slash_command(&mut self, input: &str) -> bool {
+        let trimmed = input.trim();
+        let (cmd, args) = match trimmed.split_once(char::is_whitespace) {
+            Some((c, a)) => (c, a.trim()),
+            None => (trimmed, ""),
+        };
+
+        match cmd {
+            "/exit" | "/quit" | "/q" => {
+                self.running = false;
+            }
+            "/help" | "/h" => {
+                self.help = Some(HelpState::new());
+            }
+            "/refresh" | "/r" => {
+                self.left_tree.rebuild();
+                self.right_tree.rebuild();
+                self.feedback.info("Refreshed".to_string());
+            }
+            "/hidden" => {
+                self.config.general.show_hidden_files = !self.config.general.show_hidden_files;
+                let sh = self.config.general.show_hidden_files;
+                self.left_tree.show_hidden = sh;
+                self.left_tree.rebuild();
+                self.right_tree.show_hidden = sh;
+                self.right_tree.rebuild();
+                self.feedback.info(format!(
+                    "Hidden files: {}",
+                    if sh { "shown" } else { "hidden" }
+                ));
+            }
+            "/sort" => {
+                let valid = match args {
+                    "name" => {
+                        self.active_panel_mut().sort_field = SortField::Name;
+                        true
+                    }
+                    "ext" => {
+                        self.active_panel_mut().sort_field = SortField::Extension;
+                        true
+                    }
+                    "size" => {
+                        self.active_panel_mut().sort_field = SortField::Size;
+                        true
+                    }
+                    "date" => {
+                        self.active_panel_mut().sort_field = SortField::Modified;
+                        true
+                    }
+                    _ => {
+                        self.feedback
+                            .error("Usage: /sort name|ext|size|date".to_string());
+                        false
+                    }
+                };
+                if valid {
+                    self.active_panel_mut().sort_entries();
+                }
+            }
+            "/search" | "/find" => {
+                let dir = self.active_panel_ref().current_dir.clone();
+                self.search = Some(SearchState::new(dir));
+            }
+            "/ai" => {
+                self.ai_bar = Some(AiBarState::new());
+            }
+            "/cd" => {
+                if args.is_empty() {
+                    // Go home
+                    if let Some(home) = dirs::home_dir() {
+                        self.navigate_to(home);
+                    }
+                } else {
+                    let path = if args.starts_with('~') {
+                        dirs::home_dir()
+                            .unwrap_or_default()
+                            .join(args.trim_start_matches("~/"))
+                    } else if args.starts_with('/') {
+                        PathBuf::from(args)
+                    } else {
+                        self.active_tree_ref().root.join(args)
+                    };
+                    if path.is_dir() {
+                        self.navigate_to(path);
+                    } else {
+                        self.feedback.error(format!("Not a directory: {}", args));
+                    }
+                }
+            }
+            "/menu" => {
+                self.menu = Some(MenuState::new());
+            }
+            "/info" => {
+                self.show_info_panel = !self.show_info_panel;
+            }
+            _ => return false,
+        }
+        true
     }
 
     /// Heuristic to detect shell commands vs natural language.
@@ -1004,7 +1134,7 @@ impl App {
                 if let Some((is_dir, path, name)) = node_info {
                     if is_dir {
                         // Enter changes into the directory (new root)
-                        self.active_tree().set_root(path);
+                        self.navigate_to(path);
                     } else {
                         // Smart open: text in editor, binary with system app
                         if is_text_file(&path) {
@@ -1034,7 +1164,7 @@ impl App {
                     .parent()
                     .map(|p| p.to_path_buf());
                 if let Some(parent_path) = parent {
-                    self.active_tree().set_root(parent_path);
+                    self.navigate_to(parent_path);
                 }
                 return;
             }
@@ -1103,7 +1233,7 @@ impl App {
                 } else {
                     PathBuf::from("/")
                 };
-                self.active_tree().set_root(root);
+                self.navigate_to(root);
             }
             Action::ToggleHidden => {
                 self.config.general.show_hidden_files = !self.config.general.show_hidden_files;

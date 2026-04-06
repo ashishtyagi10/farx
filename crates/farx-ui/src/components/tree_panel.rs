@@ -70,11 +70,11 @@ pub fn render_tree_panel(
         // Icon — using standard Unicode that works in every terminal
         let icon = if node.entry.is_dir {
             if node.expanded {
-                "▼ " // expanded
+                "[-] " // expanded
             } else if node.has_children {
-                "▶ " // collapsed with children
+                "[+] " // collapsed with children
             } else {
-                "△ " // empty dir
+                "[ ] " // empty dir
             }
         } else if is_selected {
             "◆ "

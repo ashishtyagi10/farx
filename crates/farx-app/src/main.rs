@@ -64,8 +64,11 @@ async fn main() -> Result<()> {
     // --check-update: just print whether an update exists
     if cli.check_update {
         update::print_version();
-        let rx = update::check_for_updates_async();
+        let rx = update::check_and_auto_update_async();
         match rx.recv() {
+            Ok(update::UpdateStatus::Updated(v)) => {
+                println!("Updated to v{v}! Restart farx to use the new version.");
+            }
             Ok(update::UpdateStatus::Available(v)) => {
                 println!("New version available: v{v}");
                 println!("Run `farx --update` to install it.");
@@ -91,8 +94,8 @@ async fn main() -> Result<()> {
         .with_writer(io::stderr)
         .init();
 
-    // Kick off a background update check (non-blocking)
-    let update_rx = update::check_for_updates_async();
+    // Kick off a background update check + auto-apply (non-blocking)
+    let update_rx = update::check_and_auto_update_async();
 
     // Load config
     let config = AppConfig::load();
@@ -121,8 +124,14 @@ async fn main() -> Result<()> {
         if !update_checked {
             if let Ok(status) = update_rx.try_recv() {
                 update_checked = true;
-                if let update::UpdateStatus::Available(v) = status {
-                    app.set_update_available(v);
+                match status {
+                    update::UpdateStatus::Updated(v) => {
+                        app.set_update_applied(v);
+                    }
+                    update::UpdateStatus::Available(v) => {
+                        app.set_update_available(v);
+                    }
+                    _ => {}
                 }
             }
         }

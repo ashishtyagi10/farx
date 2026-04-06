@@ -7,8 +7,16 @@
 set -e
 
 REPO="ashishtyagi10/farx"
-INSTALL_DIR="/usr/local/bin"
 BIN_NAME="farx"
+
+# Prefer ~/.local/bin (no sudo needed), fall back to /usr/local/bin
+if [ -n "${INSTALL_DIR:-}" ]; then
+    : # user override via env
+elif [ -d "$HOME/.local/bin" ] || mkdir -p "$HOME/.local/bin" 2>/dev/null; then
+    INSTALL_DIR="$HOME/.local/bin"
+else
+    INSTALL_DIR="/usr/local/bin"
+fi
 
 main() {
     need_cmd curl
@@ -65,7 +73,21 @@ main() {
 
     echo ""
     echo "Installed ${BIN_NAME} ${latest} to ${INSTALL_DIR}/${BIN_NAME}"
-    echo "Run 'farx' to start. Updates: 'farx --update'"
+
+    # Check if INSTALL_DIR is in PATH
+    case ":$PATH:" in
+        *":${INSTALL_DIR}:"*) ;;
+        *)
+            echo ""
+            echo "NOTE: ${INSTALL_DIR} is not in your PATH."
+            echo "Add it by running:"
+            echo "  echo 'export PATH=\"${INSTALL_DIR}:\$PATH\"' >> ~/.$(basename "$SHELL")rc"
+            echo "  source ~/.$(basename "$SHELL")rc"
+            ;;
+    esac
+
+    echo ""
+    echo "Run 'farx' to start. Farx auto-updates on startup."
 }
 
 detect_os() {

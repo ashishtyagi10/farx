@@ -14,20 +14,28 @@ const REPO_NAME: &str = "farx";
 pub enum UpdateStatus {
     /// A newer version is available.
     Available(String),
+    /// Auto-updated to a new version (restart needed).
+    Updated(String),
     /// Already on the latest version.
     UpToDate,
     /// Check failed (network error, etc.) — not fatal.
     Failed(String),
 }
 
-/// Check for updates in a background thread.
+/// Check for updates in a background thread and auto-apply if possible.
 /// Returns a receiver that will eventually contain the result.
-pub fn check_for_updates_async() -> mpsc::Receiver<UpdateStatus> {
+pub fn check_and_auto_update_async() -> mpsc::Receiver<UpdateStatus> {
     let (tx, rx) = mpsc::channel();
 
     thread::spawn(move || {
         let status = match check_latest_version() {
-            Ok(Some(latest)) => UpdateStatus::Available(latest),
+            Ok(Some(latest)) => {
+                // Try to auto-update (works when binary is user-writable)
+                match try_auto_update() {
+                    Ok(self_update::Status::Updated(v)) => UpdateStatus::Updated(v),
+                    _ => UpdateStatus::Available(latest),
+                }
+            }
             Ok(None) => UpdateStatus::UpToDate,
             Err(e) => UpdateStatus::Failed(e.to_string()),
         };
@@ -35,6 +43,22 @@ pub fn check_for_updates_async() -> mpsc::Receiver<UpdateStatus> {
     });
 
     rx
+}
+
+/// Attempt to update in-place. Succeeds without sudo if binary is in a
+/// user-writable location (e.g. ~/.local/bin).
+fn try_auto_update() -> Result<self_update::Status> {
+    let status = Update::configure()
+        .repo_owner(REPO_OWNER)
+        .repo_name(REPO_NAME)
+        .bin_name("farx")
+        .identifier("farx")
+        .current_version(cargo_crate_version!())
+        .no_confirm(true)
+        .show_download_progress(false)
+        .build()?
+        .update()?;
+    Ok(status)
 }
 
 /// Check if a newer version exists on GitHub Releases.
