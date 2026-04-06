@@ -6,4 +6,6 @@ pub mod ops;
 pub use archive::{compress_to_zip, extract_archive, is_archive, list_archive, ArchiveEntry};
 pub use duplicates::{find_duplicates, DuplicateGroup};
 pub use local::read_directory;
-pub use ops::{copy_entry, create_directory, delete_entry, move_entry, rename_entry};
+pub use ops::{
+    copy_entry, create_directory, create_symlink, delete_entry, move_entry, rename_entry,
+};

@@ -207,6 +207,12 @@ impl KeyMap {
             Action::CompressSelection,
         );
 
+        // ── Symlink ─────────────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('l'), KeyModifiers::ALT),
+            Action::CreateSymlinkDialog,
+        );
+
         // ── Select/Deselect by mask ────────────────────────────────────
         panel.insert(
             (KeyCode::Char('+'), KeyModifiers::ALT),

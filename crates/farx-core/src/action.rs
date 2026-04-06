@@ -104,6 +104,9 @@ pub enum Action {
     ExtractArchive,
     CompressSelection,
 
+    // Symlink
+    CreateSymlinkDialog,
+
     // Quick actions
     ShowQuickActions,
     /// Execute a shell command in the current directory

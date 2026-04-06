@@ -38,6 +38,7 @@ enum PendingOperation {
     CreateFile { parent: PathBuf },
     SelectByMask,
     DeselectByMask,
+    CreateSymlink { target: PathBuf },
 }
 
 /// A recorded file operation that can be undone.
@@ -1366,6 +1367,9 @@ impl App {
             "/info" => {
                 self.show_info_panel = !self.show_info_panel;
             }
+            "/symlink" | "/ln" => {
+                self.dispatch(Action::CreateSymlinkDialog);
+            }
             "/select" => {
                 if args.is_empty() {
                     self.dispatch(Action::SelectByMaskDialog);
@@ -1663,6 +1667,19 @@ impl App {
                     std::fs::File::create(&file_path)
                         .map(|_| ())
                         .map_err(anyhow::Error::from)
+                } else {
+                    return;
+                }
+            }
+            PendingOperation::CreateSymlink { target } => {
+                if let Some(name) = input_value {
+                    let name = name.trim();
+                    if name.is_empty() {
+                        return;
+                    }
+                    let link_dir = self.active_tree_ref().root.clone();
+                    let link_path = link_dir.join(name);
+                    farx_fs::create_symlink(&target, &link_path)
                 } else {
                     return;
                 }
@@ -2069,6 +2086,21 @@ impl App {
                     "Enter file name:",
                     "",
                 ));
+            }
+            Action::CreateSymlinkDialog => {
+                if let Some(node) = self.active_tree_ref().current_node() {
+                    if node.entry.name == ".." {
+                        return;
+                    }
+                    let target = node.entry.path.clone();
+                    let default_name = format!("{}_link", node.entry.name);
+                    self.pending_op = Some(PendingOperation::CreateSymlink { target });
+                    self.dialog = Some(DialogState::new_input(
+                        "Create symlink",
+                        "Enter link name:",
+                        default_name,
+                    ));
+                }
             }
             Action::SelectByMaskDialog => {
                 self.pending_op = Some(PendingOperation::SelectByMask);
