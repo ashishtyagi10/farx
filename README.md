@@ -82,6 +82,7 @@ farx --keydebug       # Debug terminal key events
 | `Shift+F6` | Rename |
 | `Ctrl+M` | Batch rename (regex find/replace) |
 | `Ctrl+Z` | Undo last file operation |
+| `Alt+L` | Create symbolic link |
 
 ### Selection
 
@@ -91,15 +92,17 @@ farx --keydebug       # Debug terminal key events
 | `Ctrl+A` | Select all |
 | `Ctrl+D` | Deselect all |
 | `Alt+Up` / `Alt+Down` | Select while moving |
+| `Alt++` | Select by pattern/mask |
+| `Alt+-` | Deselect by pattern/mask |
 
 ### Sorting
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+F3` | Sort by name |
-| `Ctrl+F4` | Sort by extension |
-| `Ctrl+F5` | Sort by size |
-| `Ctrl+F6` | Sort by date |
+| `Ctrl+F3` | Sort by name (press again to toggle asc/desc) |
+| `Ctrl+F4` | Sort by extension (press again to toggle asc/desc) |
+| `Ctrl+F5` | Sort by size (press again to toggle asc/desc) |
+| `Ctrl+F6` | Sort by date (press again to toggle asc/desc) |
 
 ### Bookmarks
 
@@ -297,6 +300,14 @@ Press `Alt+Enter` to see context-aware actions for the file under the cursor. Ac
 ## Checksums
 
 Press `Alt+K` to compute and display the SHA-256 checksum for the file under the cursor or all selected files. Use `/checksum` or `/sha256` from the command line.
+
+## Select by Pattern
+
+Press `Alt++` to select files matching a glob pattern (e.g. `*.rs`, `test*`, `*.log`). Press `Alt+-` to deselect by pattern. Supports `*` (any characters) and `?` (single character) wildcards. Use `/select <pattern>` and `/deselect <pattern>` from the command line.
+
+## Symbolic Links
+
+Press `Alt+L` to create a symbolic link to the file under the cursor. A dialog prompts for the link name. Works on Unix and Windows. Use `/symlink` or `/ln` from the command line.
 
 ## Themes
 
