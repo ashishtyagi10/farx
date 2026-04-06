@@ -104,6 +104,11 @@ pub enum Action {
     ExtractArchive,
     CompressSelection,
 
+    // Quick actions
+    ShowQuickActions,
+    /// Execute a shell command in the current directory
+    RunShellAction(String),
+
     // Remote browsing
     SshBrowse(String),
 

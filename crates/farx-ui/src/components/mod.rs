@@ -12,6 +12,7 @@ pub mod info_panel;
 pub mod markdown;
 pub mod menu;
 pub mod panel;
+pub mod quick_actions;
 pub mod search;
 pub mod syntax;
 pub mod tree_panel;

@@ -21,6 +21,9 @@ use crate::components::fuzzy_finder::{render_fuzzy_finder, FuzzyAction, FuzzyFin
 use crate::components::help::{render_help, HelpState};
 use crate::components::info_panel::{render_info_panel, InfoPanelData};
 use crate::components::menu::{render_menu, MenuAction, MenuState};
+use crate::components::quick_actions::{
+    render_quick_actions, QuickActionResult, QuickActionsState,
+};
 use crate::components::search::{render_search, SearchAction, SearchState};
 use crate::components::tree_panel::render_tree_panel_with_filter;
 use crate::components::viewer::{render_viewer, ViewerAction, ViewerState};
@@ -127,6 +130,8 @@ pub struct App {
     pub batch_rename: Option<BatchRenameState>,
     /// Fuzzy finder dialog state.
     pub fuzzy_finder: Option<FuzzyFinderState>,
+    /// Quick actions palette state.
+    pub quick_actions: Option<QuickActionsState>,
     /// File watcher: receives notifications when files change.
     fs_watcher: Option<notify::RecommendedWatcher>,
     fs_change_rx: Option<std::sync::mpsc::Receiver<()>>,
@@ -214,6 +219,7 @@ impl App {
             undo_stack: Vec::new(),
             batch_rename: None,
             fuzzy_finder: None,
+            quick_actions: None,
             fs_watcher: None,
             fs_change_rx: None,
             fs_change_tick: 0,
@@ -429,6 +435,21 @@ impl App {
                     }
                 }
                 FuzzyAction::None => {}
+            }
+            return Action::Noop;
+        }
+
+        // Quick actions palette
+        if let Some(ref mut qa) = self.quick_actions {
+            match qa.handle_key_event(key) {
+                QuickActionResult::Close => {
+                    self.quick_actions = None;
+                }
+                QuickActionResult::Execute(cmd) => {
+                    self.quick_actions = None;
+                    self.handle_quick_action(&cmd);
+                }
+                QuickActionResult::None => {}
             }
             return Action::Noop;
         }
@@ -875,6 +896,40 @@ impl App {
     }
 
     /// Set up filesystem watcher for both panel directories.
+    /// Handle a quick action command (may be a special builtin or shell command).
+    fn handle_quick_action(&mut self, cmd: &str) {
+        match cmd {
+            "__open__" => {
+                if let Some(node) = self.active_tree_ref().current_node() {
+                    let path = node.entry.path.clone();
+                    let name = node.entry.name.clone();
+                    match open::that(&path) {
+                        Ok(()) => self.feedback.info(format!("Opened: {}", name)),
+                        Err(e) => self.feedback.error(format!("Open: {}", e)),
+                    }
+                }
+            }
+            "__edit__" => self.dispatch(Action::EditFile),
+            "__view__" => self.dispatch(Action::ViewFile),
+            "__clipboard__" => self.dispatch(Action::CopyPathToClipboard),
+            "__extract__" => self.dispatch(Action::ExtractArchive),
+            "__view_archive__" => self.dispatch(Action::ViewArchive),
+            "__terminal__" => {
+                let dir = self.active_tree_ref().root.to_string_lossy().to_string();
+                let cmd = if cfg!(target_os = "macos") {
+                    format!("open -a Terminal {}", dir)
+                } else {
+                    format!("xterm -e 'cd {} && $SHELL' &", dir)
+                };
+                let _ = std::process::Command::new("sh").args(["-c", &cmd]).spawn();
+            }
+            shell_cmd => {
+                self.command_line.input = shell_cmd.to_string();
+                self.smart_execute_command();
+            }
+        }
+    }
+
     fn setup_fs_watcher(&mut self) {
         use notify::{EventKind, RecursiveMode, Watcher};
         let (tx, rx) = std::sync::mpsc::channel();
@@ -1129,6 +1184,9 @@ impl App {
             }
             "/yank" | "/copy-path" => {
                 self.dispatch(Action::CopyPathToClipboard);
+            }
+            "/actions" => {
+                self.dispatch(Action::ShowQuickActions);
             }
             "/find-file" | "/ff" => {
                 self.dispatch(Action::ShowFuzzyFinder);
@@ -2021,6 +2079,18 @@ impl App {
                     }
                 }
             }
+            Action::ShowQuickActions => {
+                if let Some(node) = self.active_tree_ref().current_node() {
+                    let name = node.entry.name.clone();
+                    let ext = node.entry.extension.as_deref();
+                    let is_dir = node.entry.is_dir;
+                    self.quick_actions = Some(QuickActionsState::new(name, ext, is_dir));
+                }
+            }
+            Action::RunShellAction(cmd) => {
+                self.command_line.input = cmd;
+                self.smart_execute_command();
+            }
             Action::ShowFuzzyFinder => {
                 let root = self.active_tree_ref().root.clone();
                 self.fuzzy_finder = Some(FuzzyFinderState::new(root));
@@ -2400,6 +2470,11 @@ impl App {
         // Fuzzy finder
         if let Some(ref ff) = self.fuzzy_finder {
             render_fuzzy_finder(frame, ff, &self.theme);
+        }
+
+        // Quick actions palette
+        if let Some(ref qa) = self.quick_actions {
+            render_quick_actions(frame, qa, &self.theme);
         }
 
         // Batch rename dialog

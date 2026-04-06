@@ -176,6 +176,12 @@ impl KeyMap {
             Action::ShowFuzzyFinder,
         );
 
+        // ── Quick actions ─────────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Enter, KeyModifiers::ALT),
+            Action::ShowQuickActions,
+        );
+
         // ── Duplicate finder ──────────────────────────────────────────────
         panel.insert(
             (KeyCode::Char('d'), KeyModifiers::ALT),
