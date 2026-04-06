@@ -1,5 +1,5 @@
 use crate::theme::Theme;
-use farx_core::tree::TreeState;
+use farx_core::tree::{GitFileStatus, TreeState};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -176,21 +176,50 @@ pub fn render_tree_panel_with_filter(
             Style::default().fg(Color::Rgb(80, 80, 85)).bg(row_bg)
         };
 
+        // Git status indicator
+        let git_indicator = tree.git_status_for(&node.entry.path);
+        let (git_glyph, git_color) = match git_indicator {
+            Some(GitFileStatus::Modified) => (" M", Color::Rgb(230, 140, 70)),
+            Some(GitFileStatus::Staged) => (" S", Color::Rgb(120, 190, 90)),
+            Some(GitFileStatus::Untracked) => (" ?", Color::Rgb(150, 150, 150)),
+            Some(GitFileStatus::Conflict) => (" !", Color::Rgb(240, 80, 80)),
+            Some(GitFileStatus::Deleted) => (" D", Color::Rgb(240, 80, 80)),
+            Some(GitFileStatus::Renamed) => (" R", Color::Rgb(140, 180, 250)),
+            Some(GitFileStatus::Ignored) => ("", Color::Reset),
+            None => ("", Color::Reset),
+        };
+        let git_len = git_glyph.len();
+
         // Calculate how much space the name part gets
         let prefix_len = indent.chars().count() + connector.chars().count() + icon.chars().count();
-        let name_width = total_width.saturating_sub(prefix_len);
+        let name_width = total_width.saturating_sub(prefix_len + git_len);
         let name_padded = if name_and_size.len() >= name_width {
             format!("{}~", &name_and_size[..name_width.saturating_sub(1)])
         } else {
             format!("{:<width$}", name_and_size, width = name_width)
         };
 
-        lines.push(Line::from(vec![
+        let mut spans = vec![
             Span::styled(indent.clone(), guide_style),
             Span::styled(connector.to_string(), guide_style),
             Span::styled(icon.to_string(), icon_style),
             Span::styled(name_padded, entry_style),
-        ]));
+        ];
+        if !git_glyph.is_empty() {
+            let git_style = if is_cursor {
+                Style::default()
+                    .fg(git_color)
+                    .bg(entry_style.bg.unwrap_or(row_bg))
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+                    .fg(git_color)
+                    .bg(row_bg)
+                    .add_modifier(Modifier::BOLD)
+            };
+            spans.push(Span::styled(git_glyph.to_string(), git_style));
+        }
+        lines.push(Line::from(spans));
     }
 
     // Fill empty rows
