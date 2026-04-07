@@ -246,6 +246,27 @@ impl ViewerState {
                 self.goto_input = Some(String::new());
                 ViewerAction::None
             }
+            KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Toggle hex mode
+                if self.hex_mode {
+                    // Switch to text: re-read file as text
+                    if let Ok(text) = std::fs::read_to_string(&self.file_path) {
+                        self.lines = text.lines().map(String::from).collect();
+                        self.total_lines = self.lines.len();
+                        self.hex_mode = false;
+                        self.scroll_offset = 0;
+                    }
+                } else {
+                    // Switch to hex: re-read file as bytes
+                    if let Ok(bytes) = std::fs::read(&self.file_path) {
+                        self.lines = hex_dump(&bytes);
+                        self.total_lines = self.lines.len();
+                        self.hex_mode = true;
+                        self.scroll_offset = 0;
+                    }
+                }
+                ViewerAction::None
+            }
             KeyCode::Char('/') | KeyCode::F(7) => {
                 self.search_input = Some(String::new());
                 ViewerAction::None
