@@ -135,6 +135,9 @@ farx --keydebug       # Debug terminal key events
 | `Alt+F7` | Search files |
 | `Alt+S` | Calculate directory / selection size |
 | `Ctrl+Y` | Copy file path(s) to clipboard |
+| `Alt+Y` | Copy file name(s) to clipboard |
+| `Ctrl+\`` | Open terminal here |
+| `Alt+H` | Recent directories |
 | `Alt+E` | Extract archive to other panel |
 | `Alt+C` | Compress selection to zip |
 | `Ctrl+P` | Fuzzy file finder |
@@ -337,6 +340,18 @@ Press `F2` to open the file or directory under the cursor with your OS's default
 ## File Preview
 
 Press `Ctrl+L` to toggle the info panel. It now shows a live preview of the file under the cursor: name, size, modification date, and the first 30 lines of text content. Binary files show a hex dump summary. Files larger than 5 MB show a placeholder.
+
+## Copy File Names
+
+Press `Alt+Y` to copy just the filename(s) (not full paths) to the clipboard. If files are selected, all selected names are copied (one per line). Complements `Ctrl+Y` which copies full paths. Use `/yank-names` or `/copy-names` from the command line.
+
+## Open Terminal Here
+
+Press `` Ctrl+` `` to open a new terminal window in the current panel's directory. macOS opens Terminal.app, Windows opens cmd, Linux uses `$TERMINAL` or xterm. Use `/terminal` or `/term` from the command line.
+
+## Recent Directories
+
+Press `Alt+H` to see a list of recently visited directories from the navigation history. The current directory is marked with `*`. Use `/recent` or `/history` from the command line, and `/goto` to jump to any listed path.
 
 ## Themes
 
