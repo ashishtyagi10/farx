@@ -383,22 +383,23 @@ impl EditorState {
                     return EditorAction::Close;
                 }
             }
-            // Save
-            (KeyCode::F(2), KeyModifiers::NONE) => {
+            // Save (F2 or Ctrl+S)
+            (KeyCode::F(2), KeyModifiers::NONE) | (KeyCode::Char('s'), KeyModifiers::CONTROL) => {
                 let _ = self.save();
             }
-            (KeyCode::F(2), KeyModifiers::SHIFT) => {
+            // Save and exit (Shift+F2 or Ctrl+Q)
+            (KeyCode::F(2), KeyModifiers::SHIFT) | (KeyCode::Char('q'), KeyModifiers::CONTROL) => {
                 if self.save().is_ok() {
                     self.active = false;
                     return EditorAction::SaveAndClose;
                 }
             }
-            // Search
-            (KeyCode::F(7), KeyModifiers::NONE) => {
+            // Search (F7 or Ctrl+F)
+            (KeyCode::F(7), KeyModifiers::NONE) | (KeyCode::Char('f'), KeyModifiers::CONTROL) => {
                 self.mode = EditorMode::Search;
                 self.search_cursor = self.search_query.len();
             }
-            // Find next
+            // Find next (F3)
             (KeyCode::F(3), KeyModifiers::NONE) => {
                 self.find_next();
             }
@@ -641,7 +642,7 @@ pub fn render_editor(frame: &mut Frame, state: &EditorState, _theme: &Theme) {
         }
         EditorMode::Normal => {
             format!(
-                " Ln {}, Col {} | {} | F2=Save  F7=Search  Ctrl+G=GoTo  Ctrl+Z=Undo  Esc=Exit ",
+                " Ln {}, Col {} | {} | Ctrl+S=Save  Ctrl+F=Search  Ctrl+G=GoTo  Ctrl+Q=SaveExit  Esc=Exit ",
                 state.cursor_line + 1,
                 state.cursor_col + 1,
                 if state.modified { "Modified" } else { "Saved" },
