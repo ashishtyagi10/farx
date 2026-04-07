@@ -92,6 +92,7 @@ pub enum Action {
 
     // Clipboard
     CopyPathToClipboard,
+    CopyNameToClipboard,
 
     // Filter
     ToggleFilter,

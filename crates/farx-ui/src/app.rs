@@ -1312,6 +1312,9 @@ impl App {
             "/yank" | "/copy-path" => {
                 self.dispatch(Action::CopyPathToClipboard);
             }
+            "/yank-names" | "/copy-names" => {
+                self.dispatch(Action::CopyNameToClipboard);
+            }
             "/checksum" | "/sha256" => {
                 self.dispatch(Action::ShowChecksums);
             }
@@ -2383,6 +2386,37 @@ impl App {
                     Err(e) => {
                         self.feedback.error(format!("Clipboard: {}", e));
                     }
+                }
+            }
+            Action::CopyNameToClipboard => {
+                let tree = self.active_tree_ref();
+                let names: Vec<String> = if !tree.selected.is_empty() {
+                    tree.selected
+                        .iter()
+                        .filter_map(|&i| tree.visible_nodes.get(i))
+                        .map(|n| n.entry.name.clone())
+                        .collect()
+                } else if let Some(node) = tree.current_node() {
+                    vec![node.entry.name.clone()]
+                } else {
+                    Vec::new()
+                };
+                if names.is_empty() {
+                    return;
+                }
+                let text = names.join("\n");
+                match arboard::Clipboard::new() {
+                    Ok(mut clipboard) => match clipboard.set_text(&text) {
+                        Ok(()) => {
+                            if names.len() == 1 {
+                                self.feedback.info(format!("Copied name: {}", names[0]));
+                            } else {
+                                self.feedback.info(format!("Copied {} names", names.len()));
+                            }
+                        }
+                        Err(e) => self.feedback.error(format!("Clipboard: {}", e)),
+                    },
+                    Err(e) => self.feedback.error(format!("Clipboard: {}", e)),
                 }
             }
             Action::ShowQuickActions => {

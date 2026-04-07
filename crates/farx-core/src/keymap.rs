@@ -167,6 +167,10 @@ impl KeyMap {
             (KeyCode::Char('y'), KeyModifiers::CONTROL),
             Action::CopyPathToClipboard,
         );
+        panel.insert(
+            (KeyCode::Char('y'), KeyModifiers::ALT),
+            Action::CopyNameToClipboard,
+        );
 
         // ── Directory size ──────────────────────────────────────────────
         panel.insert(
