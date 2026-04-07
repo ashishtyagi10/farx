@@ -14,10 +14,25 @@ pub struct InfoPanelData {
     pub selected_size: u64,
     pub free_space: Option<u64>,
     pub total_space: Option<u64>,
+    /// Preview data for the file under cursor
+    pub file_preview: Option<FilePreview>,
+}
+
+pub struct FilePreview {
+    pub name: String,
+    pub size: u64,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+    pub modified: Option<String>,
+    /// First N lines of text content, or hex summary for binary
+    pub content_lines: Vec<String>,
 }
 
 impl InfoPanelData {
-    pub fn from_panel(panel: &farx_core::PanelState) -> Self {
+    pub fn from_panel(
+        panel: &farx_core::PanelState,
+        current_file: Option<&farx_core::FileEntry>,
+    ) -> Self {
         let mut total_files = 0;
         let mut total_dirs = 0;
         let mut total_size = 0u64;
@@ -41,6 +56,60 @@ impl InfoPanelData {
         // Get disk space info
         let (free_space, total_space) = get_disk_space(&panel.current_dir);
 
+        // Build file preview for current entry
+        let file_preview = current_file.and_then(|entry| {
+            if entry.name == ".." {
+                return None;
+            }
+            let modified = entry
+                .modified
+                .map(|m| m.format("%Y-%m-%d %H:%M:%S").to_string());
+
+            let content_lines = if entry.is_dir {
+                // For directories, show child count
+                match std::fs::read_dir(&entry.path) {
+                    Ok(rd) => vec![format!("{} entries", rd.count())],
+                    Err(_) => vec!["(cannot read)".to_string()],
+                }
+            } else if entry.size > 5 * 1024 * 1024 {
+                vec!["(file too large to preview)".to_string()]
+            } else {
+                // Try reading as text
+                match std::fs::read(&entry.path) {
+                    Ok(bytes) => {
+                        let check = &bytes[..bytes.len().min(512)];
+                        if check.contains(&0) {
+                            // Binary file — show hex summary
+                            let mut lines = vec![format!("Binary file ({} bytes)", bytes.len())];
+                            for chunk in bytes.chunks(16).take(8) {
+                                let hex: Vec<String> =
+                                    chunk.iter().map(|b| format!("{:02x}", b)).collect();
+                                lines.push(hex.join(" "));
+                            }
+                            if bytes.len() > 128 {
+                                lines.push("...".to_string());
+                            }
+                            lines
+                        } else {
+                            // Text file — show first 30 lines
+                            let text = String::from_utf8_lossy(&bytes);
+                            text.lines().take(30).map(|l| l.to_string()).collect()
+                        }
+                    }
+                    Err(e) => vec![format!("(error: {})", e)],
+                }
+            };
+
+            Some(FilePreview {
+                name: entry.name.clone(),
+                size: entry.size,
+                is_dir: entry.is_dir,
+                is_symlink: entry.is_symlink,
+                modified,
+                content_lines,
+            })
+        });
+
         Self {
             current_dir: panel.current_dir.display().to_string(),
             total_files,
@@ -50,6 +119,7 @@ impl InfoPanelData {
             selected_size,
             free_space,
             total_space,
+            file_preview,
         }
     }
 }
@@ -181,6 +251,57 @@ pub fn render_info_panel(frame: &mut Frame, area: Rect, data: &InfoPanelData, _t
                     Span::styled("  Used:        ", label_style),
                     Span::styled(format!("{}%", used_pct), value_style),
                 ]));
+            }
+        }
+    }
+
+    // File preview section
+    if let Some(ref preview) = data.file_preview {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  File Preview",
+            label_style.add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled("  Name:        ", label_style),
+            Span::styled(&preview.name, value_style),
+        ]));
+        if !preview.is_dir {
+            lines.push(Line::from(vec![
+                Span::styled("  Size:        ", label_style),
+                Span::styled(format_size(preview.size), value_style),
+            ]));
+        }
+        if preview.is_symlink {
+            lines.push(Line::from(vec![
+                Span::styled("  Type:        ", label_style),
+                Span::styled("symlink", value_style),
+            ]));
+        }
+        if let Some(ref modified) = preview.modified {
+            lines.push(Line::from(vec![
+                Span::styled("  Modified:    ", label_style),
+                Span::styled(modified.as_str(), value_style),
+            ]));
+        }
+
+        // Content preview
+        if !preview.content_lines.is_empty() {
+            lines.push(Line::from(""));
+            let max_content = (inner.height as usize).saturating_sub(lines.len() + 2);
+            let content_style = Style::default()
+                .fg(Color::Rgb(170, 170, 180))
+                .bg(Color::Rgb(22, 22, 26));
+            for line in preview.content_lines.iter().take(max_content) {
+                let display: String = line.chars().take(inner.width as usize - 2).collect();
+                lines.push(Line::from(Span::styled(
+                    format!("  {}", display),
+                    content_style,
+                )));
+            }
+            if preview.content_lines.len() > max_content {
+                lines.push(Line::from(Span::styled("  ...", dim_style)));
             }
         }
     }

@@ -2781,7 +2781,8 @@ impl App {
 
         // Render right tree panel (or info panel if Ctrl+L toggled)
         if self.show_info_panel {
-            let data = InfoPanelData::from_panel(self.active_panel_ref());
+            let current_file = self.active_tree_ref().current_node().map(|n| &n.entry);
+            let data = InfoPanelData::from_panel(self.active_panel_ref(), current_file);
             render_info_panel(frame, panel_chunks[1], &data, &self.theme);
         } else {
             let right_active = self.active_panel == PanelSide::Right;
