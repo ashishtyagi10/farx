@@ -37,6 +37,8 @@ pub struct ViewerState {
     pub file_size: u64,
     /// Follow/tail mode: auto-scroll to end and reload on tick
     pub follow: bool,
+    /// Go-to-line input mode
+    pub goto_input: Option<String>,
 }
 
 const MAX_VIEW_SIZE: u64 = 100 * 1024 * 1024; // 100 MB
@@ -73,6 +75,7 @@ impl ViewerState {
                     visible_height: 0,
                     file_size,
                     follow: false,
+                    goto_input: None,
                 });
             }
         };
@@ -108,10 +111,36 @@ impl ViewerState {
             visible_height: 0,
             file_size,
             follow: false,
+            goto_input: None,
         })
     }
 
     pub fn handle_key_event(&mut self, key: KeyEvent) -> ViewerAction {
+        // Go-to-line input mode
+        if let Some(ref mut input) = self.goto_input {
+            match key.code {
+                KeyCode::Enter => {
+                    if let Ok(line_num) = input.parse::<usize>() {
+                        self.scroll_offset = line_num
+                            .saturating_sub(1)
+                            .min(self.total_lines.saturating_sub(1));
+                    }
+                    self.goto_input = None;
+                }
+                KeyCode::Esc => {
+                    self.goto_input = None;
+                }
+                KeyCode::Char(ch) if ch.is_ascii_digit() => {
+                    input.push(ch);
+                }
+                KeyCode::Backspace => {
+                    input.pop();
+                }
+                _ => {}
+            }
+            return ViewerAction::None;
+        }
+
         match key.code {
             KeyCode::Esc | KeyCode::F(3) | KeyCode::F(10) | KeyCode::Char('q') => {
                 self.active = false;
@@ -143,6 +172,10 @@ impl ViewerState {
             }
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.wrap = !self.wrap;
+                ViewerAction::None
+            }
+            KeyCode::Char('g') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.goto_input = Some(String::new());
                 ViewerAction::None
             }
             KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -361,14 +394,18 @@ pub fn render_viewer(frame: &mut Frame, state: &mut ViewerState, _theme: &Theme)
         ((state.scroll_offset + content_height).min(state.total_lines) * 100) / state.total_lines
     };
     let follow_indicator = if state.follow { "FOLLOW  " } else { "" };
-    let status_text = format!(
-        " Line {}/{} ({}%) | {}{}Esc/F3/q=Close  PgUp/PgDn=Scroll  Ctrl+W=Wrap  Ctrl+F=Follow ",
-        state.scroll_offset + 1,
-        state.total_lines,
-        percentage,
-        if state.wrap { "Wrap:ON  " } else { "" },
-        follow_indicator,
-    );
+    let status_text = if let Some(ref input) = state.goto_input {
+        format!(" Go to line: {}_ (Enter=Go, Esc=Cancel) ", input)
+    } else {
+        format!(
+            " Line {}/{} ({}%) | {}{}Esc/F3/q=Close  PgUp/PgDn  Ctrl+G=GoTo  Ctrl+F=Follow ",
+            state.scroll_offset + 1,
+            state.total_lines,
+            percentage,
+            if state.wrap { "Wrap:ON  " } else { "" },
+            follow_indicator,
+        )
+    };
     let status_line = Line::from(Span::styled(
         status_text,
         Style::default()
