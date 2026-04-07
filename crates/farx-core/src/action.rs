@@ -20,6 +20,7 @@ pub enum Action {
     SwapPanels,
 
     // File operations
+    OpenSystemApp,
     CopyDialog,
     MoveDialog,
     DeleteDialog,

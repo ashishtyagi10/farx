@@ -1447,6 +1447,9 @@ impl App {
             "/swap" => {
                 self.dispatch(Action::SwapPanels);
             }
+            "/open" => {
+                self.dispatch(Action::OpenSystemApp);
+            }
             "/goto" | "/go" | "/g" => {
                 if args.is_empty() {
                     self.dispatch(Action::GotoDirectoryDialog);
@@ -2055,6 +2058,17 @@ impl App {
                         } else {
                             tree.selected.insert(i);
                         }
+                    }
+                }
+                return;
+            }
+            Action::OpenSystemApp => {
+                if let Some(node) = self.active_tree_ref().current_node() {
+                    let path = node.entry.path.clone();
+                    let name = node.entry.name.clone();
+                    match open::that(&path) {
+                        Ok(()) => self.feedback.info(format!("Opened: {}", name)),
+                        Err(e) => self.feedback.error(format!("Open: {}", e)),
                     }
                 }
                 return;

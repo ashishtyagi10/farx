@@ -27,6 +27,7 @@ impl KeyMap {
         global.insert((KeyCode::F(12), KeyModifiers::NONE), Action::ShowScreenList);
 
         // ── Panel: function keys ───────────────────────────────────────
+        panel.insert((KeyCode::F(2), KeyModifiers::NONE), Action::OpenSystemApp);
         panel.insert((KeyCode::F(3), KeyModifiers::NONE), Action::ViewFile);
         panel.insert((KeyCode::F(4), KeyModifiers::NONE), Action::EditFile);
         panel.insert((KeyCode::F(5), KeyModifiers::NONE), Action::CopyDialog);
