@@ -1453,6 +1453,9 @@ impl App {
             "/open" => {
                 self.dispatch(Action::OpenSystemApp);
             }
+            "/terminal" | "/term" => {
+                self.dispatch(Action::OpenTerminalHere);
+            }
             "/goto" | "/go" | "/g" => {
                 if args.is_empty() {
                     self.dispatch(Action::GotoDirectoryDialog);
@@ -2386,6 +2389,27 @@ impl App {
                     Err(e) => {
                         self.feedback.error(format!("Clipboard: {}", e));
                     }
+                }
+            }
+            Action::OpenTerminalHere => {
+                let dir = self.active_tree_ref().root.to_string_lossy().to_string();
+                let result = if cfg!(target_os = "macos") {
+                    std::process::Command::new("open")
+                        .args(["-a", "Terminal", &dir])
+                        .spawn()
+                } else if cfg!(target_os = "windows") {
+                    std::process::Command::new("cmd")
+                        .args(["/C", "start", "cmd", "/K", &format!("cd /d {}", dir)])
+                        .spawn()
+                } else {
+                    // Linux: try common terminal emulators
+                    std::process::Command::new("sh")
+                        .args(["-c", &format!("cd '{}' && ${{TERMINAL:-xterm}} &", dir)])
+                        .spawn()
+                };
+                match result {
+                    Ok(_) => self.feedback.info("Terminal opened".to_string()),
+                    Err(e) => self.feedback.error(format!("Terminal: {}", e)),
                 }
             }
             Action::CopyNameToClipboard => {

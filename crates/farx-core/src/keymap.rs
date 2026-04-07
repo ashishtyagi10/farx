@@ -133,6 +133,12 @@ impl KeyMap {
             Action::ShowAiBar,
         );
 
+        // ── Open terminal here ────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('`'), KeyModifiers::CONTROL),
+            Action::OpenTerminalHere,
+        );
+
         // ── Swap panels ──────────────────────────────────────────────────
         panel.insert(
             (KeyCode::Char('u'), KeyModifiers::CONTROL),

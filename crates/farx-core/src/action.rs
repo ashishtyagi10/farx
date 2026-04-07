@@ -94,6 +94,9 @@ pub enum Action {
     CopyPathToClipboard,
     CopyNameToClipboard,
 
+    // Terminal
+    OpenTerminalHere,
+
     // Filter
     ToggleFilter,
 
