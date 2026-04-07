@@ -97,6 +97,7 @@ impl TreeState {
                     modified: None,
                     extension: None,
                     readonly: false,
+                    mode: None,
                 },
                 depth: 0,
                 expanded: false,
@@ -162,6 +163,17 @@ impl TreeState {
                 modified,
                 extension,
                 readonly: metadata.permissions().readonly(),
+                mode: {
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        Some(metadata.permissions().mode())
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        None
+                    }
+                },
             });
         }
 

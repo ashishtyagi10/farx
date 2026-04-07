@@ -23,6 +23,7 @@ pub fn read_directory(path: &Path, show_hidden: bool) -> Result<Vec<FileEntry>> 
             modified: None,
             extension: None,
             readonly: false,
+            mode: None,
         });
     }
 
@@ -68,6 +69,17 @@ pub fn read_directory(path: &Path, show_hidden: bool) -> Result<Vec<FileEntry>> 
             modified,
             extension,
             readonly,
+            mode: {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    Some(metadata.permissions().mode())
+                }
+                #[cfg(not(unix))]
+                {
+                    None
+                }
+            },
         });
     }
 

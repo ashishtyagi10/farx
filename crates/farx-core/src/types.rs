@@ -43,6 +43,8 @@ pub struct FileEntry {
     pub modified: Option<chrono::DateTime<chrono::Local>>,
     pub extension: Option<String>,
     pub readonly: bool,
+    /// Unix permission mode bits (e.g. 0o755). None on non-Unix platforms.
+    pub mode: Option<u32>,
 }
 
 pub struct PanelState {

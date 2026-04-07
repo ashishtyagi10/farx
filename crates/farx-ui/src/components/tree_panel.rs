@@ -132,8 +132,13 @@ pub fn render_tree_panel_with_filter(
         } else {
             format!("  {}", format_size(node.entry.size))
         };
+        let perms_str = node
+            .entry
+            .mode
+            .map(|m| format!(" {}", format_permissions(m)))
+            .unwrap_or_default();
 
-        let name_and_size = format!("{}{}", name, size_str);
+        let name_and_size = format!("{}{}{}", name, size_str, perms_str);
 
         // Styles
         let entry_style = if is_cursor && is_selected {
@@ -282,6 +287,26 @@ pub fn render_tree_panel_with_filter(
         Paragraph::new(Line::from(Span::styled(footer_text, theme.footer))),
         footer_area,
     );
+}
+
+/// Format Unix permission mode bits as rwxrwxrwx string.
+fn format_permissions(mode: u32) -> String {
+    let mut s = String::with_capacity(9);
+    let flags = [
+        (0o400, 'r'),
+        (0o200, 'w'),
+        (0o100, 'x'),
+        (0o040, 'r'),
+        (0o020, 'w'),
+        (0o010, 'x'),
+        (0o004, 'r'),
+        (0o002, 'w'),
+        (0o001, 'x'),
+    ];
+    for (bit, ch) in flags {
+        s.push(if mode & bit != 0 { ch } else { '-' });
+    }
+    s
 }
 
 fn format_size(size: u64) -> String {
