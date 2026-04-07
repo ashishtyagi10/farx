@@ -122,6 +122,9 @@ pub enum Action {
     // Duplicate finder
     FindDuplicates,
 
+    // Compare directories
+    CompareDirectories,
+
     // Checksums
     ShowChecksums,
 

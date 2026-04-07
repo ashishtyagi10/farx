@@ -263,6 +263,12 @@ impl KeyMap {
         panel.insert((KeyCode::F(5), KeyModifiers::CONTROL), Action::SortBySize);
         panel.insert((KeyCode::F(6), KeyModifiers::CONTROL), Action::SortByDate);
 
+        // ── Compare directories ──────────────────────────────────────────
+        panel.insert(
+            (KeyCode::F(9), KeyModifiers::CONTROL),
+            Action::CompareDirectories,
+        );
+
         // ── Toggle hidden, refresh ───────────────────────────────────────
         panel.insert(
             (KeyCode::Char('h'), KeyModifiers::CONTROL),

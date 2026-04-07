@@ -888,6 +888,53 @@ impl App {
             .info(format!("Sort: {} {}", field_name, order));
     }
 
+    /// Compare directories: select files in both panels that are unique or different.
+    fn compare_directories(&mut self) {
+        use std::collections::HashMap;
+
+        // Collect other panel data first (owned) to avoid borrow conflict
+        let other_tree = match self.active_panel {
+            PanelSide::Left => &self.right_tree,
+            PanelSide::Right => &self.left_tree,
+        };
+        let other_files: HashMap<String, (u64, Option<chrono::DateTime<chrono::Local>>)> =
+            other_tree
+                .visible_nodes
+                .iter()
+                .filter(|n| n.depth == 0 && n.entry.name != "..")
+                .map(|n| (n.entry.name.clone(), (n.entry.size, n.entry.modified)))
+                .collect();
+
+        // Select files in the active panel that are unique or differ
+        let tree = self.active_tree();
+        tree.selected.clear();
+        let mut selected_count = 0usize;
+        for i in 0..tree.visible_nodes.len() {
+            let node = &tree.visible_nodes[i];
+            if node.depth != 0 || node.entry.name == ".." {
+                continue;
+            }
+            match other_files.get(&node.entry.name) {
+                None => {
+                    // Unique to this panel
+                    tree.selected.insert(i);
+                    selected_count += 1;
+                }
+                Some(&(other_size, other_modified)) => {
+                    // Exists in both — compare size and modified time
+                    if node.entry.size != other_size || node.entry.modified != other_modified {
+                        tree.selected.insert(i);
+                        selected_count += 1;
+                    }
+                }
+            }
+        }
+        self.feedback.info(format!(
+            "Compare: {} file(s) differ or are unique",
+            selected_count,
+        ));
+    }
+
     /// Show a text-based treemap of disk usage for the current directory.
     fn show_treemap(&mut self) {
         let root = self.active_tree_ref().root.clone();
@@ -1395,6 +1442,9 @@ impl App {
             }
             "/invert" => {
                 self.dispatch(Action::InvertSelection);
+            }
+            "/compare" | "/cmp" => {
+                self.dispatch(Action::CompareDirectories);
             }
             "/goto" | "/go" | "/g" => {
                 if args.is_empty() {
@@ -2618,6 +2668,9 @@ impl App {
             }
             Action::CalculateDirSize => {
                 self.calculate_dir_size();
+            }
+            Action::CompareDirectories => {
+                self.compare_directories();
             }
             Action::SortByName => {
                 self.toggle_sort(SortField::Name);
