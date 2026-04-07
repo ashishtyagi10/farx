@@ -220,6 +220,12 @@ impl KeyMap {
         // ── Touch file ────────────────────────────────────────────────────
         panel.insert((KeyCode::Char('w'), KeyModifiers::ALT), Action::TouchFile);
 
+        // ── File statistics ──────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('i'), KeyModifiers::ALT),
+            Action::ShowFileStats,
+        );
+
         // ── Disk usage treemap ──────────────────────────────────────────
         panel.insert((KeyCode::Char('t'), KeyModifiers::ALT), Action::ShowTreemap);
 

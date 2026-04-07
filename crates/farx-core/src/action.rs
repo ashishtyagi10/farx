@@ -135,6 +135,9 @@ pub enum Action {
     // Compare directories
     CompareDirectories,
 
+    // File statistics
+    ShowFileStats,
+
     // Checksums
     ShowChecksums,
 

@@ -1469,6 +1469,9 @@ impl App {
             "/touch" => {
                 self.dispatch(Action::TouchFile);
             }
+            "/stats" | "/wc" => {
+                self.dispatch(Action::ShowFileStats);
+            }
             "/goto" | "/go" | "/g" => {
                 if args.is_empty() {
                     self.dispatch(Action::GotoDirectoryDialog);
@@ -2667,6 +2670,38 @@ impl App {
                     }
                     Err(e) => {
                         self.feedback.error(format!("SSH: {}", e));
+                    }
+                }
+            }
+            Action::ShowFileStats => {
+                if let Some(node) = self.active_tree_ref().current_node() {
+                    if node.entry.is_dir || node.entry.name == ".." {
+                        self.feedback.info("Select a file for stats".to_string());
+                    } else {
+                        match std::fs::read(&node.entry.path) {
+                            Ok(bytes) => {
+                                let size = bytes.len();
+                                let is_text = !bytes[..size.min(512)].contains(&0);
+                                let mut lines = Vec::new();
+                                lines.push(format!("File: {}", node.entry.name));
+                                lines.push(format!("Size: {} bytes", size));
+                                if is_text {
+                                    let text = String::from_utf8_lossy(&bytes);
+                                    let line_count = text.lines().count();
+                                    let word_count: usize =
+                                        text.lines().map(|l| l.split_whitespace().count()).sum();
+                                    let char_count = text.chars().count();
+                                    lines.push(format!("Lines: {}", line_count));
+                                    lines.push(format!("Words: {}", word_count));
+                                    lines.push(format!("Characters: {}", char_count));
+                                } else {
+                                    lines.push("Binary file".to_string());
+                                }
+                                self.feedback
+                                    .show_output("File Statistics", lines.join("\n"));
+                            }
+                            Err(e) => self.feedback.error(format!("Stats: {}", e)),
+                        }
                     }
                 }
             }
