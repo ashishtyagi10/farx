@@ -147,6 +147,7 @@ farx --keydebug       # Debug terminal key events
 | `Alt+K` | SHA-256 checksum |
 | `Ctrl+G` | Go to directory |
 | `Ctrl+F9` | Compare directories |
+| `Alt+W` | Touch file (update mtime) |
 
 ## Built-in Editor
 
@@ -163,7 +164,8 @@ Open any file with `F3`. The viewer supports:
 
 - Syntax-highlighted text files
 - Hex dump for binary files
-- Line wrapping toggle
+- Line wrapping toggle (`Ctrl+W`)
+- Follow/tail mode (`Ctrl+F`) — auto-scrolls as file grows, like `tail -f`
 - In-file search
 
 ## AI Assistant
@@ -340,6 +342,14 @@ Press `F2` to open the file or directory under the cursor with your OS's default
 ## File Preview
 
 Press `Ctrl+L` to toggle the info panel. It now shows a live preview of the file under the cursor: name, size, modification date, and the first 30 lines of text content. Binary files show a hex dump summary. Files larger than 5 MB show a placeholder.
+
+## Touch File
+
+Press `Alt+W` to update the modification time of the file under the cursor (or all selected files) to the current time. If the file doesn't exist, it creates it (like Unix `touch`). Use `/touch` from the command line.
+
+## File Permissions
+
+File listings now show Unix permission bits (e.g. `rwxr-xr-x`) next to the file size on Unix platforms.
 
 ## Copy File Names
 
