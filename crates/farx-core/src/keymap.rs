@@ -149,6 +149,12 @@ impl KeyMap {
         panel.insert((KeyCode::Left, KeyModifiers::ALT), Action::HistoryBack);
         panel.insert((KeyCode::Right, KeyModifiers::ALT), Action::HistoryForward);
 
+        // ── Recent directories ────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('h'), KeyModifiers::ALT),
+            Action::ShowRecentDirectories,
+        );
+
         // ── Bookmarks ────────────────────────────────────────────────────
         panel.insert(
             (KeyCode::Char('b'), KeyModifiers::CONTROL),

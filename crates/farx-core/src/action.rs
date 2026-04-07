@@ -85,6 +85,7 @@ pub enum Action {
     // History
     HistoryBack,
     HistoryForward,
+    ShowRecentDirectories,
 
     // Bookmarks
     ShowBookmarks,

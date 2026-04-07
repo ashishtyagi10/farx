@@ -1456,6 +1456,9 @@ impl App {
             "/terminal" | "/term" => {
                 self.dispatch(Action::OpenTerminalHere);
             }
+            "/recent" | "/history" => {
+                self.dispatch(Action::ShowRecentDirectories);
+            }
             "/goto" | "/go" | "/g" => {
                 if args.is_empty() {
                     self.dispatch(Action::GotoDirectoryDialog);
@@ -2751,6 +2754,22 @@ impl App {
             }
             Action::CompareDirectories => {
                 self.compare_directories();
+            }
+            Action::ShowRecentDirectories => {
+                let tree = self.active_tree_ref();
+                let mut dirs: Vec<String> = Vec::new();
+                // Current directory
+                dirs.push(format!("  * {}", tree.root.display()));
+                // Back stack (most recent first)
+                for dir in tree.history_back.iter().rev() {
+                    dirs.push(format!("    {}", dir.display()));
+                }
+                if dirs.len() <= 1 {
+                    self.feedback.info("No directory history yet".to_string());
+                } else {
+                    self.feedback
+                        .show_output("Recent Directories", dirs.join("\n"));
+                }
             }
             Action::SortByName => {
                 self.toggle_sort(SortField::Name);
