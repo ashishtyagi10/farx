@@ -25,6 +25,7 @@ pub enum MenuAction {
     // Commands
     FindFiles,
     ShowAiBar,
+    ShowAiPanel,
     SwapPanels,
     // Options
     ToggleFnBar,
@@ -139,6 +140,11 @@ impl MenuState {
                         label: "AI Assistant",
                         action: MenuAction::ShowAiBar,
                         hotkey: "Ctrl+Space",
+                    },
+                    MenuItem {
+                        label: "AI Coding Tools",
+                        action: MenuAction::ShowAiPanel,
+                        hotkey: "Ctrl+E",
                     },
                     MenuItem {
                         label: "Swap Panels",

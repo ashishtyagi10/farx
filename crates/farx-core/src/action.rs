@@ -149,6 +149,8 @@ pub enum Action {
 
     // AI
     AiQuery(String),
+    ShowAiPanel,
+    LaunchAiTool(crate::types::AiTool),
 
     // System
     Tick,

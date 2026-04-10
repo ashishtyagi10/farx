@@ -9,6 +9,7 @@ use farx_core::{Action, AppConfig, KeyMap, PanelSide, PanelState, SortOrder, Tre
 use farx_core::SortField;
 
 use crate::components::ai_bar::{render_ai_bar, AiBarAction, AiBarState};
+use crate::components::ai_panel::{render_ai_panel, AiPanelAction, AiPanelState};
 use crate::components::batch_rename::{render_batch_rename, BatchRenameAction, BatchRenameState};
 use crate::components::bookmarks::{
     load_bookmarks, render_bookmarks, save_bookmarks, Bookmark, BookmarkAction, BookmarkState,
@@ -138,6 +139,10 @@ pub struct App {
     pub fuzzy_finder: Option<FuzzyFinderState>,
     /// Quick actions palette state.
     pub quick_actions: Option<QuickActionsState>,
+    /// AI tools selector panel state.
+    pub ai_panel: Option<AiPanelState>,
+    /// When set, the main loop should launch this AI tool (terminal takeover).
+    pub pending_ai_launch: Option<farx_core::AiTool>,
     /// File watcher: receives notifications when files change.
     fs_watcher: Option<notify::RecommendedWatcher>,
     fs_change_rx: Option<std::sync::mpsc::Receiver<()>>,
@@ -226,6 +231,8 @@ impl App {
             batch_rename: None,
             fuzzy_finder: None,
             quick_actions: None,
+            ai_panel: None,
+            pending_ai_launch: None,
             fs_watcher: None,
             fs_change_rx: None,
             fs_change_tick: 0,
@@ -250,6 +257,14 @@ impl App {
         Self::refresh_panel(&mut self.right_panel, show_hidden);
     }
 
+    /// Refresh all panels (legacy + tree). Called after returning from an
+    /// external process that may have modified files.
+    pub fn refresh_all(&mut self) {
+        self.refresh_both_panels();
+        self.left_tree.rebuild();
+        self.right_tree.rebuild();
+    }
+
     /// Get a mutable reference to the currently active panel.
     pub fn active_panel_mut(&mut self) -> &mut PanelState {
         match self.active_panel {
@@ -267,7 +282,7 @@ impl App {
     }
 
     /// Get the active tree (immutable).
-    fn active_tree_ref(&self) -> &TreeState {
+    pub fn active_tree_ref(&self) -> &TreeState {
         match self.active_panel {
             PanelSide::Left => &self.left_tree,
             PanelSide::Right => &self.right_tree,
@@ -441,6 +456,21 @@ impl App {
                     }
                 }
                 FuzzyAction::None => {}
+            }
+            return Action::Noop;
+        }
+
+        // AI tools panel
+        if let Some(ref mut ai_panel) = self.ai_panel {
+            match ai_panel.handle_key_event(key) {
+                AiPanelAction::Close => {
+                    self.ai_panel = None;
+                }
+                AiPanelAction::Launch(tool) => {
+                    self.ai_panel = None;
+                    self.pending_ai_launch = Some(tool);
+                }
+                AiPanelAction::None => {}
             }
             return Action::Noop;
         }
@@ -692,6 +722,7 @@ impl App {
             MenuAction::MkDir => self.dispatch(Action::MkDirDialog),
             MenuAction::FindFiles => self.dispatch(Action::ShowSearchDialog),
             MenuAction::ShowAiBar => self.dispatch(Action::ShowAiBar),
+            MenuAction::ShowAiPanel => self.dispatch(Action::ShowAiPanel),
             MenuAction::SwapPanels => {
                 self.dispatch(Action::SwapPanels);
             }
@@ -1291,6 +1322,21 @@ impl App {
             }
             "/ai" => {
                 self.ai_bar = Some(AiBarState::new());
+            }
+            "/ai-tools" | "/ait" => {
+                self.ai_panel = Some(AiPanelState::new());
+            }
+            "/claude" => {
+                self.pending_ai_launch = Some(farx_core::AiTool::ClaudeCode);
+            }
+            "/codex" => {
+                self.pending_ai_launch = Some(farx_core::AiTool::Codex);
+            }
+            "/copilot" => {
+                self.pending_ai_launch = Some(farx_core::AiTool::GithubCopilot);
+            }
+            "/gemini" => {
+                self.pending_ai_launch = Some(farx_core::AiTool::Gemini);
             }
             "/cd" => {
                 if args.is_empty() {
@@ -2202,6 +2248,12 @@ impl App {
             Action::ShowAiBar => {
                 self.ai_bar = Some(AiBarState::new());
             }
+            Action::ShowAiPanel => {
+                self.ai_panel = Some(AiPanelState::new());
+            }
+            Action::LaunchAiTool(tool) => {
+                self.pending_ai_launch = Some(tool);
+            }
             // ── File operation dialogs ───────────────────────────────────
             Action::CopyDialog => {
                 let sources = self.collect_selected_paths();
@@ -3071,6 +3123,11 @@ impl App {
         // Quick actions palette
         if let Some(ref qa) = self.quick_actions {
             render_quick_actions(frame, qa, &self.theme);
+        }
+
+        // AI tools panel
+        if let Some(ref ai_panel) = self.ai_panel {
+            render_ai_panel(frame, ai_panel, &self.theme);
         }
 
         // Batch rename dialog

@@ -205,6 +205,12 @@ impl KeyMap {
             Action::ShowFuzzyFinder,
         );
 
+        // ── AI tools panel ──────────────────────────────────────────────────
+        panel.insert(
+            (KeyCode::Char('e'), KeyModifiers::CONTROL),
+            Action::ShowAiPanel,
+        );
+
         // ── Quick actions ─────────────────────────────────────────────────
         panel.insert(
             (KeyCode::Enter, KeyModifiers::ALT),

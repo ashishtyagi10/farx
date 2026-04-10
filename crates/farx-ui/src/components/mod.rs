@@ -1,4 +1,5 @@
 pub mod ai_bar;
+pub mod ai_panel;
 pub mod batch_rename;
 pub mod bookmarks;
 pub mod command_line;

@@ -197,6 +197,26 @@ pub fn render_help(frame: &mut Frame, state: &HelpState, _theme: &Theme) {
             Span::styled("  Ctrl+Space   ", Style::default().fg(Color::White)),
             Span::raw("Open AI command bar"),
         ]),
+        Line::from(vec![
+            Span::styled("  Ctrl+E       ", Style::default().fg(Color::White)),
+            Span::raw("AI coding tools (Claude, Codex, Copilot, Gemini)"),
+        ]),
+        Line::from(vec![
+            Span::styled("  /claude      ", Style::default().fg(Color::White)),
+            Span::raw("Launch Claude Code"),
+        ]),
+        Line::from(vec![
+            Span::styled("  /codex       ", Style::default().fg(Color::White)),
+            Span::raw("Launch Codex"),
+        ]),
+        Line::from(vec![
+            Span::styled("  /copilot     ", Style::default().fg(Color::White)),
+            Span::raw("Launch GitHub Copilot"),
+        ]),
+        Line::from(vec![
+            Span::styled("  /gemini      ", Style::default().fg(Color::White)),
+            Span::raw("Launch Gemini"),
+        ]),
         Line::from(""),
         Line::from(Span::styled(
             "  OTHER",

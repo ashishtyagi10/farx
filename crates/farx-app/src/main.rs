@@ -111,6 +111,62 @@ async fn main() -> Result<()> {
 
     // Main loop
     while app.running {
+        // Check if an AI tool launch is pending (terminal takeover)
+        if let Some(tool) = app.pending_ai_launch.take() {
+            // Leave alternate screen and restore normal terminal
+            disable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                LeaveAlternateScreen,
+                DisableMouseCapture
+            )?;
+            terminal.show_cursor()?;
+
+            // Launch the AI tool in the current directory
+            let dir = app.active_tree_ref().root.clone();
+            let (cmd, args) = tool.command();
+            let status = std::process::Command::new(cmd)
+                .args(args)
+                .current_dir(&dir)
+                .status();
+
+            match status {
+                Ok(s) if s.success() => {}
+                Ok(s) => {
+                    eprintln!(
+                        "{} exited with {}. Press Enter to return to farx...",
+                        tool.label(),
+                        s
+                    );
+                    let _ = io::stdin().read_line(&mut String::new());
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Failed to launch {}: {}. Press Enter to return to farx...",
+                        tool.label(),
+                        e
+                    );
+                    let _ = io::stdin().read_line(&mut String::new());
+                }
+            }
+
+            // Re-enter alternate screen and raw mode
+            enable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                EnterAlternateScreen,
+                EnableMouseCapture
+            )?;
+
+            // Recreate event handler (old one's crossterm stream is stale)
+            events = EventHandler::new(tick_rate);
+
+            // Force full redraw and refresh panels (files may have changed)
+            terminal.clear()?;
+            app.refresh_all();
+            continue;
+        }
+
         // Render
         terminal.draw(|frame| {
             app.render(frame);
