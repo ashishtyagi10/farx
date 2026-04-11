@@ -26,6 +26,7 @@ use crate::components::quick_actions::{
     render_quick_actions, QuickActionResult, QuickActionsState,
 };
 use crate::components::search::{render_search, SearchAction, SearchState};
+use crate::components::slash_suggestions::{render_slash_suggestions, SlashSuggestionsState};
 use crate::components::tree_panel::render_tree_panel_with_filter;
 use crate::components::viewer::{render_viewer, ViewerAction, ViewerState};
 use crate::components::{command_line, fn_bar};
@@ -141,8 +142,8 @@ pub struct App {
     pub quick_actions: Option<QuickActionsState>,
     /// AI tools selector panel state.
     pub ai_panel: Option<AiPanelState>,
-    /// When set, the main loop should launch this AI tool (terminal takeover).
-    pub pending_ai_launch: Option<farx_core::AiTool>,
+    /// Slash command suggestion popup state.
+    pub slash_suggestions: Option<SlashSuggestionsState>,
     /// File watcher: receives notifications when files change.
     fs_watcher: Option<notify::RecommendedWatcher>,
     fs_change_rx: Option<std::sync::mpsc::Receiver<()>>,
@@ -232,7 +233,7 @@ impl App {
             fuzzy_finder: None,
             quick_actions: None,
             ai_panel: None,
-            pending_ai_launch: None,
+            slash_suggestions: None,
             fs_watcher: None,
             fs_change_rx: None,
             fs_change_tick: 0,
@@ -303,6 +304,61 @@ impl App {
             }
         }
         self.update_fs_watcher();
+    }
+
+    /// Launch an AI coding tool in a new terminal window at the active panel's directory.
+    fn launch_ai_tool_in_new_window(&mut self, tool: farx_core::AiTool) {
+        let dir = self.active_tree_ref().root.to_string_lossy().to_string();
+        let (cmd, args) = tool.command();
+        let full_cmd = if args.is_empty() {
+            cmd.to_string()
+        } else {
+            format!("{} {}", cmd, args.join(" "))
+        };
+
+        let result = if cfg!(target_os = "macos") {
+            // AppleScript: open a new Terminal.app window, cd to dir, run the tool
+            let script = format!(
+                "tell application \"Terminal\"\n\
+                     do script \"cd '{}' && {}\"\n\
+                     activate\n\
+                 end tell",
+                dir, full_cmd
+            );
+            std::process::Command::new("osascript")
+                .args(["-e", &script])
+                .spawn()
+        } else if cfg!(target_os = "windows") {
+            std::process::Command::new("cmd")
+                .args([
+                    "/C",
+                    "start",
+                    "cmd",
+                    "/K",
+                    &format!("cd /d {} && {}", dir, full_cmd),
+                ])
+                .spawn()
+        } else {
+            // Linux: try common terminal emulators
+            std::process::Command::new("sh")
+                .args([
+                    "-c",
+                    &format!(
+                        "cd '{}' && ${{TERMINAL:-x-terminal-emulator}} -e {} &",
+                        dir, full_cmd
+                    ),
+                ])
+                .spawn()
+        };
+
+        match result {
+            Ok(_) => self
+                .feedback
+                .info(format!("{} opened in {}", tool.label(), dir)),
+            Err(e) => self
+                .feedback
+                .error(format!("Failed to launch {}: {}", tool.label(), e)),
+        }
     }
 
     /// Get the inactive tree's root directory.
@@ -468,7 +524,7 @@ impl App {
                 }
                 AiPanelAction::Launch(tool) => {
                     self.ai_panel = None;
-                    self.pending_ai_launch = Some(tool);
+                    self.launch_ai_tool_in_new_window(tool);
                 }
                 AiPanelAction::None => {}
             }
@@ -625,6 +681,58 @@ impl App {
         // If command line has input, intercept some keys for command line editing
         if !self.command_line.input.is_empty() {
             use crossterm::event::{KeyCode, KeyModifiers};
+
+            // Slash command suggestion navigation takes priority
+            if self.slash_suggestions.is_some() {
+                match key.code {
+                    KeyCode::Up => {
+                        if let Some(ref mut ss) = self.slash_suggestions {
+                            ss.move_up();
+                        }
+                        return Action::Noop;
+                    }
+                    KeyCode::Down => {
+                        if let Some(ref mut ss) = self.slash_suggestions {
+                            ss.move_down();
+                        }
+                        return Action::Noop;
+                    }
+                    KeyCode::Tab => {
+                        // Tab fills the command and lets user add arguments
+                        if let Some(ref ss) = self.slash_suggestions {
+                            if let Some(cmd) = ss.selected_command() {
+                                self.command_line.input = cmd.to_string();
+                                self.command_line.cursor_pos = self.command_line.input.len();
+                                self.command_line.input.push(' ');
+                                self.command_line.cursor_pos += 1;
+                            }
+                        }
+                        self.slash_suggestions = None;
+                        return Action::Noop;
+                    }
+                    KeyCode::Enter => {
+                        // Enter selects and immediately executes the command
+                        if let Some(ref ss) = self.slash_suggestions {
+                            if let Some(cmd) = ss.selected_command() {
+                                self.command_line.input = cmd.to_string();
+                                self.command_line.cursor_pos = self.command_line.input.len();
+                            }
+                        }
+                        self.slash_suggestions = None;
+                        self.smart_execute_command();
+                        return Action::Noop;
+                    }
+                    KeyCode::Esc => {
+                        self.slash_suggestions = None;
+                        self.command_line.clear();
+                        return Action::Noop;
+                    }
+                    _ => {
+                        // Fall through to normal input handling
+                    }
+                }
+            }
+
             // Tab: accept suggestion if available, otherwise switch panel
             if key.code == KeyCode::Tab && self.command_line.suggestion.is_some() {
                 self.command_line.accept_suggestion();
@@ -1220,6 +1328,50 @@ impl App {
             // Unknown slash command — fall through to shell/AI
         }
 
+        // Intercept `cd` as a built-in: change the active panel's directory
+        // (like FAR Manager — `cd` in the command line navigates the panel)
+        if let Some(cd_arg) = Self::parse_cd_command(&input) {
+            let base = self.active_panel_ref().current_dir.clone();
+            let path = if cd_arg.is_empty() {
+                dirs::home_dir().unwrap_or(base)
+            } else if cd_arg == "-" {
+                // cd - : go to previous directory from history
+                let history = match self.active_panel {
+                    PanelSide::Left => &self.left_tree.history_back,
+                    PanelSide::Right => &self.right_tree.history_back,
+                };
+                if let Some(prev) = history.last() {
+                    prev.clone()
+                } else {
+                    self.feedback.error("No previous directory".to_string());
+                    return;
+                }
+            } else if cd_arg.starts_with('~') {
+                dirs::home_dir()
+                    .unwrap_or_default()
+                    .join(cd_arg.trim_start_matches("~/").trim_start_matches('~'))
+            } else if cd_arg.starts_with('/') {
+                PathBuf::from(&cd_arg)
+            } else {
+                base.join(&cd_arg)
+            };
+            // Canonicalize to resolve `.`, `..`, and symlinks
+            match path.canonicalize() {
+                Ok(resolved) if resolved.is_dir() => {
+                    self.navigate_to(resolved);
+                }
+                Ok(resolved) => {
+                    self.feedback
+                        .error(format!("Not a directory: {}", resolved.display()));
+                }
+                Err(_) => {
+                    self.feedback
+                        .error(format!("No such directory: {}", cd_arg));
+                }
+            }
+            return;
+        }
+
         if Self::looks_like_shell_command(&input) {
             // Execute as shell command
             let output = if cfg!(windows) {
@@ -1327,16 +1479,16 @@ impl App {
                 self.ai_panel = Some(AiPanelState::new());
             }
             "/claude" => {
-                self.pending_ai_launch = Some(farx_core::AiTool::ClaudeCode);
+                self.launch_ai_tool_in_new_window(farx_core::AiTool::ClaudeCode);
             }
             "/codex" => {
-                self.pending_ai_launch = Some(farx_core::AiTool::Codex);
+                self.launch_ai_tool_in_new_window(farx_core::AiTool::Codex);
             }
             "/copilot" => {
-                self.pending_ai_launch = Some(farx_core::AiTool::GithubCopilot);
+                self.launch_ai_tool_in_new_window(farx_core::AiTool::GithubCopilot);
             }
             "/gemini" => {
-                self.pending_ai_launch = Some(farx_core::AiTool::Gemini);
+                self.launch_ai_tool_in_new_window(farx_core::AiTool::Gemini);
             }
             "/cd" => {
                 if args.is_empty() {
@@ -1567,6 +1719,38 @@ impl App {
             }
         }
         true
+    }
+
+    /// Parse a `cd` command, returning the argument (possibly empty for bare `cd`).
+    /// Returns `None` if the input is not a `cd` command.
+    fn parse_cd_command(input: &str) -> Option<String> {
+        let trimmed = input.trim();
+        if trimmed == "cd" {
+            return Some(String::new());
+        }
+        if let Some(rest) = trimmed.strip_prefix("cd ") {
+            return Some(rest.trim().to_string());
+        }
+        if let Some(rest) = trimmed.strip_prefix("cd\t") {
+            return Some(rest.trim().to_string());
+        }
+        None
+    }
+
+    /// Update the slash command suggestion popup based on current input.
+    fn update_slash_suggestions(&mut self) {
+        let input = &self.command_line.input;
+        // Only show suggestions when input is just the command prefix (no args yet)
+        if input.starts_with('/') && !input.contains(' ') {
+            let state = SlashSuggestionsState::new(input);
+            if state.matches.is_empty() {
+                self.slash_suggestions = None;
+            } else {
+                self.slash_suggestions = Some(state);
+            }
+        } else {
+            self.slash_suggestions = None;
+        }
     }
 
     /// Heuristic to detect shell commands vs natural language.
@@ -2252,7 +2436,7 @@ impl App {
                 self.ai_panel = Some(AiPanelState::new());
             }
             Action::LaunchAiTool(tool) => {
-                self.pending_ai_launch = Some(tool);
+                self.launch_ai_tool_in_new_window(tool);
             }
             // ── File operation dialogs ───────────────────────────────────
             Action::CopyDialog => {
@@ -2384,13 +2568,16 @@ impl App {
             Action::CommandLineInput(ch) => {
                 self.command_line.input_char(ch);
                 self.command_line.last_typed_tick = self.tick_count;
+                self.update_slash_suggestions();
             }
             Action::CommandLineBackspace => {
                 self.command_line.last_typed_tick = self.tick_count;
                 self.command_line.backspace();
+                self.update_slash_suggestions();
             }
             // CommandLineEnterOrDir is handled in the tree block above
             Action::CommandLineExecute => {
+                self.slash_suggestions = None;
                 self.smart_execute_command();
             }
             Action::CommandLineHistoryUp => {
@@ -2401,6 +2588,7 @@ impl App {
             }
             Action::CommandLineClear => {
                 self.command_line.clear();
+                self.slash_suggestions = None;
             }
             Action::HistoryBack => {
                 let went_back = self.active_tree().go_back();
@@ -3090,6 +3278,11 @@ impl App {
                 &active_dir,
                 &self.theme,
             );
+        }
+
+        // Slash command suggestions popup (floats above command line)
+        if let Some(ref ss) = self.slash_suggestions {
+            render_slash_suggestions(frame, ss, main_chunks[1]);
         }
 
         // Render function key bar
