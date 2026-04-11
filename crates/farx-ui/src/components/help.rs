@@ -82,8 +82,8 @@ pub fn render_help(frame: &mut Frame, state: &HelpState, _theme: &Theme) {
         )),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Ctrl+T       ", Style::default().fg(Color::White)),
-            Span::raw("Toggle panel (cycle files / terminals)"),
+            Span::styled("  Alt+N        ", Style::default().fg(Color::White)),
+            Span::raw("Next panel (cycle files / terminals)"),
         ]),
         Line::from(vec![
             Span::styled("  Ctrl+W       ", Style::default().fg(Color::White)),
