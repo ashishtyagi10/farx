@@ -539,11 +539,6 @@ impl App {
                 self.cycle_focus();
                 return Action::Noop;
             }
-            if key.code == KeyCode::Char('n') && key.modifiers.contains(KeyModifiers::ALT) {
-                // Alt+N: also cycle panels
-                self.cycle_focus();
-                return Action::Noop;
-            }
             if key.code == KeyCode::Char('w') && key.modifiers.contains(KeyModifiers::CONTROL) {
                 // Ctrl+W: close this terminal
                 self.close_terminal(tid);

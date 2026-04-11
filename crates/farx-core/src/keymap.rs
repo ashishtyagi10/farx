@@ -69,8 +69,6 @@ impl KeyMap {
         panel.insert((KeyCode::Left, KeyModifiers::NONE), Action::TreeCollapse);
         // Enter is handled specially in resolve_panel: if command line has input,
         // it executes; otherwise it enters the directory. So we don't bind it here.
-        // Alt+N also cycles panels (for terminals with Option-as-Meta enabled)
-        panel.insert((KeyCode::Char('n'), KeyModifiers::ALT), Action::SwitchPanel);
         panel.insert((KeyCode::Insert, KeyModifiers::NONE), Action::ToggleSelect);
 
         // ── Panel: Selection ──────────────────────────────────────────
