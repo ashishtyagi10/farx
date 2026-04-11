@@ -534,8 +534,8 @@ impl App {
         // Ctrl+N = cycle panels (escape hatch), Ctrl+W = close terminal
         if let Some(tid) = self.focused_terminal {
             use crossterm::event::{KeyCode, KeyModifiers};
-            if key.code == KeyCode::Char('n') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                // Ctrl+N: cycle focus to next panel
+            if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                // Ctrl+T: cycle focus to next panel
                 self.cycle_focus();
                 return Action::Noop;
             }

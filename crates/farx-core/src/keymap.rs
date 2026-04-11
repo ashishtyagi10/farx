@@ -69,9 +69,9 @@ impl KeyMap {
         panel.insert((KeyCode::Left, KeyModifiers::NONE), Action::TreeCollapse);
         // Enter is handled specially in resolve_panel: if command line has input,
         // it executes; otherwise it enters the directory. So we don't bind it here.
-        // Ctrl+N = cycle focus between panels (file browsers + terminals)
+        // Ctrl+T = cycle focus between panels (file browsers + terminals)
         panel.insert(
-            (KeyCode::Char('n'), KeyModifiers::CONTROL),
+            (KeyCode::Char('t'), KeyModifiers::CONTROL),
             Action::SwitchPanel,
         );
         panel.insert((KeyCode::Insert, KeyModifiers::NONE), Action::ToggleSelect);
