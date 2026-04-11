@@ -531,11 +531,16 @@ impl App {
         }
 
         // Embedded terminal — when focused, forward all keys to PTY
-        // Ctrl+N = cycle panels (escape hatch), Ctrl+W = close terminal
+        // F4 = cycle panels (escape hatch), Ctrl+W = close terminal
         if let Some(tid) = self.focused_terminal {
             use crossterm::event::{KeyCode, KeyModifiers};
+            if key.code == KeyCode::F(4) {
+                // F4: cycle focus to next panel
+                self.cycle_focus();
+                return Action::Noop;
+            }
             if key.code == KeyCode::Char('n') && key.modifiers.contains(KeyModifiers::ALT) {
-                // Alt+N (Option+N): cycle focus to next panel
+                // Alt+N: also cycle panels
                 self.cycle_focus();
                 return Action::Noop;
             }

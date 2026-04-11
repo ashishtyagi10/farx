@@ -10,8 +10,8 @@ use crate::theme::Theme;
 const FN_ITEMS: &[(u8, &str)] = &[
     (1, "Help"),
     (2, "Menu"),
-    (3, "View"),
-    (4, "Edit"),
+    (3, "Edit"),
+    (4, "Panel"),
     (5, "Copy"),
     (6, "Move"),
     (7, "MkDir"),

@@ -82,7 +82,7 @@ pub fn render_help(frame: &mut Frame, state: &HelpState, _theme: &Theme) {
         )),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Alt+N        ", Style::default().fg(Color::White)),
+            Span::styled("  F4           ", Style::default().fg(Color::White)),
             Span::raw("Next panel (cycle files / terminals)"),
         ]),
         Line::from(vec![
@@ -119,10 +119,6 @@ pub fn render_help(frame: &mut Frame, state: &HelpState, _theme: &Theme) {
         Line::from(""),
         Line::from(vec![
             Span::styled("  F3           ", Style::default().fg(Color::White)),
-            Span::raw("View file"),
-        ]),
-        Line::from(vec![
-            Span::styled("  F4           ", Style::default().fg(Color::White)),
             Span::raw("Edit file"),
         ]),
         Line::from(vec![

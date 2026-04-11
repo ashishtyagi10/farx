@@ -28,8 +28,8 @@ impl KeyMap {
 
         // ── Panel: function keys ───────────────────────────────────────
         panel.insert((KeyCode::F(2), KeyModifiers::NONE), Action::OpenSystemApp);
-        panel.insert((KeyCode::F(3), KeyModifiers::NONE), Action::ViewFile);
-        panel.insert((KeyCode::F(4), KeyModifiers::NONE), Action::EditFile);
+        panel.insert((KeyCode::F(3), KeyModifiers::NONE), Action::EditFile);
+        panel.insert((KeyCode::F(4), KeyModifiers::NONE), Action::SwitchPanel);
         panel.insert((KeyCode::F(5), KeyModifiers::NONE), Action::CopyDialog);
         panel.insert((KeyCode::F(6), KeyModifiers::NONE), Action::MoveDialog);
         panel.insert((KeyCode::F(7), KeyModifiers::NONE), Action::MkDirDialog);
@@ -69,7 +69,7 @@ impl KeyMap {
         panel.insert((KeyCode::Left, KeyModifiers::NONE), Action::TreeCollapse);
         // Enter is handled specially in resolve_panel: if command line has input,
         // it executes; otherwise it enters the directory. So we don't bind it here.
-        // Alt+N (Option+N on Mac) = cycle focus between panels
+        // Alt+N also cycles panels (for terminals with Option-as-Meta enabled)
         panel.insert((KeyCode::Char('n'), KeyModifiers::ALT), Action::SwitchPanel);
         panel.insert((KeyCode::Insert, KeyModifiers::NONE), Action::ToggleSelect);
 
