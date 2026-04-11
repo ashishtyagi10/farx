@@ -82,8 +82,12 @@ pub fn render_help(frame: &mut Frame, state: &HelpState, _theme: &Theme) {
         )),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Tab          ", Style::default().fg(Color::White)),
-            Span::raw("Switch between panels"),
+            Span::styled("  Ctrl+]       ", Style::default().fg(Color::White)),
+            Span::raw("Cycle focus between panels / terminals"),
+        ]),
+        Line::from(vec![
+            Span::styled("  Ctrl+W       ", Style::default().fg(Color::White)),
+            Span::raw("Close focused terminal"),
         ]),
         Line::from(vec![
             Span::styled("  Enter        ", Style::default().fg(Color::White)),
