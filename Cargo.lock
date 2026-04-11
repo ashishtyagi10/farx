@@ -651,12 +651,17 @@ dependencies = [
  "farx-core",
  "farx-fs",
  "farx-ui",
+ "flate2",
  "ratatui",
+ "reqwest",
  "self_update",
  "semver",
+ "tar",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zip",
 ]
 
 [[package]]
