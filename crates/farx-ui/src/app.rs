@@ -24,6 +24,7 @@ use crate::components::fuzzy_finder::{render_fuzzy_finder, FuzzyAction, FuzzyFin
 use crate::components::help::{render_help, HelpState};
 use crate::components::info_panel::{render_info_panel, InfoPanelData};
 use crate::components::menu::{render_menu, MenuAction, MenuState};
+use crate::components::progress::{render_progress, ProgressState};
 use crate::components::quick_actions::{
     render_quick_actions, QuickActionResult, QuickActionsState,
 };
@@ -140,6 +141,8 @@ pub struct App {
     pub batch_rename: Option<BatchRenameState>,
     /// Chmod / permissions dialog state.
     pub chmod_dialog: Option<ChmodDialogState>,
+    /// File operation progress dialog.
+    pub progress: Option<ProgressState>,
     /// Fuzzy finder dialog state.
     pub fuzzy_finder: Option<FuzzyFinderState>,
     /// Quick actions palette state.
@@ -247,6 +250,7 @@ impl App {
             undo_stack: Vec::new(),
             batch_rename: None,
             chmod_dialog: None,
+            progress: None,
             fuzzy_finder: None,
             quick_actions: None,
             ai_panel: None,
@@ -1256,6 +1260,23 @@ impl App {
         self.check_suggestion_response();
         self.check_fs_changes();
         self.poll_terminals();
+
+        // Poll file operation progress
+        if let Some(ref mut progress) = self.progress {
+            if progress.poll() {
+                let error = progress.error.clone();
+                let files_done = progress.files_done;
+                let op = progress.operation.clone();
+                self.progress = None;
+                if let Some(err) = error {
+                    self.feedback.error(format!("{} failed: {}", op, err));
+                } else {
+                    self.feedback
+                        .success(format!("{} complete: {} file(s)", op, files_done));
+                }
+                self.refresh_both_panels();
+            }
+        }
 
         // Viewer follow/tail mode: reload file every 4 ticks (~1s)
         if self.tick_count % 4 == 0 {
@@ -2464,42 +2485,65 @@ impl App {
     fn execute_confirm(&mut self, action: ConfirmAction) {
         match action {
             ConfirmAction::Copy { sources, dest } => {
-                let mut ok = 0;
-                let mut fail = 0;
-                for source in &sources {
-                    match farx_fs::copy_entry(source, &dest) {
-                        Ok(()) => ok += 1,
-                        Err(_) => fail += 1,
-                    }
-                }
-                if fail == 0 {
-                    self.feedback.success(format!("Copied {} file(s)", ok));
+                if sources.len() >= 2 {
+                    // Use progress dialog for multi-file copy
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let srcs = sources.clone();
+                    let dst = dest.clone();
+                    std::thread::spawn(move || {
+                        farx_fs::copy_entries_with_progress(srcs, dst, tx);
+                    });
+                    self.progress = Some(ProgressState::new("Copying", rx));
                 } else {
-                    self.feedback
-                        .warning(format!("Copied {}, failed {}", ok, fail));
+                    let mut ok = 0;
+                    let mut fail = 0;
+                    for source in &sources {
+                        match farx_fs::copy_entry(source, &dest) {
+                            Ok(()) => ok += 1,
+                            Err(_) => fail += 1,
+                        }
+                    }
+                    if fail == 0 {
+                        self.feedback.success(format!("Copied {} file(s)", ok));
+                    } else {
+                        self.feedback
+                            .warning(format!("Copied {}, failed {}", ok, fail));
+                    }
                 }
             }
             ConfirmAction::Move { sources, dest } => {
-                let mut ok = 0;
-                let mut fail = 0;
-                let moved_sources = sources.clone();
-                for source in &sources {
-                    match farx_fs::move_entry(source, &dest) {
-                        Ok(()) => ok += 1,
-                        Err(_) => fail += 1,
-                    }
-                }
-                if ok > 0 {
-                    self.undo_stack.push(UndoEntry::Move {
-                        sources: moved_sources,
-                        dest: dest.clone(),
+                if sources.len() >= 2 {
+                    // Use progress dialog for multi-file move
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let srcs = sources.clone();
+                    let dst = dest.clone();
+                    std::thread::spawn(move || {
+                        farx_fs::move_entries_with_progress(srcs, dst, tx);
                     });
-                }
-                if fail == 0 {
-                    self.feedback.success(format!("Moved {} file(s)", ok));
+                    self.progress = Some(ProgressState::new("Moving", rx));
+                    self.undo_stack.push(UndoEntry::Move { sources, dest });
                 } else {
-                    self.feedback
-                        .warning(format!("Moved {}, failed {}", ok, fail));
+                    let mut ok = 0;
+                    let mut fail = 0;
+                    let moved_sources = sources.clone();
+                    for source in &sources {
+                        match farx_fs::move_entry(source, &dest) {
+                            Ok(()) => ok += 1,
+                            Err(_) => fail += 1,
+                        }
+                    }
+                    if ok > 0 {
+                        self.undo_stack.push(UndoEntry::Move {
+                            sources: moved_sources,
+                            dest: dest.clone(),
+                        });
+                    }
+                    if fail == 0 {
+                        self.feedback.success(format!("Moved {} file(s)", ok));
+                    } else {
+                        self.feedback
+                            .warning(format!("Moved {}, failed {}", ok, fail));
+                    }
                 }
             }
             ConfirmAction::Delete { targets } => {
@@ -3744,6 +3788,11 @@ impl App {
         // Dialog only for text input (MkDir, Rename, CreateFile)
         if let Some(ref dialog) = self.dialog {
             render_dialog(frame, dialog, &self.theme);
+        }
+
+        // Progress dialog (renders on top of everything)
+        if let Some(ref progress) = self.progress {
+            render_progress(frame, progress, &self.theme);
         }
 
         // Scrollable output panel (from feedback) renders on top of panels

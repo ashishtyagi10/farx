@@ -55,6 +55,248 @@ pub fn move_entry(source: &Path, dest_dir: &Path) -> Result<()> {
     }
 }
 
+/// Progress update for copy/move operations.
+#[derive(Debug, Clone)]
+pub struct FileProgress {
+    /// Current file being processed.
+    pub current_file: String,
+    /// Number of files completed so far.
+    pub files_done: usize,
+    /// Total number of files.
+    pub files_total: usize,
+    /// Total bytes copied so far.
+    pub bytes_done: u64,
+    /// Total bytes to copy.
+    pub bytes_total: u64,
+    /// Whether the operation is complete.
+    pub finished: bool,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Count total files and bytes in a path (recursively for directories).
+fn count_files_and_bytes(path: &Path) -> (usize, u64) {
+    if path.is_dir() {
+        let mut count = 0usize;
+        let mut bytes = 0u64;
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let (c, b) = count_files_and_bytes(&entry.path());
+                count += c;
+                bytes += b;
+            }
+        }
+        (count, bytes)
+    } else {
+        let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        (1, size)
+    }
+}
+
+/// Copy entries with progress reporting via a channel.
+pub fn copy_entries_with_progress(
+    sources: Vec<std::path::PathBuf>,
+    dest_dir: std::path::PathBuf,
+    tx: std::sync::mpsc::Sender<FileProgress>,
+) {
+    // Count total files and bytes
+    let mut files_total = 0usize;
+    let mut bytes_total = 0u64;
+    for src in &sources {
+        let (c, b) = count_files_and_bytes(src);
+        files_total += c;
+        bytes_total += b;
+    }
+
+    let mut files_done = 0usize;
+    let mut bytes_done = 0u64;
+
+    for src in &sources {
+        let result = copy_entry_progress(
+            src,
+            &dest_dir,
+            &tx,
+            &mut files_done,
+            &mut bytes_done,
+            files_total,
+            bytes_total,
+        );
+        if let Err(e) = result {
+            let _ = tx.send(FileProgress {
+                current_file: src.display().to_string(),
+                files_done,
+                files_total,
+                bytes_done,
+                bytes_total,
+                finished: true,
+                error: Some(e.to_string()),
+            });
+            return;
+        }
+    }
+
+    let _ = tx.send(FileProgress {
+        current_file: String::new(),
+        files_done,
+        files_total,
+        bytes_done,
+        bytes_total,
+        finished: true,
+        error: None,
+    });
+}
+
+fn copy_entry_progress(
+    source: &Path,
+    dest_dir: &Path,
+    tx: &std::sync::mpsc::Sender<FileProgress>,
+    files_done: &mut usize,
+    bytes_done: &mut u64,
+    files_total: usize,
+    bytes_total: u64,
+) -> Result<()> {
+    let file_name = source
+        .file_name()
+        .ok_or_else(|| anyhow::anyhow!("No file name"))?;
+    let dest = dest_dir.join(file_name);
+
+    if source.is_dir() {
+        std::fs::create_dir_all(&dest)?;
+        for entry in std::fs::read_dir(source)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                copy_entry_progress(
+                    &entry.path(),
+                    &dest,
+                    tx,
+                    files_done,
+                    bytes_done,
+                    files_total,
+                    bytes_total,
+                )?;
+            } else {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let _ = tx.send(FileProgress {
+                    current_file: name,
+                    files_done: *files_done,
+                    files_total,
+                    bytes_done: *bytes_done,
+                    bytes_total,
+                    finished: false,
+                    error: None,
+                });
+                let size = std::fs::copy(entry.path(), dest.join(entry.file_name()))?;
+                *files_done += 1;
+                *bytes_done += size;
+            }
+        }
+    } else {
+        let name = source
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let _ = tx.send(FileProgress {
+            current_file: name,
+            files_done: *files_done,
+            files_total,
+            bytes_done: *bytes_done,
+            bytes_total,
+            finished: false,
+            error: None,
+        });
+        let size = std::fs::copy(source, &dest)?;
+        *files_done += 1;
+        *bytes_done += size;
+    }
+    Ok(())
+}
+
+/// Move entries with progress reporting via a channel.
+pub fn move_entries_with_progress(
+    sources: Vec<std::path::PathBuf>,
+    dest_dir: std::path::PathBuf,
+    tx: std::sync::mpsc::Sender<FileProgress>,
+) {
+    let mut files_total = 0usize;
+    let mut bytes_total = 0u64;
+    for src in &sources {
+        let (c, b) = count_files_and_bytes(src);
+        files_total += c;
+        bytes_total += b;
+    }
+
+    let mut files_done = 0usize;
+    let mut bytes_done = 0u64;
+
+    for src in &sources {
+        let file_name = match src.file_name() {
+            Some(n) => n,
+            None => continue,
+        };
+        let dest = dest_dir.join(file_name);
+        let name = file_name.to_string_lossy().to_string();
+
+        let _ = tx.send(FileProgress {
+            current_file: name.clone(),
+            files_done,
+            files_total,
+            bytes_done,
+            bytes_total,
+            finished: false,
+            error: None,
+        });
+
+        // Try rename first (fast, same filesystem)
+        match std::fs::rename(src, &dest) {
+            Ok(()) => {
+                let (c, b) = count_files_and_bytes(&dest);
+                files_done += c;
+                bytes_done += b;
+            }
+            Err(_) => {
+                // Cross-filesystem: copy then delete
+                let result = copy_entry_progress(
+                    src,
+                    &dest_dir,
+                    &tx,
+                    &mut files_done,
+                    &mut bytes_done,
+                    files_total,
+                    bytes_total,
+                );
+                if let Err(e) = result {
+                    let _ = tx.send(FileProgress {
+                        current_file: name,
+                        files_done,
+                        files_total,
+                        bytes_done,
+                        bytes_total,
+                        finished: true,
+                        error: Some(e.to_string()),
+                    });
+                    return;
+                }
+                if src.is_dir() {
+                    let _ = std::fs::remove_dir_all(src);
+                } else {
+                    let _ = std::fs::remove_file(src);
+                }
+            }
+        }
+    }
+
+    let _ = tx.send(FileProgress {
+        current_file: String::new(),
+        files_done,
+        files_total,
+        bytes_done,
+        bytes_total,
+        finished: true,
+        error: None,
+    });
+}
+
 /// Delete a file or directory.
 /// If `use_trash` is true, moves to the system trash/recycle bin.
 pub fn delete_entry(path: &Path, use_trash: bool) -> Result<()> {
