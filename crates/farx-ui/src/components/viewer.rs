@@ -105,7 +105,7 @@ impl ViewerState {
             lines,
             scroll_offset: 0,
             active: true,
-            wrap: false,
+            wrap: true,
             hex_mode: false,
             markdown_mode,
             markdown_lines,
@@ -244,6 +244,26 @@ impl ViewerState {
             }
             KeyCode::Char('g') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.goto_input = Some(String::new());
+                ViewerAction::None
+            }
+            KeyCode::Char('m') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Toggle markdown preview for .md files
+                let ext = self.file_path.extension().and_then(|e| e.to_str());
+                if matches!(ext, Some("md" | "markdown" | "mdx")) {
+                    self.markdown_mode = !self.markdown_mode;
+                    if self.markdown_mode && self.markdown_lines.is_empty() {
+                        // Re-render markdown
+                        let contents = self.lines.join("\n");
+                        self.markdown_lines =
+                            render_markdown_with_bg(&contents, Color::Rgb(22, 22, 26));
+                        self.total_lines = self.markdown_lines.len();
+                    } else if !self.markdown_mode {
+                        self.total_lines = self.lines.len();
+                    } else {
+                        self.total_lines = self.markdown_lines.len();
+                    }
+                    self.scroll_offset = 0;
+                }
                 ViewerAction::None
             }
             KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -417,9 +437,17 @@ pub fn render_viewer(frame: &mut Frame, state: &mut ViewerState, _theme: &Theme)
 
     let bg = Color::Rgb(22, 22, 26);
 
+    // When wrap is on, build extra lines to fill viewport (wrapped lines consume
+    // more visual space). A 3x multiplier ensures coverage even with long lines.
+    let build_count = if state.wrap {
+        content_height * 3
+    } else {
+        content_height
+    };
+
     let text_lines: Vec<Line> = if state.markdown_mode {
         // Markdown preview: use pre-rendered lines
-        let end = (state.scroll_offset + content_height).min(state.markdown_lines.len());
+        let end = (state.scroll_offset + build_count).min(state.markdown_lines.len());
         state.markdown_lines[state.scroll_offset..end].to_vec()
     } else {
         // Detect language from file extension
@@ -427,8 +455,7 @@ pub fn render_viewer(frame: &mut Frame, state: &mut ViewerState, _theme: &Theme)
         let lang = Language::from_extension(ext);
 
         let mut lines: Vec<Line> = Vec::new();
-        for i in state.scroll_offset..(state.scroll_offset + content_height).min(state.total_lines)
-        {
+        for i in state.scroll_offset..(state.scroll_offset + build_count).min(state.total_lines) {
             if i < state.lines.len() {
                 let line_num = format!("{:>6} ", i + 1);
                 let content = &state.lines[i];
@@ -496,14 +523,29 @@ pub fn render_viewer(frame: &mut Frame, state: &mut ViewerState, _theme: &Theme)
     } else if let Some(ref input) = state.goto_input {
         format!(" Go to line: {}_ (Enter=Go, Esc=Cancel) ", input)
     } else {
-        format!(
-            " Line {}/{} ({}%) | {}{}Esc/F3/q=Close  PgUp/PgDn  Ctrl+G=GoTo  Ctrl+F=Follow ",
-            state.scroll_offset + 1,
-            state.total_lines,
-            percentage,
-            if state.wrap { "Wrap:ON  " } else { "" },
-            follow_indicator,
-        )
+        {
+            let ext = state.file_path.extension().and_then(|e| e.to_str());
+            let is_md = matches!(ext, Some("md" | "markdown" | "mdx"));
+            let md_hint = if is_md {
+                if state.markdown_mode {
+                    "  Ctrl+M=Raw"
+                } else {
+                    "  Ctrl+M=Preview"
+                }
+            } else {
+                ""
+            };
+            format!(
+                " Line {}/{} ({}%) | {}{}{}Esc/F3/q=Close  Ctrl+W=Wrap  Ctrl+G=GoTo{}",
+                state.scroll_offset + 1,
+                state.total_lines,
+                percentage,
+                if state.wrap { "Wrap " } else { "" },
+                if state.markdown_mode { "MD " } else { "" },
+                follow_indicator,
+                md_hint,
+            )
+        }
     };
     let status_line = Line::from(Span::styled(
         status_text,

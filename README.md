@@ -84,6 +84,7 @@ farx --keydebug       # Debug terminal key events
 | `Ctrl+M` | Batch rename (regex find/replace) |
 | `Ctrl+Z` | Undo last file operation |
 | `Alt+L` | Create symbolic link |
+| `Alt+A` | File permissions (chmod) |
 
 ### Selection
 
@@ -149,6 +150,10 @@ farx --keydebug       # Debug terminal key events
 | `Ctrl+F9` | Compare directories |
 | `Alt+W` | Touch file (update mtime) |
 | `Alt+I` | File statistics (line/word/byte count) |
+| `Ctrl+T` | New tab (current directory) |
+| `Ctrl+W` | Close tab |
+| `Ctrl+Tab` | Next tab |
+| `Alt+1`..`Alt+9` | Switch to tab by number |
 
 ## Built-in Editor
 
@@ -366,6 +371,46 @@ Press `` Ctrl+` `` to open a new terminal window in the current panel's director
 
 Press `Alt+H` to see a list of recently visited directories from the navigation history. The current directory is marked with `*`. Use `/recent` or `/history` from the command line, and `/goto` to jump to any listed path.
 
+## Mouse Support
+
+Farx supports full mouse interaction:
+- **Left-click** on a file to move the cursor and switch panels
+- **Double-click** to enter a directory or open a file
+- **Right-click** to toggle file selection
+- **Scroll wheel** scrolls whichever panel the mouse is over
+- **Click breadcrumb** segments in the path bar to navigate to ancestors
+- **Click fn-bar** buttons to trigger the corresponding action
+
+## File Permissions (chmod)
+
+Press `Alt+A` to open the permissions dialog for the file under the cursor. Toggle read/write/execute bits for owner/group/other with Space, navigate with arrow keys. Shows the octal representation live. Press Enter to apply. Use `/chmod` or `/permissions` from the command line. Unix only.
+
+## Content Search (Grep)
+
+The search dialog (`Alt+F7`) has a "Containing text" field for searching inside files. Results now show matching line numbers and text content. Use `/grep` from the command line to open the search dialog with the content field pre-focused.
+
+## Tabs
+
+Each panel supports multiple directory tabs:
+- `Ctrl+T` — open a new tab in the current directory
+- `Ctrl+W` — close the active tab
+- `Ctrl+Tab` — switch to the next tab
+- `Alt+1`..`Alt+9` — jump to tab by number
+
+A tab bar appears at the top of the panel when multiple tabs are open.
+
+## File Diff
+
+Use `/diff` to compare the file under the cursor in the left panel against the file under the cursor in the right panel. Shows a side-by-side view with color-coded differences (red=removed, green=added, yellow=changed). Scroll with Up/Down/PgUp/PgDn, close with Esc.
+
+## Image Preview
+
+When the info panel (`Ctrl+L`) is open and the cursor is on an image file (PNG, JPG, GIF, BMP, WEBP, etc.), Farx renders a scaled thumbnail preview using Unicode half-block characters. Works in all terminals. Shows image dimensions alongside the preview.
+
+## Copy/Move Progress
+
+When copying or moving multiple files, a progress dialog shows the current file, file/byte counters, and a visual progress bar. The operation runs in a background thread so the UI stays responsive.
+
 ## Themes
 
 Set the theme in `~/.config/farx/config.toml`:
@@ -399,6 +444,12 @@ date_format = "%Y-%m-%d %H:%M"
 [panels]
 directories_first = true    # Directories before files
 default_sort = "name"       # "name", "extension", "size", or "date"
+
+[keybindings]
+# Remap any key to any action. Key format: "Modifier+Key"
+# "Ctrl+E" = "edit"
+# "Alt+G" = "goto"
+# "F12" = "quit"
 
 [ai]
 enabled = false

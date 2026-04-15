@@ -3786,7 +3786,7 @@ impl App {
         let size = frame.area();
 
         // Full-screen modals first
-        if let Some(ref editor) = self.editor {
+        if let Some(ref mut editor) = self.editor {
             render_editor(frame, editor, &self.theme);
             return;
         }

@@ -1,9 +1,10 @@
+use crate::components::markdown::render_markdown_with_bg;
 use crate::components::syntax::{highlight_line, Language};
 use crate::theme::Theme;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::prelude::*;
 use ratatui::widgets::{
-    Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+    Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
 };
 use std::path::{Path, PathBuf};
 
@@ -38,6 +39,14 @@ pub struct EditorState {
     pub horizontal_scroll: usize,
     pub modified: bool,
     pub active: bool,
+    /// Word wrap mode (visual only — data stays unwrapped)
+    pub wrap: bool,
+    /// Markdown preview mode (read-only rendered view)
+    pub preview_mode: bool,
+    /// Pre-rendered markdown lines for preview
+    preview_lines: Vec<Line<'static>>,
+    /// Scroll offset for preview mode
+    preview_scroll: usize,
     mode: EditorMode,
     search_query: String,
     search_cursor: usize,
@@ -80,6 +89,10 @@ impl EditorState {
             horizontal_scroll: 0,
             modified: false,
             active: true,
+            wrap: true,
+            preview_mode: false,
+            preview_lines: Vec::new(),
+            preview_scroll: 0,
             mode: EditorMode::Normal,
             search_query: String::new(),
             search_cursor: 0,
@@ -272,26 +285,109 @@ impl EditorState {
         }
     }
 
-    pub fn scroll_to_cursor(&mut self, visible_height: usize, visible_width: usize) {
-        // Vertical scroll
-        if self.cursor_line < self.scroll_offset {
-            self.scroll_offset = self.cursor_line;
+    /// How many visual lines a logical line occupies when wrapped.
+    fn visual_height_of_line(&self, line_idx: usize, text_width: usize) -> usize {
+        if text_width == 0 {
+            return 1;
         }
-        if self.cursor_line >= self.scroll_offset + visible_height {
-            self.scroll_offset = self.cursor_line - visible_height + 1;
-        }
-        // Horizontal scroll
-        let gutter_width = 6; // line number width
-        let text_width = visible_width.saturating_sub(gutter_width);
-        if self.cursor_col < self.horizontal_scroll {
-            self.horizontal_scroll = self.cursor_col;
-        }
-        if self.cursor_col >= self.horizontal_scroll + text_width {
-            self.horizontal_scroll = self.cursor_col - text_width + 1;
+        let char_count = self
+            .lines
+            .get(line_idx)
+            .map(|l| l.chars().count())
+            .unwrap_or(0);
+        if char_count == 0 {
+            1
+        } else {
+            char_count.div_ceil(text_width)
         }
     }
 
+    pub fn scroll_to_cursor(&mut self, visible_height: usize, visible_width: usize) {
+        let gutter_width = 6usize;
+        let text_width = visible_width.saturating_sub(gutter_width);
+
+        if self.wrap && text_width > 0 {
+            // Ensure cursor line is at or below scroll_offset
+            if self.cursor_line < self.scroll_offset {
+                self.scroll_offset = self.cursor_line;
+            }
+
+            // Compute visual rows from scroll_offset to cursor position
+            let mut visual = 0usize;
+            for i in self.scroll_offset..=self.cursor_line.min(self.lines.len().saturating_sub(1)) {
+                if i == self.cursor_line {
+                    // Add the cursor's row within this wrapped line
+                    let char_col = self.lines[i][..self.cursor_col.min(self.lines[i].len())]
+                        .chars()
+                        .count();
+                    visual += char_col / text_width.max(1);
+                } else {
+                    visual += self.visual_height_of_line(i, text_width);
+                }
+            }
+
+            // Scroll down until cursor's visual row fits on screen
+            while visual >= visible_height && self.scroll_offset < self.cursor_line {
+                let removed = self.visual_height_of_line(self.scroll_offset, text_width);
+                visual = visual.saturating_sub(removed);
+                self.scroll_offset += 1;
+            }
+        } else {
+            // Non-wrap mode: logical-line scrolling
+            if self.cursor_line < self.scroll_offset {
+                self.scroll_offset = self.cursor_line;
+            }
+            if self.cursor_line >= self.scroll_offset + visible_height {
+                self.scroll_offset = self.cursor_line - visible_height + 1;
+            }
+            // Horizontal scroll
+            if self.cursor_col < self.horizontal_scroll {
+                self.horizontal_scroll = self.cursor_col;
+            }
+            if self.cursor_col >= self.horizontal_scroll + text_width {
+                self.horizontal_scroll = self.cursor_col - text_width + 1;
+            }
+        }
+    }
+
+    fn is_markdown_file(&self) -> bool {
+        let ext = self.file_path.extension().and_then(|e| e.to_str());
+        matches!(ext, Some("md" | "markdown" | "mdx"))
+    }
+
     pub fn handle_key_event(&mut self, key: KeyEvent) -> EditorAction {
+        // Markdown preview mode — limited key handling
+        if self.preview_mode {
+            match key.code {
+                KeyCode::Char('m') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.preview_mode = false;
+                }
+                KeyCode::Esc => {
+                    self.preview_mode = false;
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.preview_scroll = self.preview_scroll.saturating_sub(1);
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.preview_scroll = self.preview_scroll.saturating_add(1);
+                }
+                KeyCode::PageUp => {
+                    self.preview_scroll = self.preview_scroll.saturating_sub(30);
+                }
+                KeyCode::PageDown | KeyCode::Char(' ') => {
+                    self.preview_scroll = self.preview_scroll.saturating_add(30);
+                }
+                KeyCode::Home => {
+                    self.preview_scroll = 0;
+                }
+                KeyCode::End => {
+                    self.preview_scroll = self.preview_lines.len().saturating_sub(1);
+                }
+                _ => {}
+            }
+            return EditorAction::None;
+        }
+
         match self.mode {
             EditorMode::ConfirmExit => {
                 match key.code {
@@ -392,6 +488,19 @@ impl EditorState {
                 if self.save().is_ok() {
                     self.active = false;
                     return EditorAction::SaveAndClose;
+                }
+            }
+            // Toggle word wrap
+            (KeyCode::Char('w'), KeyModifiers::CONTROL) => {
+                self.wrap = !self.wrap;
+            }
+            // Toggle markdown preview (for .md files)
+            (KeyCode::Char('m'), KeyModifiers::CONTROL) => {
+                if self.is_markdown_file() {
+                    let contents = self.lines.join("\n");
+                    self.preview_lines = render_markdown_with_bg(&contents, Color::Rgb(22, 22, 26));
+                    self.preview_scroll = 0;
+                    self.preview_mode = true;
                 }
             }
             // Search (F7 or Ctrl+F)
@@ -501,7 +610,7 @@ impl EditorState {
     }
 }
 
-pub fn render_editor(frame: &mut Frame, state: &EditorState, _theme: &Theme) {
+pub fn render_editor(frame: &mut Frame, state: &mut EditorState, _theme: &Theme) {
     let area = frame.area();
     frame.render_widget(Clear, area);
 
@@ -511,7 +620,8 @@ pub fn render_editor(frame: &mut Frame, state: &EditorState, _theme: &Theme) {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "new file".to_string());
     let modified_marker = if state.modified { " [modified]" } else { "" };
-    let title = format!(" Edit: {}{} ", file_name, modified_marker);
+    let preview_marker = if state.preview_mode { " [preview]" } else { "" };
+    let title = format!(" Edit: {}{}{} ", file_name, modified_marker, preview_marker);
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -535,98 +645,288 @@ pub fn render_editor(frame: &mut Frame, state: &EditorState, _theme: &Theme) {
     let gutter_width = 6u16;
     let text_width = inner.width.saturating_sub(gutter_width) as usize;
 
+    // --- Markdown preview mode ---
+    if state.preview_mode {
+        // Clamp preview scroll
+        let total = state.preview_lines.len();
+        if total > visible_height {
+            state.preview_scroll = state
+                .preview_scroll
+                .min(total.saturating_sub(visible_height));
+        } else {
+            state.preview_scroll = 0;
+        }
+        let build_count = visible_height * 3;
+        let end = (state.preview_scroll + build_count).min(total);
+        let md_lines: Vec<Line> = state.preview_lines[state.preview_scroll..end].to_vec();
+        let paragraph = Paragraph::new(md_lines).wrap(Wrap { trim: false });
+        let text_area = Rect::new(inner.x, inner.y, inner.width, visible_height as u16);
+        frame.render_widget(paragraph, text_area);
+
+        // Scrollbar
+        if total > visible_height {
+            let scrollbar_area = Rect::new(
+                area.x + area.width.saturating_sub(1),
+                area.y + 1,
+                1,
+                area.height.saturating_sub(2),
+            );
+            let mut scrollbar_state = ScrollbarState::new(total.saturating_sub(visible_height))
+                .position(state.preview_scroll);
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .track_symbol(Some("│"))
+                    .thumb_symbol("█")
+                    .track_style(Style::default().fg(Color::Rgb(50, 50, 55)))
+                    .thumb_style(Style::default().fg(Color::Rgb(120, 120, 140))),
+                scrollbar_area,
+                &mut scrollbar_state,
+            );
+        }
+
+        // Status bar
+        let status_y = inner.y + inner.height.saturating_sub(1);
+        let pct = if total == 0 {
+            100
+        } else {
+            ((state.preview_scroll + visible_height).min(total) * 100) / total
+        };
+        let status = format!(
+            " MD Preview {}/{} ({}%) | Ctrl+M/Esc=Edit  PgUp/PgDn ",
+            state.preview_scroll + 1,
+            total,
+            pct,
+        );
+        let status_line = Line::from(Span::styled(
+            format!("{:<width$}", status, width = inner.width as usize),
+            Style::default()
+                .fg(Color::Rgb(16, 16, 18))
+                .bg(Color::Rgb(100, 180, 220)),
+        ));
+        frame.render_widget(
+            Paragraph::new(status_line),
+            Rect::new(inner.x, status_y, inner.width, 1),
+        );
+        return;
+    }
+
+    // --- Normal edit mode ---
+    // Adjust scroll so cursor is visible
+    state.scroll_to_cursor(visible_height, inner.width as usize);
+
     // Detect language from file extension
     let ext = state.file_path.extension().and_then(|e| e.to_str());
     let lang = Language::from_extension(ext);
 
-    // Build visible lines with syntax highlighting
-    let mut text_lines: Vec<Line> = Vec::new();
-    for i in state.scroll_offset..(state.scroll_offset + visible_height).min(state.lines.len()) {
-        let line_num = format!("{:>5} ", i + 1);
-        let line = &state.lines[i];
+    let bg_normal = Color::Rgb(22, 22, 26);
 
-        // Apply horizontal scroll
-        let visible_text: String = line
-            .chars()
-            .skip(state.horizontal_scroll)
-            .take(text_width)
-            .collect();
+    if state.wrap && text_width > 0 {
+        // ---- Wrapped rendering ----
+        // Build visual lines from scroll_offset
+        let mut visual_lines: Vec<Line> = Vec::new();
+        let mut cursor_visual_y: Option<u16> = None;
+        let mut cursor_visual_x: Option<u16> = None;
+        let mut logical_idx = state.scroll_offset;
 
-        let is_cursor_line = i == state.cursor_line;
-        let bg = if is_cursor_line {
-            Color::Indexed(236)
-        } else {
-            Color::Rgb(22, 22, 26)
-        };
-        let line_num_style = Style::default().fg(Color::DarkGray).bg(bg);
+        while visual_lines.len() < visible_height && logical_idx < state.lines.len() {
+            let line = &state.lines[logical_idx];
+            let is_cursor_line = logical_idx == state.cursor_line;
+            let bg = if is_cursor_line {
+                Color::Indexed(236)
+            } else {
+                bg_normal
+            };
+            let line_num_style = Style::default().fg(Color::DarkGray).bg(bg);
 
-        let mut spans = vec![Span::styled(line_num, line_num_style)];
+            let chars: Vec<char> = line.chars().collect();
+            let chunk_count = if chars.is_empty() {
+                1
+            } else {
+                chars.len().div_ceil(text_width)
+            };
 
-        // Syntax highlight the visible portion
-        let highlighted = highlight_line(&visible_text, lang, bg);
-        if highlighted.is_empty() {
-            spans.push(Span::styled(
-                format!("{:<width$}", visible_text, width = text_width),
-                Style::default().fg(Color::Rgb(200, 200, 210)).bg(bg),
-            ));
-        } else {
-            spans.extend(highlighted);
-            // Pad remaining width with background
-            let used: usize = visible_text.len();
-            if used < text_width {
-                spans.push(Span::styled(
-                    " ".repeat(text_width - used),
-                    Style::default().bg(bg),
-                ));
+            for chunk_idx in 0..chunk_count {
+                if visual_lines.len() >= visible_height {
+                    break;
+                }
+                let char_start = chunk_idx * text_width;
+                let char_end = (char_start + text_width).min(chars.len());
+                let chunk_text: String = chars[char_start..char_end].iter().collect();
+
+                // Line number only on first visual line of each logical line
+                let gutter = if chunk_idx == 0 {
+                    format!("{:>5} ", logical_idx + 1)
+                } else {
+                    "    > ".to_string()
+                };
+
+                let mut spans = vec![Span::styled(gutter, line_num_style)];
+
+                let highlighted = highlight_line(&chunk_text, lang, bg);
+                if highlighted.is_empty() {
+                    spans.push(Span::styled(
+                        format!("{:<width$}", chunk_text, width = text_width),
+                        Style::default().fg(Color::Rgb(200, 200, 210)).bg(bg),
+                    ));
+                } else {
+                    spans.extend(highlighted);
+                    let used = chunk_text.len();
+                    if used < text_width {
+                        spans.push(Span::styled(
+                            " ".repeat(text_width - used),
+                            Style::default().bg(bg),
+                        ));
+                    }
+                }
+
+                // Track cursor visual position
+                if is_cursor_line {
+                    let cursor_char_col = line[..state.cursor_col.min(line.len())].chars().count();
+                    if cursor_char_col >= char_start && cursor_char_col <= char_end {
+                        cursor_visual_y = Some(visual_lines.len() as u16);
+                        cursor_visual_x = Some((cursor_char_col - char_start) as u16);
+                    }
+                }
+
+                visual_lines.push(Line::from(spans));
             }
+            logical_idx += 1;
         }
 
-        text_lines.push(Line::from(spans));
+        // Fill remaining empty lines
+        while visual_lines.len() < visible_height {
+            visual_lines.push(Line::from(vec![
+                Span::styled("    ~ ", Style::default().fg(Color::DarkGray).bg(bg_normal)),
+                Span::styled(" ".repeat(text_width), Style::default().bg(bg_normal)),
+            ]));
+        }
+
+        let text_area = Rect::new(inner.x, inner.y, inner.width, visible_height as u16);
+        frame.render_widget(Paragraph::new(visual_lines), text_area);
+
+        // Scrollbar
+        if state.lines.len() > visible_height {
+            let scrollbar_area = Rect::new(
+                area.x + area.width.saturating_sub(1),
+                area.y + 1,
+                1,
+                area.height.saturating_sub(2),
+            );
+            let mut scrollbar_state =
+                ScrollbarState::new(state.lines.len().saturating_sub(visible_height))
+                    .position(state.scroll_offset);
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .track_symbol(Some("│"))
+                    .thumb_symbol("█")
+                    .track_style(Style::default().fg(Color::Rgb(50, 50, 55)))
+                    .thumb_style(Style::default().fg(Color::Rgb(120, 120, 140))),
+                scrollbar_area,
+                &mut scrollbar_state,
+            );
+        }
+
+        // Cursor positioning for wrap mode
+        if state.mode == EditorMode::Normal {
+            if let (Some(vy), Some(vx)) = (cursor_visual_y, cursor_visual_x) {
+                let cx = inner.x + gutter_width + vx;
+                let cy = inner.y + vy;
+                if cx < inner.x + inner.width && cy < inner.y + visible_height as u16 {
+                    frame.set_cursor_position((cx, cy));
+                }
+            }
+        }
+    } else {
+        // ---- Non-wrapped rendering (original) ----
+        let mut text_lines: Vec<Line> = Vec::new();
+        for i in state.scroll_offset..(state.scroll_offset + visible_height).min(state.lines.len())
+        {
+            let line_num = format!("{:>5} ", i + 1);
+            let line = &state.lines[i];
+
+            let visible_text: String = line
+                .chars()
+                .skip(state.horizontal_scroll)
+                .take(text_width)
+                .collect();
+
+            let is_cursor_line = i == state.cursor_line;
+            let bg = if is_cursor_line {
+                Color::Indexed(236)
+            } else {
+                bg_normal
+            };
+            let line_num_style = Style::default().fg(Color::DarkGray).bg(bg);
+
+            let mut spans = vec![Span::styled(line_num, line_num_style)];
+
+            let highlighted = highlight_line(&visible_text, lang, bg);
+            if highlighted.is_empty() {
+                spans.push(Span::styled(
+                    format!("{:<width$}", visible_text, width = text_width),
+                    Style::default().fg(Color::Rgb(200, 200, 210)).bg(bg),
+                ));
+            } else {
+                spans.extend(highlighted);
+                let used: usize = visible_text.len();
+                if used < text_width {
+                    spans.push(Span::styled(
+                        " ".repeat(text_width - used),
+                        Style::default().bg(bg),
+                    ));
+                }
+            }
+
+            text_lines.push(Line::from(spans));
+        }
+
+        // Fill remaining lines
+        for _ in text_lines.len()..visible_height {
+            text_lines.push(Line::from(vec![
+                Span::styled("    ~ ", Style::default().fg(Color::DarkGray).bg(bg_normal)),
+                Span::styled(" ".repeat(text_width), Style::default().bg(bg_normal)),
+            ]));
+        }
+
+        let text_area = Rect::new(inner.x, inner.y, inner.width, visible_height as u16);
+        frame.render_widget(Paragraph::new(text_lines), text_area);
+
+        // Scrollbar
+        if state.lines.len() > visible_height {
+            let scrollbar_area = Rect::new(
+                area.x + area.width.saturating_sub(1),
+                area.y + 1,
+                1,
+                area.height.saturating_sub(2),
+            );
+            let mut scrollbar_state =
+                ScrollbarState::new(state.lines.len().saturating_sub(visible_height))
+                    .position(state.scroll_offset);
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .track_symbol(Some("│"))
+                    .thumb_symbol("█")
+                    .track_style(Style::default().fg(Color::Rgb(50, 50, 55)))
+                    .thumb_style(Style::default().fg(Color::Rgb(120, 120, 140))),
+                scrollbar_area,
+                &mut scrollbar_state,
+            );
+        }
+
+        // Cursor positioning for non-wrap mode
+        if state.mode == EditorMode::Normal {
+            let visual_col = state.cursor_col.saturating_sub(state.horizontal_scroll) as u16;
+            let cursor_x = inner.x + gutter_width + visual_col;
+            let cursor_y = inner.y + (state.cursor_line.saturating_sub(state.scroll_offset)) as u16;
+            if cursor_x < inner.x + inner.width && cursor_y < inner.y + visible_height as u16 {
+                frame.set_cursor_position((cursor_x, cursor_y));
+            }
+        }
     }
 
-    // Fill remaining lines
-    for _ in text_lines.len()..visible_height {
-        text_lines.push(Line::from(vec![
-            Span::styled(
-                "    ~ ",
-                Style::default()
-                    .fg(Color::DarkGray)
-                    .bg(Color::Rgb(22, 22, 26)),
-            ),
-            Span::styled(
-                " ".repeat(text_width),
-                Style::default().bg(Color::Rgb(22, 22, 26)),
-            ),
-        ]));
-    }
-
-    let text_area = Rect::new(inner.x, inner.y, inner.width, visible_height as u16);
-    frame.render_widget(Paragraph::new(text_lines), text_area);
-
-    // Scrollbar
-    if state.lines.len() > visible_height {
-        let scrollbar_area = Rect::new(
-            area.x + area.width.saturating_sub(1),
-            area.y + 1,
-            1,
-            area.height.saturating_sub(2),
-        );
-        let mut scrollbar_state =
-            ScrollbarState::new(state.lines.len().saturating_sub(visible_height))
-                .position(state.scroll_offset);
-        frame.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .track_symbol(Some("│"))
-                .thumb_symbol("█")
-                .track_style(Style::default().fg(Color::Rgb(50, 50, 55)))
-                .thumb_style(Style::default().fg(Color::Rgb(120, 120, 140))),
-            scrollbar_area,
-            &mut scrollbar_state,
-        );
-    }
-
-    // Status bar at bottom
+    // Status bar at bottom (shared by wrap and non-wrap modes)
     let status_y = inner.y + inner.height.saturating_sub(1);
+    let is_md = state.is_markdown_file();
     let status = match state.mode {
         EditorMode::ConfirmExit => {
             " File modified. Save? (Y)es / (N)o / (S)ave and exit / (Esc) cancel ".to_string()
@@ -641,11 +941,14 @@ pub fn render_editor(frame: &mut Frame, state: &EditorState, _theme: &Theme) {
             )
         }
         EditorMode::Normal => {
+            let md_hint = if is_md { "  Ctrl+M=Preview" } else { "" };
             format!(
-                " Ln {}, Col {} | {} | Ctrl+S=Save  Ctrl+F=Search  Ctrl+G=GoTo  Ctrl+Q=SaveExit  Esc=Exit ",
+                " Ln {}, Col {} | {} | {}Ctrl+S=Save  Ctrl+W=Wrap  Ctrl+G=GoTo{}",
                 state.cursor_line + 1,
                 state.cursor_col + 1,
                 if state.modified { "Modified" } else { "Saved" },
+                if state.wrap { "Wrap " } else { "" },
+                md_hint,
             )
         }
     };
@@ -660,19 +963,12 @@ pub fn render_editor(frame: &mut Frame, state: &EditorState, _theme: &Theme) {
         Rect::new(inner.x, status_y, inner.width, 1),
     );
 
-    // Position the cursor
+    // Cursor in Search/GotoLine modes (on status bar)
     if state.mode == EditorMode::Search {
-        let cursor_x = inner.x + 9 + state.search_cursor as u16; // " Search: " is 9 chars
+        let cursor_x = inner.x + 9 + state.search_cursor as u16;
         frame.set_cursor_position((cursor_x.min(inner.x + inner.width - 1), status_y));
     } else if state.mode == EditorMode::GotoLine {
-        let cursor_x = inner.x + 14 + state.goto_line_input.len() as u16; // " Go to line: " is 14
+        let cursor_x = inner.x + 14 + state.goto_line_input.len() as u16;
         frame.set_cursor_position((cursor_x.min(inner.x + inner.width - 1), status_y));
-    } else if state.mode == EditorMode::Normal {
-        let visual_col = state.cursor_col.saturating_sub(state.horizontal_scroll) as u16;
-        let cursor_x = inner.x + gutter_width + visual_col;
-        let cursor_y = inner.y + (state.cursor_line.saturating_sub(state.scroll_offset)) as u16;
-        if cursor_x < inner.x + inner.width && cursor_y < inner.y + visible_height as u16 {
-            frame.set_cursor_position((cursor_x, cursor_y));
-        }
     }
 }
