@@ -1161,6 +1161,89 @@ impl App {
     }
 
     /// Handle a click on the function key bar.
+    /// Render the status bar with disk space, selection info, and file count.
+    fn render_status_bar(&self, frame: &mut Frame, area: ratatui::layout::Rect) {
+        use ratatui::text::{Line, Span};
+        use ratatui::widgets::Paragraph;
+
+        let tree = self.active_tree_ref();
+        let total_files = tree.visible_nodes.len();
+        let selected_count = tree.selected.len();
+        let selected_size: u64 = tree
+            .selected
+            .iter()
+            .filter_map(|&i| tree.visible_nodes.get(i))
+            .filter(|n| !n.entry.is_dir)
+            .map(|n| n.entry.size)
+            .sum();
+
+        let bg = ratatui::style::Color::Indexed(235);
+        let label_style = ratatui::style::Style::default()
+            .fg(ratatui::style::Color::Rgb(140, 140, 150))
+            .bg(bg);
+        let value_style = ratatui::style::Style::default()
+            .fg(ratatui::style::Color::White)
+            .bg(bg);
+        let sep_style = ratatui::style::Style::default()
+            .fg(ratatui::style::Color::Rgb(60, 60, 65))
+            .bg(bg);
+
+        let mut spans: Vec<Span<'_>> = Vec::new();
+        spans.push(Span::styled(" ", label_style));
+
+        // File count
+        spans.push(Span::styled("Files: ", label_style));
+        spans.push(Span::styled(format!("{}", total_files), value_style));
+
+        // Selection info
+        if selected_count > 0 {
+            spans.push(Span::styled(" │ ", sep_style));
+            spans.push(Span::styled("Selected: ", label_style));
+            spans.push(Span::styled(
+                format!("{} ({})", selected_count, format_size_human(selected_size)),
+                value_style,
+            ));
+        }
+
+        // Disk space
+        spans.push(Span::styled(" │ ", sep_style));
+        let (free, total) = get_disk_space_cached(&tree.root);
+        if let (Some(free), Some(total)) = (free, total) {
+            spans.push(Span::styled("Disk: ", label_style));
+            spans.push(Span::styled(
+                format!(
+                    "{} free / {}",
+                    format_size_human(free),
+                    format_size_human(total)
+                ),
+                value_style,
+            ));
+        }
+
+        // Tab info
+        let tab_group = match self.active_panel {
+            PanelSide::Left => &self.left_tree,
+            PanelSide::Right => &self.right_tree,
+        };
+        if tab_group.tab_count() > 1 {
+            spans.push(Span::styled(" │ ", sep_style));
+            spans.push(Span::styled("Tab: ", label_style));
+            spans.push(Span::styled(
+                format!("{}/{}", tab_group.active_tab() + 1, tab_group.tab_count()),
+                value_style,
+            ));
+        }
+
+        // Fill remaining width
+        let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+        let remaining = (area.width as usize).saturating_sub(used);
+        if remaining > 0 {
+            spans.push(Span::styled(" ".repeat(remaining), label_style));
+        }
+
+        frame.render_widget(Paragraph::new(Line::from(spans)), area);
+    }
+
     fn handle_fn_bar_click(&mut self, mx: u16, fn_rect: ratatui::layout::Rect) {
         let total_width = fn_rect.width as usize;
         let item_count = 10usize; // F1..F10
@@ -3735,15 +3818,19 @@ impl App {
             return;
         }
 
-        // Layout: panels (fills remaining) | command box (3 rows) | fn bar (1 row)
+        // Layout: panels | status bar (1 row) | command box (3 rows) | fn bar (1 row)
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Min(3),    // Panels
+                Constraint::Length(1), // Status bar
                 Constraint::Length(3), // Command line box
                 Constraint::Length(1), // Function key bar
             ])
             .split(size);
+
+        // Render status bar
+        self.render_status_bar(frame, main_chunks[1]);
 
         // Compute panel rects from the layout tree
         let panel_rects = self.layout.compute_rects(main_chunks[0]);
@@ -3751,7 +3838,7 @@ impl App {
 
         // Cache fn-bar rect for mouse hit-testing
         if self.config.ui.show_fn_bar {
-            self.cached_fn_bar_rect = Some(main_chunks[2]);
+            self.cached_fn_bar_rect = Some(main_chunks[3]);
         } else {
             self.cached_fn_bar_rect = None;
         }
@@ -3820,12 +3907,12 @@ impl App {
         // Render command line / feedback area
         // Feedback (messages, confirmations) replaces the command line when active
         if self.feedback.has_content() {
-            render_feedback(frame, main_chunks[1], &self.feedback);
+            render_feedback(frame, main_chunks[2], &self.feedback);
         } else {
             let active_dir = self.active_tree_ref().root.clone();
             command_line::render_command_line(
                 frame,
-                main_chunks[1],
+                main_chunks[2],
                 &self.command_line,
                 &active_dir,
                 &self.theme,
@@ -3834,12 +3921,12 @@ impl App {
 
         // Slash command suggestions popup (floats above command line)
         if let Some(ref ss) = self.slash_suggestions {
-            render_slash_suggestions(frame, ss, main_chunks[1]);
+            render_slash_suggestions(frame, ss, main_chunks[2]);
         }
 
         // Render function key bar
         if self.config.ui.show_fn_bar {
-            fn_bar::render_fn_bar(frame, main_chunks[2], &self.theme);
+            fn_bar::render_fn_bar(frame, main_chunks[3], &self.theme);
         }
 
         // Overlays: menu > search > AI bar > dialog (only for text input)
@@ -3932,6 +4019,31 @@ fn format_size_human(size: u64) -> String {
         format!("{:.1} MB", size as f64 / 1_048_576.0)
     } else {
         format!("{:.2} GB", size as f64 / 1_073_741_824.0)
+    }
+}
+
+/// Get free and total disk space for the given path.
+fn get_disk_space_cached(path: &std::path::Path) -> (Option<u64>, Option<u64>) {
+    #[cfg(unix)]
+    {
+        use std::ffi::CString;
+        let c_path = CString::new(path.to_string_lossy().as_bytes()).ok();
+        if let Some(c_path) = c_path {
+            unsafe {
+                let mut stat: libc::statvfs = std::mem::zeroed();
+                if libc::statvfs(c_path.as_ptr(), &mut stat) == 0 {
+                    let free = stat.f_bavail as u64 * stat.f_frsize;
+                    let total = stat.f_blocks as u64 * stat.f_frsize;
+                    return (Some(free), Some(total));
+                }
+            }
+        }
+        (None, None)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        (None, None)
     }
 }
 
