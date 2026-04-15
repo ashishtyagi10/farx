@@ -303,6 +303,21 @@ impl KeyMap {
         panel.insert((KeyCode::F(5), KeyModifiers::CONTROL), Action::SortBySize);
         panel.insert((KeyCode::F(6), KeyModifiers::CONTROL), Action::SortByDate);
 
+        // ── Tabs ────────────────────────────────────────────────────────
+        panel.insert((KeyCode::Char('t'), KeyModifiers::CONTROL), Action::NewTab);
+        panel.insert(
+            (KeyCode::Char('w'), KeyModifiers::CONTROL),
+            Action::CloseTab,
+        );
+        panel.insert((KeyCode::Tab, KeyModifiers::CONTROL), Action::NextTab);
+        // Alt+1..9 for switching tabs
+        for i in 1..=9u8 {
+            panel.insert(
+                (KeyCode::Char((b'0' + i) as char), KeyModifiers::ALT),
+                Action::SwitchTab(i as usize - 1),
+            );
+        }
+
         // ── Compare directories ──────────────────────────────────────────
         panel.insert(
             (KeyCode::F(9), KeyModifiers::CONTROL),

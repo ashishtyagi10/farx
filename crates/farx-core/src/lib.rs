@@ -3,6 +3,7 @@ pub mod config;
 pub mod error;
 pub mod keymap;
 pub mod panel_layout;
+pub mod tab_group;
 pub mod tree;
 pub mod types;
 
@@ -11,5 +12,6 @@ pub use config::AppConfig;
 pub use error::FarxError;
 pub use keymap::KeyMap;
 pub use panel_layout::*;
+pub use tab_group::TabGroup;
 pub use tree::*;
 pub use types::*;

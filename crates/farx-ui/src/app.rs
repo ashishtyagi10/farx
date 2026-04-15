@@ -4,7 +4,7 @@ use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::Frame;
 
-use farx_core::{Action, AppConfig, KeyMap, PanelSide, PanelState, SortOrder, TreeState};
+use farx_core::{Action, AppConfig, KeyMap, PanelSide, PanelState, SortOrder, TabGroup, TreeState};
 
 use farx_core::SortField;
 
@@ -30,7 +30,7 @@ use crate::components::quick_actions::{
 };
 use crate::components::search::{render_search, SearchAction, SearchState};
 use crate::components::slash_suggestions::{render_slash_suggestions, SlashSuggestionsState};
-use crate::components::tree_panel::render_tree_panel_with_filter;
+use crate::components::tree_panel::{render_tab_bar, render_tree_panel_with_filter};
 use crate::components::viewer::{render_viewer, ViewerAction, ViewerState};
 use crate::components::{command_line, fn_bar};
 use crate::theme::Theme;
@@ -119,10 +119,10 @@ pub struct App {
     suggestion_rx: Option<tokio::sync::oneshot::Receiver<Option<String>>>,
     /// The input text the pending suggestion was requested for.
     suggestion_request_input: String,
-    /// Tree view state for the left panel.
-    pub left_tree: TreeState,
-    /// Tree view state for the right panel.
-    pub right_tree: TreeState,
+    /// Tree view state for the left panel (supports multiple tabs).
+    pub left_tree: TabGroup,
+    /// Tree view state for the right panel (supports multiple tabs).
+    pub right_tree: TabGroup,
     /// If set, a newer version is available for update.
     pub update_available: Option<String>,
     /// Bookmarks panel state (Ctrl+B).
@@ -226,12 +226,12 @@ impl App {
             left_tree: {
                 let mut t = TreeState::new(cwd2);
                 t.show_hidden = show_hidden;
-                t
+                TabGroup::new(t)
             },
             right_tree: {
                 let mut t = TreeState::new(home2);
                 t.show_hidden = show_hidden;
-                t
+                TabGroup::new(t)
             },
             update_available: None,
             bookmarks_panel: None,
@@ -3461,6 +3461,35 @@ impl App {
                         .error("Chmod is only available on Unix systems".to_string());
                 }
             }
+            Action::NewTab => {
+                let root = self.active_tree_ref().root.clone();
+                let show_hidden = self.config.general.show_hidden_files;
+                match self.active_panel {
+                    PanelSide::Left => self.left_tree.new_tab(root, show_hidden),
+                    PanelSide::Right => self.right_tree.new_tab(root, show_hidden),
+                }
+            }
+            Action::CloseTab => {
+                let closed = match self.active_panel {
+                    PanelSide::Left => self.left_tree.close_tab(),
+                    PanelSide::Right => self.right_tree.close_tab(),
+                };
+                if !closed {
+                    self.feedback.info("Cannot close the last tab".to_string());
+                }
+            }
+            Action::NextTab => match self.active_panel {
+                PanelSide::Left => self.left_tree.next_tab(),
+                PanelSide::Right => self.right_tree.next_tab(),
+            },
+            Action::PrevTab => match self.active_panel {
+                PanelSide::Left => self.left_tree.prev_tab(),
+                PanelSide::Right => self.right_tree.prev_tab(),
+            },
+            Action::SwitchTab(idx) => match self.active_panel {
+                PanelSide::Left => self.left_tree.switch_to(idx),
+                PanelSide::Right => self.right_tree.switch_to(idx),
+            },
             Action::FindDuplicates => {
                 let root = self.active_tree_ref().root.clone();
                 self.feedback.info("Scanning for duplicates...".to_string());
@@ -3676,25 +3705,41 @@ impl App {
         for (leaf, rect) in &panel_rects {
             match leaf {
                 farx_core::PanelLeaf::FilePanel(side) => {
-                    let (tree, panel_state) = match side {
-                        PanelSide::Left => (&mut self.left_tree, &self.left_panel),
-                        PanelSide::Right => (&mut self.right_tree, &self.right_panel),
+                    let (tabs, tree, panel_state) = match side {
+                        PanelSide::Left => (
+                            self.left_tree.tab_labels(),
+                            &mut self.left_tree as &mut TabGroup,
+                            &self.left_panel,
+                        ),
+                        PanelSide::Right => (
+                            self.right_tree.tab_labels(),
+                            &mut self.right_tree as &mut TabGroup,
+                            &self.right_panel,
+                        ),
                     };
                     let is_active = self.focused_terminal.is_none() && self.active_panel == *side;
                     let filter_editing = is_active && self.filter_active;
 
+                    // Render tab bar (consumes 0 or 1 row)
+                    let tab_height = render_tab_bar(frame, *rect, &tabs, is_active, &self.theme);
+                    let panel_rect = ratatui::layout::Rect {
+                        y: rect.y + tab_height,
+                        height: rect.height.saturating_sub(tab_height),
+                        ..*rect
+                    };
+
                     // Scroll adjustments
-                    let panel_height = rect.height.saturating_sub(3) as usize;
+                    let panel_height = panel_rect.height.saturating_sub(3) as usize;
                     tree.scroll_to_cursor(panel_height);
 
                     if self.show_info_panel && *side != self.active_panel {
                         let current_file = self.active_tree_ref().current_node().map(|n| &n.entry);
                         let data = InfoPanelData::from_panel(panel_state, current_file);
-                        render_info_panel(frame, *rect, &data, &self.theme);
+                        render_info_panel(frame, panel_rect, &data, &self.theme);
                     } else {
                         render_tree_panel_with_filter(
                             frame,
-                            *rect,
+                            panel_rect,
                             tree,
                             is_active,
                             &self.theme,

@@ -144,6 +144,13 @@ pub enum Action {
     // File permissions
     ChmodDialog,
 
+    // Tabs
+    NewTab,
+    CloseTab,
+    NextTab,
+    PrevTab,
+    SwitchTab(usize),
+
     // Disk usage treemap
     ShowTreemap,
 
