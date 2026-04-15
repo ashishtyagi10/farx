@@ -990,6 +990,18 @@ impl App {
                     }
                 }
 
+                // Check breadcrumb click (top border row of a panel)
+                if let Some(path) = self.breadcrumb_hit(mx, my) {
+                    if path.is_dir() {
+                        let show_hidden = self.config.general.show_hidden_files;
+                        let tree = self.active_tree();
+                        tree.set_root(path);
+                        tree.show_hidden = show_hidden;
+                        tree.rebuild();
+                    }
+                    return;
+                }
+
                 // Check panel click
                 if let Some((side, row_in_list)) = self.panel_row_at(mx, my) {
                     // Switch active panel if needed
@@ -1098,6 +1110,25 @@ impl App {
                         return Some((*side, Some(row)));
                     }
                     return Some((*side, None));
+                }
+            }
+        }
+        None
+    }
+
+    /// Check if a click hit a breadcrumb segment in the panel title bar.
+    fn breadcrumb_hit(&self, x: u16, y: u16) -> Option<std::path::PathBuf> {
+        use crate::components::tree_panel::breadcrumb_path_at_click;
+        for (leaf, rect) in &self.cached_panel_rects {
+            // Top border row of the panel
+            if y == rect.y && x >= rect.x && x < rect.x + rect.width {
+                if let farx_core::PanelLeaf::FilePanel(side) = leaf {
+                    let tree = match side {
+                        PanelSide::Left => &self.left_tree,
+                        PanelSide::Right => &self.right_tree,
+                    };
+                    // Switch to this panel if needed
+                    return breadcrumb_path_at_click(&tree.root, *rect, x);
                 }
             }
         }
