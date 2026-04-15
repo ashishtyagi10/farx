@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::Frame;
 
@@ -156,6 +156,12 @@ pub struct App {
     fs_change_rx: Option<std::sync::mpsc::Receiver<()>>,
     /// Debounce: tick count of last fs change signal.
     fs_change_tick: u64,
+    /// Cached panel rects from last render (for mouse hit-testing).
+    cached_panel_rects: Vec<(farx_core::PanelLeaf, ratatui::layout::Rect)>,
+    /// Cached fn-bar rect from last render (for mouse hit-testing).
+    cached_fn_bar_rect: Option<ratatui::layout::Rect>,
+    /// Last mouse click position and tick for double-click detection.
+    last_click: Option<(u16, u16, u64)>,
 }
 
 impl App {
@@ -247,6 +253,9 @@ impl App {
             fs_watcher: None,
             fs_change_rx: None,
             fs_change_tick: 0,
+            cached_panel_rects: Vec::new(),
+            cached_fn_bar_rect: None,
+            last_click: None,
         };
 
         app.setup_fs_watcher();
@@ -875,8 +884,10 @@ impl App {
         self.keymap.resolve_panel(&key)
     }
 
-    /// Handle mouse events (scroll, click).
+    /// Handle mouse events (scroll, click, double-click).
     pub fn handle_mouse_event(&mut self, mouse: MouseEvent) {
+        let (mx, my) = (mouse.column, mouse.row);
+
         match mouse.kind {
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                 // Route scroll to active full-screen overlay first
@@ -898,19 +909,188 @@ impl App {
                     viewer.handle_mouse_event(mouse);
                     return;
                 }
-                // Scroll the active panel
-                let tree = match self.active_panel {
-                    PanelSide::Left => &mut self.left_tree,
-                    PanelSide::Right => &mut self.right_tree,
-                };
-                match mouse.kind {
-                    MouseEventKind::ScrollUp => tree.move_cursor(-3),
-                    MouseEventKind::ScrollDown => tree.move_cursor(3),
-                    _ => {}
+                // Find which panel the mouse is over and scroll it
+                if let Some(side) = self.panel_side_at(mx, my) {
+                    let tree = match side {
+                        PanelSide::Left => &mut self.left_tree,
+                        PanelSide::Right => &mut self.right_tree,
+                    };
+                    match mouse.kind {
+                        MouseEventKind::ScrollUp => tree.move_cursor(-3),
+                        MouseEventKind::ScrollDown => tree.move_cursor(3),
+                        _ => {}
+                    }
+                }
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                // Ignore clicks when full-screen overlays are active
+                if self.editor.is_some() || self.viewer.is_some() || self.help.is_some() {
+                    return;
+                }
+                // Ignore clicks when modal dialogs are active
+                if self.dialog.is_some()
+                    || self.menu.is_some()
+                    || self.search.is_some()
+                    || self.ai_bar.is_some()
+                    || self.bookmarks_panel.is_some()
+                    || self.fuzzy_finder.is_some()
+                    || self.quick_actions.is_some()
+                    || self.batch_rename.is_some()
+                {
+                    return;
+                }
+
+                // Check fn-bar click
+                if let Some(fn_rect) = self.cached_fn_bar_rect {
+                    if my >= fn_rect.y
+                        && my < fn_rect.y + fn_rect.height
+                        && mx >= fn_rect.x
+                        && mx < fn_rect.x + fn_rect.width
+                    {
+                        self.handle_fn_bar_click(mx, fn_rect);
+                        return;
+                    }
+                }
+
+                // Check panel click
+                if let Some((side, row_in_list)) = self.panel_row_at(mx, my) {
+                    // Switch active panel if needed
+                    if self.active_panel != side {
+                        self.active_panel = side;
+                        // Sync tree root
+                        let tree = match side {
+                            PanelSide::Left => &mut self.left_tree,
+                            PanelSide::Right => &mut self.right_tree,
+                        };
+                        let _ = tree;
+                    }
+
+                    // Move cursor to the clicked row
+                    if let Some(row) = row_in_list {
+                        let tree = match side {
+                            PanelSide::Left => &mut self.left_tree,
+                            PanelSide::Right => &mut self.right_tree,
+                        };
+                        let target = tree.scroll_offset + row;
+                        if target < tree.visible_nodes.len() {
+                            tree.cursor = target;
+                        }
+                    }
+
+                    // Double-click detection (within 8 ticks ≈ 2 seconds)
+                    let is_double = if let Some((lx, ly, lt)) = self.last_click {
+                        lx == mx && ly == my && self.tick_count.saturating_sub(lt) < 8
+                    } else {
+                        false
+                    };
+
+                    if is_double {
+                        self.last_click = None;
+                        self.dispatch(Action::EnterDirectory);
+                    } else {
+                        self.last_click = Some((mx, my, self.tick_count));
+                    }
+                }
+            }
+            MouseEventKind::Down(MouseButton::Right) => {
+                // Right-click on a panel entry → toggle selection
+                if self.editor.is_some() || self.viewer.is_some() || self.help.is_some() {
+                    return;
+                }
+                if let Some((side, row_in_list)) = self.panel_row_at(mx, my) {
+                    if self.active_panel != side {
+                        self.active_panel = side;
+                    }
+                    if let Some(row) = row_in_list {
+                        let tree = match side {
+                            PanelSide::Left => &mut self.left_tree,
+                            PanelSide::Right => &mut self.right_tree,
+                        };
+                        let target = tree.scroll_offset + row;
+                        if target < tree.visible_nodes.len() {
+                            tree.cursor = target;
+                            if tree.selected.contains(&target) {
+                                tree.selected.remove(&target);
+                            } else {
+                                tree.selected.insert(target);
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
         }
+    }
+
+    /// Determine which panel side a screen coordinate falls in.
+    fn panel_side_at(&self, x: u16, y: u16) -> Option<PanelSide> {
+        for (leaf, rect) in &self.cached_panel_rects {
+            if x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height {
+                if let farx_core::PanelLeaf::FilePanel(side) = leaf {
+                    return Some(*side);
+                }
+            }
+        }
+        None
+    }
+
+    /// Determine panel side and the row index within the file list area.
+    /// Returns (side, Some(row_in_visible_list)) or (side, None) if click is on header/footer.
+    fn panel_row_at(&self, x: u16, y: u16) -> Option<(PanelSide, Option<usize>)> {
+        for (leaf, rect) in &self.cached_panel_rects {
+            if x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height {
+                if let farx_core::PanelLeaf::FilePanel(side) = leaf {
+                    // Inner area: 1 for top border
+                    let inner_y = rect.y + 1;
+                    // Filter bar may take 1 row at the top of inner
+                    let tree = match side {
+                        PanelSide::Left => &self.left_tree,
+                        PanelSide::Right => &self.right_tree,
+                    };
+                    let filter_height: u16 = if !tree.filter.is_empty() || self.filter_active {
+                        1
+                    } else {
+                        0
+                    };
+                    let list_start_y = inner_y + filter_height;
+                    // Footer is 1 row, bottom border is 1 row
+                    let list_end_y = rect.y + rect.height - 2; // -1 border -1 footer
+                    if y >= list_start_y && y < list_end_y {
+                        let row = (y - list_start_y) as usize;
+                        return Some((*side, Some(row)));
+                    }
+                    return Some((*side, None));
+                }
+            }
+        }
+        None
+    }
+
+    /// Handle a click on the function key bar.
+    fn handle_fn_bar_click(&mut self, mx: u16, fn_rect: ratatui::layout::Rect) {
+        let total_width = fn_rect.width as usize;
+        let item_count = 10usize; // F1..F10
+        let slot_width = if item_count > 0 {
+            total_width / item_count
+        } else {
+            return;
+        };
+        let click_offset = (mx - fn_rect.x) as usize;
+        let slot_index = click_offset / slot_width;
+        let action = match slot_index {
+            0 => Action::ShowHelp,      // F1
+            1 => Action::OpenSystemApp, // F2
+            2 => Action::EditFile,      // F3
+            3 => Action::SwitchPanel,   // F4
+            4 => Action::CopyDialog,    // F5
+            5 => Action::MoveDialog,    // F6
+            6 => Action::MkDirDialog,   // F7
+            7 => Action::DeleteDialog,  // F8
+            8 => Action::ShowMenu,      // F9
+            9 => Action::Quit,          // F10
+            _ => return,
+        };
+        self.dispatch(action);
     }
 
     fn handle_menu_action(&mut self, action: MenuAction) {
@@ -3344,6 +3524,14 @@ impl App {
 
         // Compute panel rects from the layout tree
         let panel_rects = self.layout.compute_rects(main_chunks[0]);
+        self.cached_panel_rects = panel_rects.clone();
+
+        // Cache fn-bar rect for mouse hit-testing
+        if self.config.ui.show_fn_bar {
+            self.cached_fn_bar_rect = Some(main_chunks[2]);
+        } else {
+            self.cached_fn_bar_rect = None;
+        }
 
         // Render each leaf panel
         for (leaf, rect) in &panel_rects {
