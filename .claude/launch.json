@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "farx-dev",
+      "runtimeExecutable": "cargo",
+      "runtimeArgs": ["run", "--bin", "farx"],
+      "port": 0
+    },
+    {
+      "name": "farx-release",
+      "runtimeExecutable": "cargo",
+      "runtimeArgs": ["run", "--release", "--bin", "farx"],
+      "port": 0
+    }
+  ]
+}

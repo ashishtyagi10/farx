@@ -29,6 +29,7 @@ fn lua_err(e: mlua::Error) -> anyhow::Error {
 pub struct PluginEngine {
     lua: Lua,
     commands: HashMap<String, PluginCommand>,
+    plugin_dir: PathBuf,
 }
 
 impl PluginEngine {
@@ -37,12 +38,23 @@ impl PluginEngine {
         Ok(Self {
             lua,
             commands: HashMap::new(),
+            plugin_dir: plugin_directory(),
+        })
+    }
+
+    #[cfg(test)]
+    fn with_plugin_dir(plugin_dir: PathBuf) -> anyhow::Result<Self> {
+        let lua = Lua::new();
+        Ok(Self {
+            lua,
+            commands: HashMap::new(),
+            plugin_dir,
         })
     }
 
     /// Load all plugins from the plugins directory.
     pub fn load_plugins(&mut self) -> anyhow::Result<Vec<String>> {
-        let plugin_dir = plugin_directory();
+        let plugin_dir = self.plugin_dir.clone();
         let mut loaded = Vec::new();
 
         if !plugin_dir.exists() {
@@ -119,7 +131,7 @@ return _cmds
             .get(name)
             .ok_or_else(|| anyhow::anyhow!("Unknown plugin command: {}", name))?;
 
-        let source = std::fs::read_to_string(plugin_directory().join(&cmd.plugin_file))?;
+        let source = std::fs::read_to_string(self.plugin_dir.join(&cmd.plugin_file))?;
 
         let wrapper = format!(
             r#"
@@ -171,4 +183,64 @@ pub fn plugin_directory() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
         .join("farx")
         .join("plugins")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_test_plugin(dir: &std::path::Path) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(
+            dir.join("hello.lua"),
+            r#"
+farx.register_command("hello", "Say hello", [[
+    farx.message("Hello from " .. farx.current_dir)
+]])
+"#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn load_plugins_registers_commands() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plugin_dir = tmp.path().join("plugins");
+        write_test_plugin(&plugin_dir);
+
+        let mut engine = PluginEngine::with_plugin_dir(plugin_dir).unwrap();
+        let loaded = engine.load_plugins().unwrap();
+
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded.contains(&"hello".to_string()));
+        assert!(engine.has_command("hello"));
+        assert_eq!(engine.list_commands().len(), 1);
+    }
+
+    #[test]
+    fn execute_command_returns_message_output() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plugin_dir = tmp.path().join("plugins");
+        write_test_plugin(&plugin_dir);
+
+        let mut engine = PluginEngine::with_plugin_dir(plugin_dir).unwrap();
+        engine.load_plugins().unwrap();
+
+        let result = engine.execute_command("hello", "/tmp/work").unwrap();
+        match result {
+            PluginResult::Message(msg) => assert_eq!(msg, "Hello from /tmp/work"),
+            other => panic!("expected message output, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn execute_command_unknown_name_returns_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plugin_dir = tmp.path().join("plugins");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+
+        let engine = PluginEngine::with_plugin_dir(plugin_dir).unwrap();
+        let err = engine.execute_command("missing", "/tmp").unwrap_err();
+        assert!(err.to_string().contains("Unknown plugin command"));
+    }
 }

@@ -184,6 +184,17 @@ Edit `crates/farx-ai/src/agent.rs`:
 - Use `thiserror` for library error types in `farx-core`
 - Use `tracing` macros (`info!`, `warn!`, `error!`) instead of `println!` / `eprintln!`
 
+## Coverage
+
+Install and run coverage locally:
+
+```sh
+cargo install cargo-llvm-cov
+cargo llvm-cov clean --workspace
+cargo llvm-cov --workspace --all-features --html
+cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+```
+
 ## Pull Request Process
 
 1. Fork the repository

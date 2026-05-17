@@ -1,4 +1,10 @@
-use std::path::{Path, PathBuf};
+mod globs;
+mod helpers;
+mod pending;
+mod shell_commands;
+mod text_detect;
+
+use std::path::PathBuf;
 
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Constraint, Direction, Layout};
@@ -37,37 +43,11 @@ use crate::components::viewer::{render_viewer, ViewerAction, ViewerState};
 use crate::components::{command_line, fn_bar};
 use crate::theme::Theme;
 
-/// Pending operation for input dialogs (MkDir, Rename, CreateFile).
-#[derive(Debug, Clone)]
-enum PendingOperation {
-    MkDir { parent: PathBuf },
-    Rename { original: PathBuf },
-    CreateFile { parent: PathBuf },
-    CopySameDir { source: PathBuf },
-    SelectByMask,
-    DeselectByMask,
-    CreateSymlink { target: PathBuf },
-    GotoDirectory,
-}
-
-/// A recorded file operation that can be undone.
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-enum UndoEntry {
-    /// Files were deleted (moved to trash). Record paths for feedback.
-    Delete { paths: Vec<PathBuf> },
-    /// Files were moved from sources to dest dir.
-    Move {
-        sources: Vec<PathBuf>,
-        dest: PathBuf,
-    },
-    /// A file was renamed from old to new.
-    Rename { old: PathBuf, new: PathBuf },
-    /// A directory was created.
-    MkDir { path: PathBuf },
-    /// A file was created.
-    CreateFile { path: PathBuf },
-}
+use self::globs::glob_match;
+use self::helpers::{dir_size_recursive, format_size_human, get_disk_space_cached};
+use self::pending::{PendingOperation, UndoEntry};
+use self::shell_commands::looks_like_shell_command;
+use self::text_detect::is_text_file;
 
 /// Main application state that owns panels, config, and the render loop.
 pub struct App {
@@ -1976,7 +1956,7 @@ impl App {
             return;
         }
 
-        if Self::looks_like_shell_command(&input) {
+        if looks_like_shell_command(&input) {
             // Execute as shell command
             let output = if cfg!(windows) {
                 std::process::Command::new("cmd")
@@ -2375,172 +2355,6 @@ impl App {
         } else {
             self.slash_suggestions = None;
         }
-    }
-
-    /// Heuristic to detect shell commands vs natural language.
-    fn looks_like_shell_command(input: &str) -> bool {
-        let trimmed = input.trim();
-        if trimmed.is_empty() {
-            return false;
-        }
-
-        // Starts with common shell prefixes
-        let first_word = trimmed.split_whitespace().next().unwrap_or("");
-
-        // Absolute or relative path
-        if first_word.starts_with('/')
-            || first_word.starts_with("./")
-            || first_word.starts_with("~/")
-        {
-            return true;
-        }
-
-        // Contains shell operators
-        if trimmed.contains('|')
-            || trimmed.contains('>')
-            || trimmed.contains('<')
-            || trimmed.contains("&&")
-            || trimmed.contains("||")
-            || trimmed.contains(';')
-        {
-            return true;
-        }
-
-        // Starts with common command names
-        const SHELL_COMMANDS: &[&str] = &[
-            "ls",
-            "cd",
-            "cp",
-            "mv",
-            "rm",
-            "mkdir",
-            "rmdir",
-            "cat",
-            "head",
-            "tail",
-            "grep",
-            "find",
-            "sed",
-            "awk",
-            "sort",
-            "uniq",
-            "wc",
-            "echo",
-            "printf",
-            "touch",
-            "chmod",
-            "chown",
-            "chgrp",
-            "ln",
-            "pwd",
-            "env",
-            "export",
-            "which",
-            "whereis",
-            "whoami",
-            "date",
-            "cal",
-            "df",
-            "du",
-            "free",
-            "top",
-            "ps",
-            "kill",
-            "tar",
-            "zip",
-            "unzip",
-            "gzip",
-            "gunzip",
-            "curl",
-            "wget",
-            "ssh",
-            "scp",
-            "rsync",
-            "git",
-            "docker",
-            "make",
-            "npm",
-            "yarn",
-            "pnpm",
-            "cargo",
-            "rustc",
-            "python",
-            "python3",
-            "pip",
-            "node",
-            "ruby",
-            "go",
-            "java",
-            "javac",
-            "gcc",
-            "g++",
-            "clang",
-            "brew",
-            "apt",
-            "yum",
-            "dnf",
-            "pacman",
-            "snap",
-            "flatpak",
-            "systemctl",
-            "journalctl",
-            "sudo",
-            "su",
-            "man",
-            "less",
-            "more",
-            "vi",
-            "vim",
-            "nano",
-            "emacs",
-            "code",
-            "open",
-            "xdg-open",
-            "clear",
-            "reset",
-            "history",
-            "alias",
-            "unalias",
-            "set",
-            "unset",
-            "test",
-            "true",
-            "false",
-            "yes",
-            "no",
-            "tee",
-            "xargs",
-            "diff",
-            "patch",
-            "file",
-            "stat",
-            "md5",
-            "sha256sum",
-            "base64",
-        ];
-
-        if SHELL_COMMANDS.contains(&first_word) {
-            return true;
-        }
-
-        // Environment variable assignment (FOO=bar)
-        if first_word.contains('=') && !first_word.starts_with('=') {
-            return true;
-        }
-
-        // If first word contains a dot and looks like a script (./foo.sh, script.py)
-        if first_word.contains('.')
-            && (first_word.ends_with(".sh")
-                || first_word.ends_with(".py")
-                || first_word.ends_with(".rb")
-                || first_word.ends_with(".js")
-                || first_word.ends_with(".pl"))
-        {
-            return true;
-        }
-
-        // Default: treat as natural language (AI query)
-        false
     }
 
     /// Process the result of a closed dialog and execute the corresponding file operation.
@@ -4118,174 +3932,6 @@ impl App {
         // Update modal renders last so it sits above every other overlay.
         if let Some(ref state) = self.update_state {
             render_update_modal(frame, state, &self.theme);
-        }
-    }
-}
-
-/// Determine if a file should be opened in the built-in editor (text)
-/// or with the system default application (binary/media).
-/// Recursively calculate the total size of a directory.
-fn dir_size_recursive(path: &Path) -> u64 {
-    let mut total = 0u64;
-    if let Ok(entries) = std::fs::read_dir(path) {
-        for entry in entries.flatten() {
-            if let Ok(meta) = entry.metadata() {
-                if meta.is_dir() {
-                    total += dir_size_recursive(&entry.path());
-                } else {
-                    total += meta.len();
-                }
-            }
-        }
-    }
-    total
-}
-
-/// Format a byte count into a human-readable size string.
-fn format_size_human(size: u64) -> String {
-    if size < 1_000 {
-        format!("{} B", size)
-    } else if size < 1_000_000 {
-        format!("{:.1} KB", size as f64 / 1_024.0)
-    } else if size < 1_000_000_000 {
-        format!("{:.1} MB", size as f64 / 1_048_576.0)
-    } else {
-        format!("{:.2} GB", size as f64 / 1_073_741_824.0)
-    }
-}
-
-/// Get free and total disk space for the given path.
-fn get_disk_space_cached(path: &std::path::Path) -> (Option<u64>, Option<u64>) {
-    #[cfg(unix)]
-    {
-        use std::ffi::CString;
-        let c_path = CString::new(path.to_string_lossy().as_bytes()).ok();
-        if let Some(c_path) = c_path {
-            unsafe {
-                let mut stat: libc::statvfs = std::mem::zeroed();
-                if libc::statvfs(c_path.as_ptr(), &mut stat) == 0 {
-                    let free = stat.f_bavail as u64 * stat.f_frsize;
-                    let total = stat.f_blocks as u64 * stat.f_frsize;
-                    return (Some(free), Some(total));
-                }
-            }
-        }
-        (None, None)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = path;
-        (None, None)
-    }
-}
-
-/// Simple glob pattern matcher supporting `*` (any chars) and `?` (single char).
-fn glob_match(pattern: &str, text: &str) -> bool {
-    let p: Vec<char> = pattern.chars().collect();
-    let t: Vec<char> = text.chars().collect();
-    glob_match_impl(&p, &t)
-}
-
-fn glob_match_impl(pattern: &[char], text: &[char]) -> bool {
-    let (mut pi, mut ti) = (0, 0);
-    let (mut star_pi, mut star_ti) = (usize::MAX, 0);
-
-    while ti < text.len() {
-        if pi < pattern.len() && (pattern[pi] == '?' || pattern[pi] == text[ti]) {
-            pi += 1;
-            ti += 1;
-        } else if pi < pattern.len() && pattern[pi] == '*' {
-            star_pi = pi;
-            star_ti = ti;
-            pi += 1;
-        } else if star_pi != usize::MAX {
-            pi = star_pi + 1;
-            star_ti += 1;
-            ti = star_ti;
-        } else {
-            return false;
-        }
-    }
-    while pi < pattern.len() && pattern[pi] == '*' {
-        pi += 1;
-    }
-    pi == pattern.len()
-}
-
-fn is_text_file(path: &Path) -> bool {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase());
-
-    match ext.as_deref() {
-        // Definitely text — open in editor
-        Some(
-            "rs" | "py" | "js" | "ts" | "jsx" | "tsx" | "go" | "c" | "h" | "cpp" | "cc"
-            | "hpp" | "java" | "kt" | "swift" | "rb" | "pl" | "pm" | "lua" | "php"
-            | "sh" | "bash" | "zsh" | "fish" | "ps1" | "bat" | "cmd"
-            | "html" | "htm" | "css" | "scss" | "less" | "sass"
-            | "xml" | "svg" | "json" | "jsonc" | "yaml" | "yml" | "toml" | "ini" | "cfg"
-            | "conf" | "env" | "properties"
-            | "md" | "markdown" | "txt" | "text" | "log" | "csv" | "tsv"
-            | "sql" | "graphql" | "gql"
-            | "dockerfile" | "makefile" | "cmake"
-            | "gitignore" | "gitattributes" | "editorconfig"
-            | "lock" | "sum"  // Cargo.lock, go.sum etc
-            | "r" | "R" | "jl" | "ex" | "exs" | "erl" | "hrl" | "elm"
-            | "zig" | "nim" | "v" | "d" | "pas" | "pp"
-            | "tf" | "hcl" | "nix" | "dhall"
-            | "proto" | "thrift" | "avsc"
-            | "vue" | "svelte" | "astro"
-        ) => true,
-
-        // Definitely binary — open with system app
-        Some(
-            "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods" | "odp"
-            | "png" | "jpg" | "jpeg" | "gif" | "bmp" | "ico" | "tiff" | "tif" | "webp"
-            | "heic" | "heif" | "raw" | "cr2" | "nef"
-            | "mp3" | "wav" | "flac" | "aac" | "ogg" | "wma" | "m4a"
-            | "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v"
-            | "zip" | "tar" | "gz" | "bz2" | "xz" | "7z" | "rar" | "zst" | "lz"
-            | "dmg" | "iso" | "img" | "pkg" | "deb" | "rpm" | "msi" | "exe" | "app"
-            | "so" | "dylib" | "dll" | "a" | "lib" | "o" | "obj"
-            | "class" | "jar" | "war" | "pyc" | "pyo" | "wasm"
-            | "ttf" | "otf" | "woff" | "woff2" | "eot"
-            | "db" | "sqlite" | "sqlite3"
-            | "psd" | "ai" | "sketch" | "fig" | "xd"
-        ) => false,
-
-        // No extension — try to detect by reading first bytes
-        None => {
-            // Check if the filename itself is a known text file
-            let name = path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
-            matches!(name.to_lowercase().as_str(),
-                "makefile" | "dockerfile" | "vagrantfile" | "gemfile" | "rakefile"
-                | "procfile" | "brewfile" | "justfile" | "taskfile"
-                | ".gitignore" | ".gitattributes" | ".editorconfig" | ".env"
-                | ".bashrc" | ".zshrc" | ".profile" | ".vimrc"
-                | "license" | "readme" | "changelog" | "authors" | "todo"
-            ) || {
-                // Heuristic: try reading first 512 bytes, check for null bytes
-                std::fs::read(path)
-                    .map(|bytes| {
-                        let check = &bytes[..bytes.len().min(512)];
-                        !check.contains(&0) // no null bytes = likely text
-                    })
-                    .unwrap_or(false)
-            }
-        }
-
-        // Unknown extension — try binary detection
-        Some(_) => {
-            std::fs::read(path)
-                .map(|bytes| {
-                    let check = &bytes[..bytes.len().min(512)];
-                    !check.contains(&0)
-                })
-                .unwrap_or(false)
         }
     }
 }
