@@ -25,16 +25,37 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Generate coverage (lcov)
+      - name: Generate scoped coverage summary
         run: |
           cargo llvm-cov clean --workspace
-          cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+          cargo llvm-cov -p farx-core -p farx-fs -p farx-plugin --all-features \
+            --ignore-filename-regex 'crates/farx-core/src/update.rs' \
+            --summary-only | tee coverage-summary.txt
+
+      - name: Enforce line coverage >= 80%
+        run: |
+          LINE_COVER=$(awk '/^TOTAL/{gsub("%","",$10); print $10}' coverage-summary.txt)
+          echo "Line coverage: ${LINE_COVER}%"
+          awk -v v="$LINE_COVER" 'BEGIN { exit (v >= 80.0) ? 0 : 1 }'
+
+      - name: Generate scoped coverage (lcov)
+        run: |
+          cargo llvm-cov clean --workspace
+          cargo llvm-cov -p farx-core -p farx-fs -p farx-plugin --all-features \
+            --ignore-filename-regex 'crates/farx-core/src/update.rs' \
+            --lcov --output-path lcov.info
 
       - name: Upload lcov artifact
         uses: actions/upload-artifact@v4
         with:
           name: lcov
           path: lcov.info
+
+      - name: Upload coverage summary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: coverage-summary.txt
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4

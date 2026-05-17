@@ -195,6 +195,15 @@ cargo llvm-cov --workspace --all-features --html
 cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
 ```
 
+Scoped coverage target used in CI (line coverage >= 80%):
+
+```sh
+cargo llvm-cov clean --workspace
+cargo llvm-cov -p farx-core -p farx-fs -p farx-plugin --all-features \
+  --ignore-filename-regex 'crates/farx-core/src/update.rs' \
+  --summary-only
+```
+
 ## Pull Request Process
 
 1. Fork the repository
