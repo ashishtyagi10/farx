@@ -10,6 +10,7 @@ mod helpers;
 mod keys;
 mod mouse;
 mod pending;
+mod render;
 mod selection_ops;
 mod shell_commands;
 mod slash;
@@ -21,38 +22,28 @@ mod update_flow;
 
 use std::path::PathBuf;
 
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::Frame;
-
 use farx_core::{Action, AppConfig, KeyMap, PanelSide, PanelState, TabGroup, TreeState};
 
 use farx_core::SortField;
 
-use crate::components::ai_bar::{render_ai_bar, AiBarState};
-use crate::components::ai_panel::{render_ai_panel, AiPanelState};
-use crate::components::batch_rename::{render_batch_rename, BatchRenameState};
-use crate::components::bookmarks::{
-    load_bookmarks, render_bookmarks, save_bookmarks, Bookmark, BookmarkState,
-};
-use crate::components::chmod_dialog::{render_chmod_dialog, ChmodDialogState};
+use crate::components::ai_bar::AiBarState;
+use crate::components::ai_panel::AiPanelState;
+use crate::components::batch_rename::BatchRenameState;
+use crate::components::bookmarks::{load_bookmarks, save_bookmarks, Bookmark, BookmarkState};
+use crate::components::chmod_dialog::ChmodDialogState;
 use crate::components::command_line::CommandLineState;
-use crate::components::dialog::{render_dialog, DialogState};
-use crate::components::diff_view::{render_diff_view, DiffViewState};
-use crate::components::editor::{render_editor, EditorState};
-use crate::components::embedded_terminal::render_terminal;
-use crate::components::feedback::{render_feedback, ConfirmAction, FeedbackState};
-use crate::components::fuzzy_finder::{render_fuzzy_finder, FuzzyFinderState};
-use crate::components::help::{render_help, HelpState};
-use crate::components::info_panel::{render_info_panel, InfoPanelData};
-use crate::components::menu::{render_menu, MenuState};
-use crate::components::progress::{render_progress, ProgressState};
-use crate::components::quick_actions::{render_quick_actions, QuickActionsState};
-use crate::components::search::{render_search, SearchState};
-use crate::components::slash_suggestions::{render_slash_suggestions, SlashSuggestionsState};
-use crate::components::tree_panel::{render_tab_bar, render_tree_panel_with_filter};
-use crate::components::update_modal::render_update_modal;
-use crate::components::viewer::{render_viewer, ViewerState};
-use crate::components::{command_line, fn_bar};
+use crate::components::dialog::DialogState;
+use crate::components::diff_view::DiffViewState;
+use crate::components::editor::EditorState;
+use crate::components::feedback::{ConfirmAction, FeedbackState};
+use crate::components::fuzzy_finder::FuzzyFinderState;
+use crate::components::help::HelpState;
+use crate::components::menu::MenuState;
+use crate::components::progress::ProgressState;
+use crate::components::quick_actions::QuickActionsState;
+use crate::components::search::SearchState;
+use crate::components::slash_suggestions::SlashSuggestionsState;
+use crate::components::viewer::ViewerState;
 use crate::theme::Theme;
 
 use self::helpers::format_size_human;
@@ -1414,219 +1405,6 @@ impl App {
             _ => {
                 // Other actions not yet implemented
             }
-        }
-    }
-
-    /// Render the entire application UI into the given frame.
-    pub fn render(&mut self, frame: &mut Frame) {
-        let size = frame.area();
-
-        // Full-screen modals first
-        if let Some(ref mut editor) = self.editor {
-            render_editor(frame, editor, &self.theme);
-            return;
-        }
-        if let Some(ref mut viewer) = self.viewer {
-            render_viewer(frame, viewer, &self.theme);
-            return;
-        }
-        if let Some(ref help) = self.help {
-            render_help(frame, help, &self.theme);
-            return;
-        }
-        if let Some(ref diff) = self.diff_view {
-            render_diff_view(frame, diff, &self.theme);
-            return;
-        }
-
-        if !self.panels_visible {
-            let active_dir = match self.active_panel {
-                PanelSide::Left => self.left_panel.current_dir.clone(),
-                PanelSide::Right => self.right_panel.current_dir.clone(),
-            };
-            command_line::render_command_line(
-                frame,
-                size,
-                &self.command_line,
-                &active_dir,
-                &self.theme,
-            );
-            return;
-        }
-
-        // Layout: panels | status bar (1 row) | command box (3 rows) | fn bar (1 row)
-        let main_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(3),    // Panels
-                Constraint::Length(1), // Status bar
-                Constraint::Length(3), // Command line box
-                Constraint::Length(1), // Function key bar
-            ])
-            .split(size);
-
-        // Render status bar
-        self.render_status_bar(frame, main_chunks[1]);
-
-        // Compute panel rects from the layout tree
-        let panel_rects = self.layout.compute_rects(main_chunks[0]);
-        self.cached_panel_rects = panel_rects.clone();
-
-        // Cache fn-bar rect for mouse hit-testing
-        if self.config.ui.show_fn_bar {
-            self.cached_fn_bar_rect = Some(main_chunks[3]);
-        } else {
-            self.cached_fn_bar_rect = None;
-        }
-
-        // Render each leaf panel
-        for (leaf, rect) in &panel_rects {
-            match leaf {
-                farx_core::PanelLeaf::FilePanel(side) => {
-                    let (tabs, tree, panel_state) = match side {
-                        PanelSide::Left => (
-                            self.left_tree.tab_labels(),
-                            &mut self.left_tree as &mut TabGroup,
-                            &self.left_panel,
-                        ),
-                        PanelSide::Right => (
-                            self.right_tree.tab_labels(),
-                            &mut self.right_tree as &mut TabGroup,
-                            &self.right_panel,
-                        ),
-                    };
-                    let is_active = self.focused_terminal.is_none() && self.active_panel == *side;
-                    let filter_editing = is_active && self.filter_active;
-
-                    // Render tab bar (consumes 0 or 1 row)
-                    let tab_height = render_tab_bar(frame, *rect, &tabs, is_active, &self.theme);
-                    let panel_rect = ratatui::layout::Rect {
-                        y: rect.y + tab_height,
-                        height: rect.height.saturating_sub(tab_height),
-                        ..*rect
-                    };
-
-                    // Scroll adjustments
-                    let panel_height = panel_rect.height.saturating_sub(3) as usize;
-                    tree.scroll_to_cursor(panel_height);
-
-                    if self.show_info_panel && *side != self.active_panel {
-                        let current_file = self.active_tree_ref().current_node().map(|n| &n.entry);
-                        let data = InfoPanelData::from_panel(panel_state, current_file);
-                        render_info_panel(frame, panel_rect, &data, &self.theme);
-                    } else {
-                        render_tree_panel_with_filter(
-                            frame,
-                            panel_rect,
-                            tree,
-                            is_active,
-                            &self.theme,
-                            filter_editing,
-                        );
-                    }
-                }
-                farx_core::PanelLeaf::Terminal(tid) => {
-                    if let Some(term) = self.terminals.get_mut(*tid) {
-                        // Resize terminal to match panel inner area
-                        let inner_h = rect.height.saturating_sub(2);
-                        let inner_w = rect.width.saturating_sub(2);
-                        if inner_h > 0 && inner_w > 0 {
-                            term.resize(inner_h, inner_w);
-                        }
-                        let is_focused = self.focused_terminal == Some(*tid);
-                        render_terminal(frame, *rect, term, is_focused);
-                    }
-                }
-            }
-        }
-
-        // Render command line / feedback area
-        // Feedback (messages, confirmations) replaces the command line when active
-        if self.feedback.has_content() {
-            render_feedback(frame, main_chunks[2], &self.feedback);
-        } else {
-            let active_dir = self.active_tree_ref().root.clone();
-            command_line::render_command_line(
-                frame,
-                main_chunks[2],
-                &self.command_line,
-                &active_dir,
-                &self.theme,
-            );
-        }
-
-        // Slash command suggestions popup (floats above command line)
-        if let Some(ref ss) = self.slash_suggestions {
-            render_slash_suggestions(frame, ss, main_chunks[2]);
-        }
-
-        // Render function key bar
-        if self.config.ui.show_fn_bar {
-            fn_bar::render_fn_bar(frame, main_chunks[3], &self.theme);
-        }
-
-        // Overlays: menu > search > AI bar > dialog (only for text input)
-        if let Some(ref menu) = self.menu {
-            render_menu(frame, menu, &self.theme);
-        }
-
-        if let Some(ref search) = self.search {
-            render_search(frame, search, &self.theme);
-        }
-
-        if let Some(ref ai_bar) = self.ai_bar {
-            render_ai_bar(frame, ai_bar, &self.theme);
-        }
-
-        // Bookmarks panel
-        if let Some(ref bm_panel) = self.bookmarks_panel {
-            render_bookmarks(frame, bm_panel, &self.theme);
-        }
-
-        // Fuzzy finder
-        if let Some(ref ff) = self.fuzzy_finder {
-            render_fuzzy_finder(frame, ff, &self.theme);
-        }
-
-        // Quick actions palette
-        if let Some(ref qa) = self.quick_actions {
-            render_quick_actions(frame, qa, &self.theme);
-        }
-
-        // AI tools panel
-        if let Some(ref ai_panel) = self.ai_panel {
-            render_ai_panel(frame, ai_panel, &self.theme);
-        }
-
-        // Batch rename dialog
-        if let Some(ref br) = self.batch_rename {
-            render_batch_rename(frame, br, &self.theme);
-        }
-
-        // Chmod dialog
-        if let Some(ref chmod) = self.chmod_dialog {
-            render_chmod_dialog(frame, chmod, &self.theme);
-        }
-
-        // Dialog only for text input (MkDir, Rename, CreateFile)
-        if let Some(ref dialog) = self.dialog {
-            render_dialog(frame, dialog, &self.theme);
-        }
-
-        // Progress dialog (renders on top of everything)
-        if let Some(ref progress) = self.progress {
-            render_progress(frame, progress, &self.theme);
-        }
-
-        // Scrollable output panel (from feedback) renders on top of panels
-        if self.feedback.output_visible {
-            let output_area = main_chunks[0]; // render over the panel area
-            render_feedback(frame, output_area, &self.feedback);
-        }
-
-        // Update modal renders last so it sits above every other overlay.
-        if let Some(ref state) = self.update_state {
-            render_update_modal(frame, state, &self.theme);
         }
     }
 }
