@@ -41,9 +41,8 @@ pub fn perform_update() -> Result<self_update::Status> {
     let tmp_dir = tempfile::tempdir()?;
     let tmp_archive = tmp_dir.path().join(&asset.name);
 
-    let response = reqwest::blocking::get(&asset.download_url)?;
-    let bytes = response.bytes()?;
-    std::fs::write(&tmp_archive, &bytes)?;
+    download_asset(&asset.download_url, &tmp_archive)?;
+    verify_archive_magic(&asset.name, &tmp_archive)?;
 
     let tmp_bin = tmp_dir.path().join("farx");
     extract_binary(&asset.name, &tmp_archive, &tmp_bin)?;
@@ -79,6 +78,54 @@ pub fn perform_update() -> Result<self_update::Status> {
     warn_path_and_shadow(&local_bin);
 
     Ok(self_update::Status::Updated(remote_ver.to_string()))
+}
+
+/// Stream the release asset to disk. Uses an explicit `Client` with a
+/// `User-Agent` and `Accept: application/octet-stream` to make sure GitHub
+/// serves the actual binary content and not a JSON metadata response or
+/// an unexpected redirect target.
+fn download_asset(url: &str, dest: &Path) -> Result<()> {
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(concat!("farx-updater/", env!("CARGO_PKG_VERSION")))
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()?;
+    let mut response = client
+        .get(url)
+        .header("Accept", "application/octet-stream")
+        .send()?
+        .error_for_status()?;
+    let mut file = std::fs::File::create(dest)?;
+    response.copy_to(&mut file)?;
+    Ok(())
+}
+
+/// Verify the first few bytes of the downloaded file match the expected
+/// archive format. Catches GitHub serving HTML/JSON instead of the binary
+/// asset with a clearer error than the eventual gzip-decoder failure.
+fn verify_archive_magic(asset_name: &str, path: &Path) -> Result<()> {
+    use std::io::Read;
+    let mut head = [0u8; 4];
+    let read = std::fs::File::open(path)?.read(&mut head)?;
+    if asset_name.ends_with(".tar.gz") || asset_name.ends_with(".tgz") {
+        if read < 2 || head[0] != 0x1f || head[1] != 0x8b {
+            anyhow::bail!(
+                "Downloaded {} is not a gzip stream (got bytes {:02x?}). \
+                 The release asset may be missing or the URL returned an \
+                 error page.",
+                asset_name,
+                &head[..read]
+            );
+        }
+    } else if asset_name.ends_with(".zip") {
+        if read < 4 || head[0] != b'P' || head[1] != b'K' {
+            anyhow::bail!(
+                "Downloaded {} is not a zip archive (got bytes {:02x?}).",
+                asset_name,
+                &head[..read]
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Return `current_exe()` only if the directory containing it is writable
