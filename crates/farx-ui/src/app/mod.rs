@@ -8,12 +8,14 @@ mod fs_watcher;
 mod globs;
 mod helpers;
 mod keys;
+mod lifecycle;
 mod mouse;
 mod pending;
 mod render;
 mod selection_ops;
 mod shell_commands;
 mod slash;
+mod state;
 mod terminals;
 mod text_detect;
 mod tick;
@@ -22,285 +24,31 @@ mod update_flow;
 
 use std::path::PathBuf;
 
-use farx_core::{Action, AppConfig, KeyMap, PanelSide, PanelState, TabGroup, TreeState};
-
-use farx_core::SortField;
+use farx_core::{Action, PanelSide, SortField};
 
 use crate::components::ai_bar::AiBarState;
 use crate::components::ai_panel::AiPanelState;
 use crate::components::batch_rename::BatchRenameState;
-use crate::components::bookmarks::{load_bookmarks, save_bookmarks, Bookmark, BookmarkState};
+use crate::components::bookmarks::{save_bookmarks, Bookmark, BookmarkState};
 use crate::components::chmod_dialog::ChmodDialogState;
-use crate::components::command_line::CommandLineState;
 use crate::components::dialog::DialogState;
 use crate::components::diff_view::DiffViewState;
 use crate::components::editor::EditorState;
-use crate::components::feedback::{ConfirmAction, FeedbackState};
+use crate::components::feedback::ConfirmAction;
 use crate::components::fuzzy_finder::FuzzyFinderState;
 use crate::components::help::HelpState;
 use crate::components::menu::MenuState;
-use crate::components::progress::ProgressState;
 use crate::components::quick_actions::QuickActionsState;
 use crate::components::search::SearchState;
-use crate::components::slash_suggestions::SlashSuggestionsState;
 use crate::components::viewer::ViewerState;
-use crate::theme::Theme;
+
+pub use self::state::App;
 
 use self::helpers::format_size_human;
 use self::pending::{PendingOperation, UndoEntry};
 use self::text_detect::is_text_file;
 
-/// Main application state that owns panels, config, and the render loop.
-pub struct App {
-    /// Whether the application is still running.
-    pub running: bool,
-    /// Which panel is currently active / focused.
-    pub active_panel: PanelSide,
-    /// Left file panel state.
-    pub left_panel: PanelState,
-    /// Right file panel state.
-    pub right_panel: PanelState,
-    /// Command line input state.
-    pub command_line: CommandLineState,
-    /// Whether the dual panels are visible (Ctrl+O toggles).
-    pub panels_visible: bool,
-    /// Application configuration.
-    pub config: AppConfig,
-    /// Key bindings.
-    pub keymap: KeyMap,
-    /// Visual theme.
-    pub theme: Theme,
-    /// Currently open modal dialog, if any.
-    pub dialog: Option<DialogState>,
-    /// The pending file operation associated with the current dialog.
-    pending_op: Option<PendingOperation>,
-    /// File viewer state (F3).
-    pub viewer: Option<ViewerState>,
-    /// Help screen state (F1).
-    pub help: Option<HelpState>,
-    /// AI bar state (Ctrl+Space).
-    pub ai_bar: Option<AiBarState>,
-    /// AI agent for processing queries.
-    ai_agent: farx_ai::AiAgent,
-    /// Tokio runtime handle for async AI queries.
-    ai_pending_response: Option<tokio::sync::oneshot::Receiver<String>>,
-    /// Editor state (F4).
-    pub editor: Option<EditorState>,
-    /// Menu bar state (F9).
-    pub menu: Option<MenuState>,
-    /// Search dialog state (Alt+F7).
-    pub search: Option<SearchState>,
-    /// Whether to show info panel instead of inactive panel (Ctrl+L).
-    pub show_info_panel: bool,
-    /// Command output to display.
-    pub command_output: Option<String>,
-    /// Inline feedback system (replaces modal dialogs for messages/confirms).
-    pub feedback: FeedbackState,
-    /// Tick counter for debounce timing.
-    tick_count: u64,
-    /// Pending typeahead suggestion response.
-    suggestion_rx: Option<tokio::sync::oneshot::Receiver<Option<String>>>,
-    /// The input text the pending suggestion was requested for.
-    suggestion_request_input: String,
-    /// Tree view state for the left panel (supports multiple tabs).
-    pub left_tree: TabGroup,
-    /// Tree view state for the right panel (supports multiple tabs).
-    pub right_tree: TabGroup,
-    /// If set, a newer version is available for update.
-    pub update_available: Option<String>,
-    /// Bookmarks panel state (Ctrl+B).
-    pub bookmarks_panel: Option<BookmarkState>,
-    /// Persisted bookmarks list.
-    pub bookmarks: Vec<Bookmark>,
-    /// Filter state for narrowing directory listing.
-    pub filter_active: bool,
-    /// Current filter pattern.
-    pub filter_pattern: String,
-    /// Plugin engine for Lua extensions.
-    pub plugin_engine: Option<farx_plugin::PluginEngine>,
-    /// Undo stack for file operations.
-    undo_stack: Vec<UndoEntry>,
-    /// Batch rename dialog state.
-    pub batch_rename: Option<BatchRenameState>,
-    /// Chmod / permissions dialog state.
-    pub chmod_dialog: Option<ChmodDialogState>,
-    /// File operation progress dialog.
-    pub progress: Option<ProgressState>,
-    /// Side-by-side diff view state.
-    pub diff_view: Option<DiffViewState>,
-    /// Fuzzy finder dialog state.
-    pub fuzzy_finder: Option<FuzzyFinderState>,
-    /// Quick actions palette state.
-    pub quick_actions: Option<QuickActionsState>,
-    /// AI tools selector panel state.
-    pub ai_panel: Option<AiPanelState>,
-    /// Slash command suggestion popup state.
-    pub slash_suggestions: Option<SlashSuggestionsState>,
-    /// In-TUI auto-update flow state (`/update` command).
-    pub update_state: Option<crate::components::update_modal::UpdateState>,
-    /// Set to true when the main loop should leave the alternate screen and
-    /// run the blocking installer. Cleared by the main loop after handling.
-    pub pending_install: bool,
-    /// Embedded terminal sessions.
-    pub terminals: Vec<crate::components::embedded_terminal::TerminalSession>,
-    /// Panel layout tree (supports recursive splitting).
-    pub layout: farx_core::LayoutNode,
-    /// Index of the focused leaf in the layout tree (None = file panel via active_panel).
-    pub focused_terminal: Option<usize>,
-    /// File watcher: receives notifications when files change.
-    fs_watcher: Option<notify::RecommendedWatcher>,
-    fs_change_rx: Option<std::sync::mpsc::Receiver<()>>,
-    /// Debounce: tick count of last fs change signal.
-    fs_change_tick: u64,
-    /// Cached panel rects from last render (for mouse hit-testing).
-    cached_panel_rects: Vec<(farx_core::PanelLeaf, ratatui::layout::Rect)>,
-    /// Cached fn-bar rect from last render (for mouse hit-testing).
-    cached_fn_bar_rect: Option<ratatui::layout::Rect>,
-    /// Last mouse click position and tick for double-click detection.
-    last_click: Option<(u16, u16, u64)>,
-}
-
 impl App {
-    /// Create a new App, loading directory contents for both panels.
-    ///
-    /// The left panel starts in the current working directory and the right
-    /// panel starts in the user's home directory.
-    pub fn new(config: AppConfig) -> anyhow::Result<Self> {
-        let cwd = std::env::current_dir()?;
-        let cwd2 = cwd.clone();
-        let home = dirs::home_dir().unwrap_or_else(|| cwd.clone());
-        let show_hidden = config.general.show_hidden_files;
-
-        let home2 = home.clone();
-        let mut left = PanelState::new(PanelSide::Left, cwd);
-        let mut right = PanelState::new(PanelSide::Right, home);
-
-        // Load initial directory contents
-        Self::refresh_panel(&mut left, show_hidden);
-        Self::refresh_panel(&mut right, show_hidden);
-
-        let ai_agent = farx_ai::AiAgent::new(
-            &config.ai.provider,
-            config.ai.base_url.clone(),
-            config.ai.model.clone(),
-            config.ai.max_tokens,
-            &config.ai.api_key_env,
-        );
-
-        let mut app = Self {
-            running: true,
-            active_panel: PanelSide::Left,
-            left_panel: left,
-            right_panel: right,
-            command_line: CommandLineState::new(),
-            panels_visible: true,
-            keymap: {
-                let mut km = KeyMap::far_defaults();
-                if !config.keybindings.is_empty() {
-                    km.apply_overrides(&config.keybindings);
-                }
-                km
-            },
-            theme: Theme::by_name(&config.ui.theme),
-            config,
-            dialog: None,
-            pending_op: None,
-            viewer: None,
-            help: None,
-            ai_bar: None,
-            ai_agent,
-            ai_pending_response: None,
-            editor: None,
-            menu: None,
-            search: None,
-            show_info_panel: false,
-            command_output: None,
-            feedback: FeedbackState::new(),
-            tick_count: 0,
-            suggestion_rx: None,
-            suggestion_request_input: String::new(),
-            left_tree: {
-                let mut t = TreeState::new(cwd2);
-                t.show_hidden = show_hidden;
-                TabGroup::new(t)
-            },
-            right_tree: {
-                let mut t = TreeState::new(home2);
-                t.show_hidden = show_hidden;
-                TabGroup::new(t)
-            },
-            update_available: None,
-            bookmarks_panel: None,
-            bookmarks: load_bookmarks(),
-            filter_active: false,
-            filter_pattern: String::new(),
-            plugin_engine: {
-                match farx_plugin::PluginEngine::new() {
-                    Ok(mut engine) => {
-                        let _ = engine.load_plugins();
-                        Some(engine)
-                    }
-                    Err(_) => None,
-                }
-            },
-            undo_stack: Vec::new(),
-            batch_rename: None,
-            chmod_dialog: None,
-            progress: None,
-            diff_view: None,
-            fuzzy_finder: None,
-            quick_actions: None,
-            ai_panel: None,
-            slash_suggestions: None,
-            update_state: None,
-            pending_install: false,
-            terminals: Vec::new(),
-            layout: farx_core::LayoutNode::default_layout(),
-            focused_terminal: None,
-            fs_watcher: None,
-            fs_change_rx: None,
-            fs_change_tick: 0,
-            cached_panel_rects: Vec::new(),
-            cached_fn_bar_rect: None,
-            last_click: None,
-        };
-
-        app.setup_fs_watcher();
-        Ok(app)
-    }
-
-    /// Re-read the directory listing for a panel and sort the entries.
-    fn refresh_panel(panel: &mut PanelState, show_hidden: bool) {
-        if let Ok(entries) = farx_fs::read_directory(&panel.current_dir, show_hidden) {
-            panel.entries = entries;
-            panel.sort_entries();
-        }
-    }
-
-    /// Refresh both panels.
-    fn refresh_both_panels(&mut self) {
-        let show_hidden = self.config.general.show_hidden_files;
-        Self::refresh_panel(&mut self.left_panel, show_hidden);
-        Self::refresh_panel(&mut self.right_panel, show_hidden);
-    }
-
-    /// Refresh all panels (legacy + tree). Called after returning from an
-    /// external process that may have modified files.
-    pub fn refresh_all(&mut self) {
-        self.refresh_both_panels();
-        self.left_tree.rebuild();
-        self.right_tree.rebuild();
-    }
-
-    /// Handle mouse events (scroll, click, double-click).
-
-    /// Handle a click on the function key bar.
-
-    /// Smart command execution: detects whether the input is a shell command or
-    /// natural language, and routes accordingly.
-    ///
-    /// Heuristic: if the input starts with a known command/path prefix, or contains
-
     /// Execute an action, updating application state accordingly.
     pub fn dispatch(&mut self, action: Action) {
         // Both panels use tree view — route navigation through the active tree
