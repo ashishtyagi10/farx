@@ -832,6 +832,7 @@ dependencies = [
  "flate2",
  "ratatui",
  "reqwest",
+ "self-replace",
  "self_update",
  "semver",
  "serde",

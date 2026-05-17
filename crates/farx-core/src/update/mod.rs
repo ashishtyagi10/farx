@@ -1,6 +1,7 @@
 //! Self-update support: check GitHub Releases and install new versions
 //! into `~/.local/bin` without requiring sudo.
 
+mod asset;
 mod check;
 mod install;
 mod version;

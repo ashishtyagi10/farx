@@ -9,13 +9,18 @@ set -e
 REPO="ashishtyagi10/farx"
 BIN_NAME="farx"
 
-# Prefer ~/.local/bin (no sudo needed), fall back to /usr/local/bin
+# Always install to ~/.local/bin so neither install nor `/update` ever
+# needs sudo. The user can override with INSTALL_DIR=/path env var if
+# they really want a system location.
 if [ -n "${INSTALL_DIR:-}" ]; then
     : # user override via env
-elif [ -d "$HOME/.local/bin" ] || mkdir -p "$HOME/.local/bin" 2>/dev/null; then
-    INSTALL_DIR="$HOME/.local/bin"
 else
-    INSTALL_DIR="/usr/local/bin"
+    INSTALL_DIR="$HOME/.local/bin"
+    mkdir -p "$INSTALL_DIR" || {
+        echo "Error: cannot create ${INSTALL_DIR}." >&2
+        echo "Set INSTALL_DIR=/some/writable/dir and re-run." >&2
+        exit 1
+    }
 fi
 
 main() {
@@ -63,12 +68,13 @@ main() {
             ;;
     esac
 
-    # Install the binary
+    # Install the binary (no sudo — INSTALL_DIR is user-writable by design)
     if [ -w "$INSTALL_DIR" ]; then
         install -m 755 "${tmpdir}/${BIN_NAME}" "${INSTALL_DIR}/${BIN_NAME}"
     else
-        echo "Installing to ${INSTALL_DIR} (requires sudo)..."
-        sudo install -m 755 "${tmpdir}/${BIN_NAME}" "${INSTALL_DIR}/${BIN_NAME}"
+        echo "Error: ${INSTALL_DIR} is not writable by the current user." >&2
+        echo "Re-run with INSTALL_DIR set to a writable directory." >&2
+        exit 1
     fi
 
     echo ""

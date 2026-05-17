@@ -1,16 +1,19 @@
 //! Blocking install flow: pick the right release asset, download it,
-//! extract the `farx` binary, and install it to `~/.local/bin`.
+//! extract the `farx` binary, and install it without ever invoking sudo —
+//! first by replacing the running binary in place when possible, otherwise
+//! by writing to `~/.local/bin/farx`.
 
 use anyhow::Result;
 use self_update::cargo_crate_version;
-use self_update::update::ReleaseAsset;
 use semver::Version;
 use std::path::{Path, PathBuf};
 
+use super::asset::{extract_binary, make_executable, select_asset};
 use super::{REPO_NAME, REPO_OWNER};
 
 /// Perform the actual update: download the latest release and install
-/// to `~/.local/bin`. Never requires sudo — works entirely in user space.
+/// without sudo. Tries an in-place replace of the running binary first;
+/// falls back to `~/.local/bin/farx`.
 pub fn perform_update() -> Result<self_update::Status> {
     let current = cargo_crate_version!();
 
@@ -51,93 +54,46 @@ pub fn perform_update() -> Result<self_update::Status> {
 
     make_executable(&tmp_bin)?;
 
+    // 1. Try replacing the running binary atomically in-place. Works
+    //    without sudo whenever the user has write access to the directory
+    //    containing the current executable (e.g. ~/.local/bin, ~/bin,
+    //    /opt/homebrew/bin if owned by the user, etc.).
+    if let Some(current_exe) = current_exe_if_writable() {
+        match self_replace::self_replace(&tmp_bin) {
+            Ok(()) => {
+                println!("Replaced {} in place.", current_exe.display());
+                return Ok(self_update::Status::Updated(remote_ver.to_string()));
+            }
+            Err(e) => {
+                println!(
+                    "In-place replace of {} failed ({}). Falling back to ~/.local/bin.",
+                    current_exe.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    // 2. Fall back: install to ~/.local/bin (a user-writable location).
     let local_bin = install_to_local_bin(&tmp_bin)?;
     warn_path_and_shadow(&local_bin);
 
     Ok(self_update::Status::Updated(remote_ver.to_string()))
 }
 
-/// Determine the right asset for this platform.
-fn select_asset(assets: &[ReleaseAsset]) -> Result<ReleaseAsset> {
-    let target = self_update::get_target();
-    let asset = assets
-        .iter()
-        .find(|a| a.name.contains(&target))
-        .or_else(|| {
-            let os = if cfg!(target_os = "macos") {
-                "apple"
-            } else if cfg!(target_os = "linux") {
-                "linux"
-            } else {
-                "windows"
-            };
-            let arch = if cfg!(target_arch = "aarch64") {
-                "aarch64"
-            } else {
-                "x86_64"
-            };
-            assets
-                .iter()
-                .find(|a| a.name.contains(os) && a.name.contains(arch))
-        })
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "No release asset found for target '{}'. Available: {}",
-                target,
-                assets
-                    .iter()
-                    .map(|a| a.name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        })?;
-    Ok(asset.clone())
-}
-
-/// Extract the `farx` binary from the downloaded archive into `tmp_bin`.
-fn extract_binary(asset_name: &str, tmp_archive: &Path, tmp_bin: &Path) -> Result<()> {
-    if asset_name.ends_with(".tar.gz") || asset_name.ends_with(".tgz") {
-        let file = std::fs::File::open(tmp_archive)?;
-        let gz = flate2::read::GzDecoder::new(file);
-        let mut archive = tar::Archive::new(gz);
-        for entry in archive.entries()? {
-            let mut entry = entry?;
-            let path = entry.path()?.to_path_buf();
-            if path.file_name().map(|n| n == "farx").unwrap_or(false) {
-                entry.unpack(tmp_bin)?;
-                break;
-            }
+/// Return `current_exe()` only if the directory containing it is writable
+/// by the current user (so `self_replace` can succeed without sudo).
+fn current_exe_if_writable() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let parent = exe.parent()?;
+    let probe = parent.join(".farx-write-probe");
+    match std::fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            Some(exe)
         }
-    } else if asset_name.ends_with(".zip") {
-        let file = std::fs::File::open(tmp_archive)?;
-        let mut archive = zip::ZipArchive::new(file)?;
-        for i in 0..archive.len() {
-            let mut entry = archive.by_index(i)?;
-            if entry.name().ends_with("farx") || entry.name().ends_with("farx.exe") {
-                let mut out = std::fs::File::create(tmp_bin)?;
-                std::io::copy(&mut entry, &mut out)?;
-                break;
-            }
-        }
-    } else {
-        // Assume raw binary
-        std::fs::copy(tmp_archive, tmp_bin)?;
+        Err(_) => None,
     }
-    Ok(())
-}
-
-/// Mark the temporary binary executable on Unix.
-fn make_executable(tmp_bin: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(tmp_bin, std::fs::Permissions::from_mode(0o755))?;
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = tmp_bin;
-    }
-    Ok(())
 }
 
 /// Copy `tmp_bin` to `~/.local/bin/farx` and return the install directory.
@@ -173,11 +129,16 @@ fn warn_path_and_shadow(local_bin: &Path) {
         if !current_exe.starts_with(local_bin) {
             println!();
             println!(
-                "NOTE: You're running farx from {} which may shadow the update.",
+                "NOTE: The currently running farx is at {} and may shadow the",
                 current_exe.display()
             );
+            println!("      update on your PATH. Two ways to fix without sudo:");
             println!(
-                "      Remove the old copy: sudo rm {}",
+                "        1. Put {} earlier in your PATH, or",
+                local_bin.display()
+            );
+            println!(
+                "        2. Delete the shadowing copy yourself: rm {}",
                 current_exe.display()
             );
         }

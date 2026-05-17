@@ -16,6 +16,7 @@ tracing = { workspace = true }
 
 # Auto-update
 self_update = { workspace = true }
+self-replace = "1"
 semver = { workspace = true }
 reqwest = { workspace = true, features = ["blocking"] }
 tempfile = "3"
