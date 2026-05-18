@@ -20,7 +20,7 @@ impl Default for AiConfig {
             enabled: false,
             provider: "openrouter".to_string(),
             base_url: "https://openrouter.ai/api/v1".to_string(),
-            model: "google/gemma-3-4b-it:free".to_string(),
+            model: "google/gemma-4-31b-it:free".to_string(),
             max_tokens: 4096,
             api_key_env: "OPENROUTER_API_KEY".to_string(),
         }
