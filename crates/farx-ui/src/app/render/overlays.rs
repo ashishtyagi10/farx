@@ -25,7 +25,7 @@ impl App {
     /// Paint the stack of optional overlays (menu, search, AI bar, dialogs,
     /// progress, output, update modal). `panel_area` is the file-panel
     /// rect used as the canvas for the scrollable output panel.
-    pub(super) fn render_overlays(&self, frame: &mut Frame, panel_area: Rect) {
+    pub(super) fn render_overlays(&mut self, frame: &mut Frame, panel_area: Rect) {
         if let Some(ref menu) = self.menu {
             render_menu(frame, menu, &self.theme);
         }
@@ -50,7 +50,7 @@ impl App {
             render_quick_actions(frame, qa, &self.theme);
         }
 
-        if let Some(ref ai_panel) = self.ai_panel {
+        if let Some(ref mut ai_panel) = self.ai_panel {
             render_ai_panel(frame, ai_panel, &self.theme);
         }
 
