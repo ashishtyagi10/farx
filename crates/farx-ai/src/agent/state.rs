@@ -9,6 +9,7 @@ pub struct AiAgent {
     pub(super) provider: ApiProvider,
     pub(super) base_url: String,
     pub(super) model: String,
+    pub(super) fallback_models: Vec<String>,
     pub(super) max_tokens: u32,
 }
 
@@ -17,6 +18,7 @@ impl AiAgent {
         provider: &str,
         base_url: String,
         model: String,
+        fallback_models: Vec<String>,
         max_tokens: u32,
         api_key_env: &str,
     ) -> Self {
@@ -30,6 +32,7 @@ impl AiAgent {
             provider,
             base_url,
             model,
+            fallback_models,
             max_tokens,
         }
     }
@@ -48,6 +51,10 @@ impl AiAgent {
 
     pub fn model(&self) -> &str {
         &self.model
+    }
+
+    pub fn fallback_models(&self) -> &[String] {
+        &self.fallback_models
     }
 
     pub fn max_tokens(&self) -> u32 {

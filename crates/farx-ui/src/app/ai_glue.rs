@@ -19,6 +19,7 @@ impl App {
             &self.config.ai.provider,
             self.ai_agent.base_url().to_string(),
             self.ai_agent.model().to_string(),
+            self.ai_agent.fallback_models().to_vec(),
             self.ai_agent.max_tokens(),
             &self.config.ai.api_key_env,
         );
@@ -60,6 +61,7 @@ impl App {
             &self.config.ai.provider,
             self.ai_agent.base_url().to_string(),
             self.ai_agent.model().to_string(),
+            self.ai_agent.fallback_models().to_vec(),
             self.ai_agent.max_tokens(),
             &self.config.ai.api_key_env,
         );

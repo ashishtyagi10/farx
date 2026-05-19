@@ -31,6 +31,7 @@ impl App {
             &config.ai.provider,
             config.ai.base_url.clone(),
             config.ai.model.clone(),
+            config.ai.fallback_models.clone(),
             config.ai.max_tokens,
             &config.ai.api_key_env,
         );
