@@ -8,8 +8,9 @@ use farx_core::PanelSide;
 use super::super::App;
 
 impl App {
-    /// If a click lands on a terminal tile, focus it and promote it in the
-    /// grid order. Returns `true` when the click was consumed by a terminal.
+    /// If a click lands on a terminal tile, focus it (promoting it in the
+    /// grid order only if it was minimized). Returns `true` when the click
+    /// was consumed by a terminal.
     pub(super) fn try_focus_terminal_at(&mut self, x: u16, y: u16) -> bool {
         // Collect matching terminal id without holding an immutable borrow.
         let hit = self.cached_panel_rects.iter().find_map(|(leaf, rect)| {
@@ -22,7 +23,11 @@ impl App {
         });
         if let Some(id) = hit {
             self.focused_terminal = Some(id);
-            self.grid.touch(id);
+            // Only reorder when clicking a minimized thumbnail (promote it);
+            // clicking a full tile just focuses it without reshuffling.
+            if self.grid.minimized().contains(&id) {
+                self.grid.touch(id);
+            }
             return true;
         }
         false

@@ -129,7 +129,12 @@ impl App {
             None => order[0],
         };
         self.focused_terminal = Some(next);
-        self.grid.touch(next);
+        // Only reorder when focusing a currently-minimized tile (pull it up
+        // into the grid). Cycling among full tiles keeps their positions
+        // stable so they don't shuffle under the user.
+        if self.grid.minimized().contains(&next) {
+            self.grid.touch(next);
+        }
         if let Some(t) = self.terminal_by_id_mut(next) {
             t.has_attention = false;
         }
