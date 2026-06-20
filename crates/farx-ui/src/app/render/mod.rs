@@ -61,18 +61,6 @@ fn render_farx_logo(frame: &mut Frame, area: Rect) {
     );
 }
 
-/// Inset a rect horizontally (~8%, clamped 2..6 cols) so a box doesn't touch
-/// the screen edges.
-fn inset_x(area: Rect) -> Rect {
-    let m = (area.width / 12).clamp(2, 6);
-    Rect {
-        x: area.x + m,
-        y: area.y,
-        width: area.width.saturating_sub(m * 2),
-        height: area.height,
-    }
-}
-
 use super::App;
 
 impl App {
@@ -126,9 +114,9 @@ impl App {
             render_farx_logo(frame, main_chunks[0]);
         }
 
-        // The command input sits in the bottom row, inset from the screen
-        // edges. Its footer carries the agent status ("no agents" / "N agents").
-        let cmd_area = inset_x(main_chunks[1]);
+        // The command input sits in the bottom row, spanning the full screen
+        // width. Its footer carries the agent status ("no agents" / "N agents").
+        let cmd_area = main_chunks[1];
         if self.feedback.has_content() {
             render_feedback(frame, cmd_area, &self.feedback);
         } else {

@@ -15,7 +15,13 @@ pub fn render_thumbnail(frame: &mut Frame, area: Rect, session: &TerminalSession
     } else {
         ("●", Color::Indexed(240))
     };
-    let label = format!(" {} [{}] {} ", glyph, number, session.title);
+    let label = format!(
+        " {} [{}] {} — {} ",
+        glyph,
+        number,
+        session.title,
+        session.cwd_name()
+    );
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(color).bg(Color::Black))

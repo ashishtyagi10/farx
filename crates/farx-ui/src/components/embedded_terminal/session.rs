@@ -4,6 +4,10 @@ use std::sync::Arc;
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
+/// Number of scrollback rows the vt100 parser retains for each session, so
+/// the user can scroll up through history with the mouse wheel.
+pub(super) const SCROLLBACK_LINES: usize = 1000;
+
 /// Callback invoked by the PTY reader thread whenever new output arrives, so
 /// the render loop can be woken for an immediate redraw instead of waiting
 /// for the next periodic tick. Kept as an opaque closure to avoid coupling
@@ -24,7 +28,7 @@ pub struct TerminalSession {
     /// The arguments the program was spawned with (for `/restart`).
     pub spawn_args: Vec<String>,
     /// vt100 terminal emulator / parser.
-    parser: vt100::Parser,
+    pub(super) parser: vt100::Parser,
     /// Channel receiving raw bytes from the PTY reader thread.
     output_rx: mpsc::Receiver<Vec<u8>>,
     /// Writer handle to send input to the PTY.
@@ -97,7 +101,7 @@ impl TerminalSession {
             }
         });
 
-        let parser = vt100::Parser::new(rows, cols, 100);
+        let parser = vt100::Parser::new(rows, cols, SCROLLBACK_LINES);
 
         Ok(Self {
             id,
@@ -133,8 +137,10 @@ impl TerminalSession {
         got_data
     }
 
-    /// Write raw bytes to the PTY (keyboard input).
+    /// Write raw bytes to the PTY (keyboard input). Typing snaps the view back
+    /// to the live bottom so the user sees what they're entering.
     pub fn write_input(&mut self, data: &[u8]) {
+        self.parser.set_scrollback(0);
         let _ = self.writer.write_all(data);
         let _ = self.writer.flush();
     }
@@ -160,9 +166,26 @@ impl TerminalSession {
         self.parser.screen()
     }
 
+    /// Basename of the working directory, for display in the tile title.
+    /// Falls back to the full path string (then "/") when there is no final
+    /// component (e.g. the filesystem root).
+    pub fn cwd_name(&self) -> String {
+        self.cwd
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| {
+                let s = self.cwd.to_string_lossy();
+                if s.is_empty() {
+                    "/".to_string()
+                } else {
+                    s.into_owned()
+                }
+            })
+    }
+
     /// Clear the rendered view by resetting the vt100 parser. The underlying
     /// program is untouched — its next output simply repaints a fresh screen.
     pub fn clear_screen(&mut self) {
-        self.parser = vt100::Parser::new(self.rows, self.cols, 100);
+        self.parser = vt100::Parser::new(self.rows, self.cols, SCROLLBACK_LINES);
     }
 }

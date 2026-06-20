@@ -34,10 +34,14 @@ pub fn render_terminal(
         Color::Indexed(240)
     };
 
+    let cwd = session.cwd_name();
+    let scroll = session.scrollback();
     let title = if !session.alive {
-        format!(" [{}] {} (exited) ", number, session.title)
+        format!(" [{}] {} — {} (exited) ", number, session.title, cwd)
+    } else if scroll > 0 {
+        format!(" [{}] {} — {} (↑{}) ", number, session.title, cwd, scroll)
     } else {
-        format!(" [{}] {} ", number, session.title)
+        format!(" [{}] {} — {} ", number, session.title, cwd)
     };
 
     let block = Block::default()

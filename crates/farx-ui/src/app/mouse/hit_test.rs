@@ -33,6 +33,19 @@ impl App {
         false
     }
 
+    /// Return the terminal id whose tile contains the coordinate, without
+    /// changing focus. Used to route mouse-wheel scrolling to a tile.
+    pub(super) fn terminal_id_at(&self, x: u16, y: u16) -> Option<usize> {
+        self.cached_panel_rects.iter().find_map(|(leaf, rect)| {
+            if x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height {
+                if let farx_core::PanelLeaf::Terminal(id) = leaf {
+                    return Some(*id);
+                }
+            }
+            None
+        })
+    }
+
     /// Determine which panel side a screen coordinate falls in.
     pub(super) fn panel_side_at(&self, x: u16, y: u16) -> Option<PanelSide> {
         for (leaf, rect) in &self.cached_panel_rects {

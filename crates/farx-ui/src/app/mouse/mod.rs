@@ -6,6 +6,8 @@ mod hit_test;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use farx_core::{Action, PanelSide};
 
+use crate::components::embedded_terminal::SCROLL_STEP;
+
 use super::App;
 
 impl App {
@@ -31,6 +33,16 @@ impl App {
                 }
                 if let Some(ref mut viewer) = self.viewer {
                     viewer.handle_mouse_event(mouse);
+                    return;
+                }
+                if let Some(id) = self.terminal_id_at(mx, my) {
+                    if let Some(term) = self.terminal_by_id_mut(id) {
+                        if matches!(mouse.kind, MouseEventKind::ScrollUp) {
+                            term.scroll_up(SCROLL_STEP);
+                        } else {
+                            term.scroll_down(SCROLL_STEP);
+                        }
+                    }
                     return;
                 }
                 if let Some(side) = self.panel_side_at(mx, my) {

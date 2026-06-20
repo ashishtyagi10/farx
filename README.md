@@ -247,9 +247,14 @@ command line:
 | `/only` | Close every tile except the focused one |
 | `/close` or `/x` | Close the focused tile; `/closeall` closes every tile |
 
-Each tile's title bar shows its number as `[n]` so you can jump straight to it
-with `/focus n`. Press `F1` to focus the command input from anywhere (even while
-an agent has the keyboard), and `F2` to cycle focus between tiles.
+Each tile's title bar shows its number as `[n]`, its title, and its working
+directory (e.g. `[1] claude — myproject`) so you can jump straight to it with
+`/focus n`. Press `F1` to focus the command input from anywhere (even while an
+agent has the keyboard), and `F2` to cycle focus between tiles.
+
+Scroll back through a tile's output with the **mouse wheel** — hover over any
+tile and scroll up to walk through its history (up to 1000 lines). The title
+shows `(↑N)` while you're viewing history; typing snaps back to the live bottom.
 
 ## Bookmarks
 
@@ -400,7 +405,7 @@ Farx supports full mouse interaction:
 - **Left-click** on a file to move the cursor and switch panels
 - **Double-click** to enter a directory or open a file
 - **Right-click** to toggle file selection
-- **Scroll wheel** scrolls whichever panel the mouse is over
+- **Scroll wheel** scrolls whichever panel or agent tile the mouse is over (over a tile it walks back through the terminal's scrollback history)
 - **Click breadcrumb** segments in the path bar to navigate to ancestors
 - **Click fn-bar** buttons to trigger the corresponding action
 
