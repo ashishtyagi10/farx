@@ -7,6 +7,10 @@ pub const PART_B: &[SlashCommand] = &[
         description: "Open menu bar",
     },
     SlashCommand {
+        command: "/only",
+        description: "Close all agent tiles except the focused one",
+    },
+    SlashCommand {
         command: "/open",
         description: "Open with system application",
     },
@@ -29,6 +33,10 @@ pub const PART_B: &[SlashCommand] = &[
     SlashCommand {
         command: "/rename-batch",
         description: "Batch rename files",
+    },
+    SlashCommand {
+        command: "/restart",
+        description: "Respawn the focused agent tile",
     },
     SlashCommand {
         command: "/search",

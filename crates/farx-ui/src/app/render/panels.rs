@@ -13,7 +13,10 @@ impl App {
         use farx_core::compute_grid_layout;
         let layout = compute_grid_layout(area, &self.grid);
         self.cached_panel_rects.clear();
-        for (id, rect) in &layout.full {
+        // Tile numbers continue from full tiles into the minimized strip so they
+        // match the 1-based numbering shown by `/agents` and used by `/focus`.
+        let full_count = layout.full.len();
+        for (i, (id, rect)) in layout.full.iter().enumerate() {
             let inner_h = rect.height.saturating_sub(2);
             let inner_w = rect.width.saturating_sub(2);
             if inner_h > 0 && inner_w > 0 {
@@ -23,14 +26,14 @@ impl App {
             }
             let is_focused = self.focused_terminal == Some(*id);
             if let Some(term) = self.terminal_by_id(*id) {
-                render_terminal(frame, *rect, term, is_focused);
+                render_terminal(frame, *rect, term, is_focused, i + 1);
                 self.cached_panel_rects
                     .push((farx_core::PanelLeaf::Terminal(*id), *rect));
             }
         }
-        for (id, rect) in &layout.minimized {
+        for (j, (id, rect)) in layout.minimized.iter().enumerate() {
             if let Some(term) = self.terminal_by_id(*id) {
-                render_thumbnail(frame, *rect, term);
+                render_thumbnail(frame, *rect, term, full_count + j + 1);
                 self.cached_panel_rects
                     .push((farx_core::PanelLeaf::Terminal(*id), *rect));
             }

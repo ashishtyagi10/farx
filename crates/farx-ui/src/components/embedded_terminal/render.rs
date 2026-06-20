@@ -15,8 +15,15 @@ fn vt100_to_ratatui_color(color: vt100::Color, default: Color) -> Color {
     }
 }
 
-/// Render a terminal session into a frame area.
-pub fn render_terminal(frame: &mut Frame, area: Rect, session: &TerminalSession, is_focused: bool) {
+/// Render a terminal session into a frame area. `number` is the tile's 1-based
+/// position in the grid (as shown by `/agents` and used by `/focus`).
+pub fn render_terminal(
+    frame: &mut Frame,
+    area: Rect,
+    session: &TerminalSession,
+    is_focused: bool,
+    number: usize,
+) {
     let border_color = if is_focused {
         Color::Cyan
     } else if session.has_attention {
@@ -28,9 +35,9 @@ pub fn render_terminal(frame: &mut Frame, area: Rect, session: &TerminalSession,
     };
 
     let title = if !session.alive {
-        format!(" {} (exited) ", session.title)
+        format!(" [{}] {} (exited) ", number, session.title)
     } else {
-        format!(" {} ", session.title)
+        format!(" [{}] {} ", number, session.title)
     };
 
     let block = Block::default()

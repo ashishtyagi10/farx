@@ -6,7 +6,8 @@ use ratatui::Frame;
 use super::session::TerminalSession;
 
 /// Render a minimized agent as a compact titled box (no PTY contents).
-pub fn render_thumbnail(frame: &mut Frame, area: Rect, session: &TerminalSession) {
+/// `number` is the tile's 1-based grid position (as used by `/focus`).
+pub fn render_thumbnail(frame: &mut Frame, area: Rect, session: &TerminalSession, number: usize) {
     let (glyph, color) = if !session.alive {
         ("✗", Color::Red)
     } else if session.has_attention {
@@ -14,7 +15,7 @@ pub fn render_thumbnail(frame: &mut Frame, area: Rect, session: &TerminalSession
     } else {
         ("●", Color::Indexed(240))
     };
-    let label = format!(" {} {} ", glyph, session.title);
+    let label = format!(" {} [{}] {} ", glyph, number, session.title);
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(color).bg(Color::Black))

@@ -59,3 +59,23 @@ fn title_command_requires_an_argument() {
 
     assert_eq!(last_message(&app), "Usage: /title <new tile name>");
 }
+
+#[test]
+fn only_command_without_focus_errors() {
+    let dir = setup_test_dir();
+    let mut app = make_app_in(dir.path());
+
+    run(&mut app, "/only");
+
+    assert_eq!(last_message(&app), "No focused agent to keep");
+}
+
+#[test]
+fn restart_command_without_focus_errors() {
+    let dir = setup_test_dir();
+    let mut app = make_app_in(dir.path());
+
+    run(&mut app, "/restart");
+
+    assert_eq!(last_message(&app), "No focused agent to restart");
+}

@@ -1,6 +1,6 @@
 //! Slash commands for managing the agent grid: list tiles, focus a tile by
-//! number, and rename the focused tile. All are command-driven so they never
-//! steal keys from the focused agent.
+//! number, rename the focused tile, close the others, and restart the focused
+//! tile. All are command-driven so they never steal keys from the focused agent.
 
 use super::super::App;
 
@@ -11,6 +11,8 @@ impl App {
             "/agents" | "/ls" => self.list_agents(),
             "/focus" | "/f" => self.focus_agent_by_arg(args),
             "/title" => self.rename_focused_agent(args),
+            "/only" => self.close_other_agents(),
+            "/restart" => self.restart_focused_agent(),
             _ => return false,
         }
         true
@@ -121,5 +123,41 @@ impl App {
             t.title = title.to_string();
         }
         self.feedback.info(format!("Renamed tile to {}", title));
+    }
+
+    /// `/only` — close every tile except the focused one (tmux `kill-pane -a`).
+    fn close_other_agents(&mut self) {
+        let Some(keep) = self.focused_terminal else {
+            self.feedback.error("No focused agent to keep".to_string());
+            return;
+        };
+        let others: Vec<usize> = self
+            .agent_order()
+            .into_iter()
+            .filter(|id| *id != keep)
+            .collect();
+        let n = others.len();
+        for id in others {
+            self.close_terminal(id);
+        }
+        self.feedback.info(format!("Closed {} other tile(s)", n));
+    }
+
+    /// `/restart` — respawn the focused tile's original program in its cwd.
+    fn restart_focused_agent(&mut self) {
+        let Some(id) = self.focused_terminal else {
+            self.feedback
+                .error("No focused agent to restart".to_string());
+            return;
+        };
+        let Some(t) = self.terminal_by_id(id) else {
+            return;
+        };
+        let cmd = t.spawn_cmd.clone();
+        let args = t.spawn_args.clone();
+        let cwd = t.cwd.clone();
+        self.close_terminal(id);
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        self.spawn_embedded_terminal_in(&cmd, &arg_refs, cwd);
     }
 }

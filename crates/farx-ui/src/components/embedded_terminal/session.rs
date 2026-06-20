@@ -19,6 +19,10 @@ pub struct TerminalSession {
     pub title: String,
     /// Working directory the session was spawned in.
     pub cwd: std::path::PathBuf,
+    /// The program that was spawned (for `/restart`).
+    pub spawn_cmd: String,
+    /// The arguments the program was spawned with (for `/restart`).
+    pub spawn_args: Vec<String>,
     /// vt100 terminal emulator / parser.
     parser: vt100::Parser,
     /// Channel receiving raw bytes from the PTY reader thread.
@@ -99,6 +103,8 @@ impl TerminalSession {
             id,
             title: cmd.to_string(),
             cwd: cwd.to_path_buf(),
+            spawn_cmd: cmd.to_string(),
+            spawn_args: args.iter().map(|s| s.to_string()).collect(),
             parser,
             output_rx: rx,
             writer,
