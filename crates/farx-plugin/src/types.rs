@@ -29,3 +29,39 @@ pub fn plugin_directory() -> PathBuf {
         .join("farx")
         .join("plugins")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plugin_directory_ends_with_farx_plugins() {
+        let dir = plugin_directory();
+        assert!(dir.ends_with("farx/plugins"));
+    }
+
+    #[test]
+    fn lua_err_wraps_message() {
+        let err = lua_err(mlua::Error::RuntimeError("boom".to_string()));
+        assert!(err.to_string().contains("boom"));
+    }
+
+    #[test]
+    fn plugin_result_and_command_construct() {
+        let cmd = PluginCommand {
+            name: "hello".to_string(),
+            description: "say hi".to_string(),
+            plugin_file: "hello.lua".to_string(),
+        };
+        assert_eq!(cmd.name, "hello");
+        match PluginResult::Message("m".to_string()) {
+            PluginResult::Message(m) => assert_eq!(m, "m"),
+            _ => panic!("wrong variant"),
+        }
+        assert!(matches!(PluginResult::None, PluginResult::None));
+        assert!(matches!(
+            PluginResult::Shell("ls".into()),
+            PluginResult::Shell(_)
+        ));
+    }
+}

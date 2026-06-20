@@ -53,3 +53,25 @@ impl AiTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_tool_has_label_command_and_description() {
+        for &tool in AiTool::all() {
+            assert!(!tool.label().is_empty());
+            assert!(!tool.description().is_empty());
+            let (cmd, _args) = tool.command();
+            assert!(!cmd.is_empty());
+        }
+        assert_eq!(AiTool::all().len(), 5);
+    }
+
+    #[test]
+    fn copilot_command_passes_subcommand() {
+        assert_eq!(AiTool::GithubCopilot.command(), ("gh", &["copilot"][..]));
+        assert_eq!(AiTool::ClaudeCode.command(), ("claude", &[][..]));
+    }
+}

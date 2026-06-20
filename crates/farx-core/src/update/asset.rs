@@ -86,3 +86,7 @@ pub(super) fn make_executable(tmp_bin: &Path) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "asset_tests.rs"]
+mod asset_tests;

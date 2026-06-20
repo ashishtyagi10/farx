@@ -137,4 +137,41 @@ mod tests {
         assert_eq!(tabs.tab_count(), 1);
         assert!(!tabs.close_tab());
     }
+
+    #[test]
+    fn tab_labels_and_edge_cases() {
+        let tmp = tempfile::tempdir().unwrap();
+        let a = tmp.path().join("alpha");
+        let b = tmp.path().join("beta");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+
+        let mut tabs = TabGroup::new(TreeState::new(a));
+        tabs.new_tab(b, false);
+
+        let labels = tabs.tab_labels();
+        assert_eq!(labels.len(), 2);
+        assert_eq!(labels[0].0, "alpha");
+        assert!(!labels[0].1); // not active
+        assert_eq!(labels[1].0, "beta");
+        assert!(labels[1].1); // active
+
+        // switch_to out of range is a no-op.
+        tabs.switch_to(99);
+        assert_eq!(tabs.active_tab(), 1);
+
+        // prev_tab from index 0 wraps to the last tab.
+        tabs.switch_to(0);
+        tabs.prev_tab();
+        assert_eq!(tabs.active_tab(), 1);
+
+        // Closing the active last tab moves active back into range.
+        assert!(tabs.close_tab());
+        assert_eq!(tabs.active_tab(), 0);
+
+        // Single-tab no-op switching.
+        tabs.next_tab();
+        tabs.prev_tab();
+        assert_eq!(tabs.active_tab(), 0);
+    }
 }
