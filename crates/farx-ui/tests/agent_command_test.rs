@@ -79,3 +79,33 @@ fn restart_command_without_focus_errors() {
 
     assert_eq!(last_message(&app), "No focused agent to restart");
 }
+
+#[test]
+fn clear_command_without_focus_errors() {
+    let dir = setup_test_dir();
+    let mut app = make_app_in(dir.path());
+
+    run(&mut app, "/clear");
+
+    assert_eq!(last_message(&app), "No focused agent to clear");
+}
+
+#[test]
+fn clearall_command_without_agents_is_guarded() {
+    let dir = setup_test_dir();
+    let mut app = make_app_in(dir.path());
+
+    run(&mut app, "/clearall");
+
+    assert_eq!(last_message(&app), "No agents to clear");
+}
+
+#[test]
+fn last_command_without_history_is_guarded() {
+    let dir = setup_test_dir();
+    let mut app = make_app_in(dir.path());
+
+    run(&mut app, "/last");
+
+    assert_eq!(last_message(&app), "No previous tile");
+}

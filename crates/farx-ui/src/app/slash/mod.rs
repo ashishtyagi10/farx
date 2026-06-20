@@ -3,6 +3,7 @@
 //! returns `true` and execution stops.
 
 mod agents;
+mod agents_nav;
 mod ai;
 mod core;
 mod files;
@@ -21,6 +22,7 @@ impl App {
 
         self.slash_core(cmd, args)
             || self.slash_agents(cmd, args)
+            || self.slash_agents_nav(cmd, args)
             || self.slash_ai(cmd, args)
             || self.slash_files(cmd, args)
             || self.slash_plugin_or_unknown(cmd, args)

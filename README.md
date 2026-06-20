@@ -240,7 +240,10 @@ command line:
 | `/agents` or `/ls` | List running tiles with their number, title, state (focused / minimized / exited), and working directory |
 | `/focus <n>` or `/f <n>` | Focus the tile numbered `n` (the `[n]` shown in each tile's title bar); promotes a minimized tile back into the grid |
 | `/title <name>` | Rename the focused tile — handy for telling apart several agents of the same kind |
+| `/next` / `/prev` | Cycle focus forward / backward through the tiles |
+| `/last` | Jump back to the previously-focused tile (ping-pong between two agents) |
 | `/restart` | Respawn the focused tile's program in its original directory — useful to revive an exited agent |
+| `/clear` / `/clearall` | Reset the focused tile's view / every tile's view |
 | `/only` | Close every tile except the focused one |
 | `/close` or `/x` | Close the focused tile; `/closeall` closes every tile |
 

@@ -159,4 +159,10 @@ impl TerminalSession {
     pub fn screen(&self) -> &vt100::Screen {
         self.parser.screen()
     }
+
+    /// Clear the rendered view by resetting the vt100 parser. The underlying
+    /// program is untouched — its next output simply repaints a fresh screen.
+    pub fn clear_screen(&mut self) {
+        self.parser = vt100::Parser::new(self.rows, self.cols, 100);
+    }
 }

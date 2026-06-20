@@ -77,6 +77,8 @@ pub struct App {
     pub pending_install: bool,
     pub terminals: Vec<crate::components::embedded_terminal::TerminalSession>,
     pub focused_terminal: Option<usize>,
+    /// The tile focused before the current one, for `/last` ping-pong.
+    pub(super) last_focused_terminal: Option<usize>,
     /// Monotonic counter for stable terminal ids.
     pub(super) next_terminal_id: usize,
     /// LRU-ordered grid layout tracking which terminals are full vs minimized.

@@ -91,18 +91,11 @@ impl App {
             }
         };
         let id = order[n - 1];
-        self.focused_terminal = Some(id);
-        // Pull a minimized tile up into the full grid; leave full tiles in place.
-        if self.grid.minimized().contains(&id) {
-            self.grid.touch(id);
-        }
-        let title = match self.terminal_by_id_mut(id) {
-            Some(t) => {
-                t.has_attention = false;
-                t.title.clone()
-            }
-            None => return,
-        };
+        self.focus_tile(id);
+        let title = self
+            .terminal_by_id(id)
+            .map(|t| t.title.clone())
+            .unwrap_or_default();
         self.feedback.info(format!("Focused {}. {}", n, title));
     }
 

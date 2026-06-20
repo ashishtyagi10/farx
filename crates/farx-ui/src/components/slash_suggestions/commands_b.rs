@@ -3,8 +3,16 @@ use super::command::SlashCommand;
 /// Second half of the slash command catalog (sorted, M through Y).
 pub const PART_B: &[SlashCommand] = &[
     SlashCommand {
+        command: "/last",
+        description: "Focus the previously-focused tile",
+    },
+    SlashCommand {
         command: "/menu",
         description: "Open menu bar",
+    },
+    SlashCommand {
+        command: "/next",
+        description: "Focus the next agent tile",
     },
     SlashCommand {
         command: "/only",
@@ -21,6 +29,10 @@ pub const PART_B: &[SlashCommand] = &[
     SlashCommand {
         command: "/plugin",
         description: "List or run plugins",
+    },
+    SlashCommand {
+        command: "/prev",
+        description: "Focus the previous agent tile",
     },
     SlashCommand {
         command: "/recent",

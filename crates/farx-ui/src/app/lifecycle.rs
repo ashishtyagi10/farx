@@ -105,6 +105,7 @@ impl App {
             pending_install: false,
             terminals: Vec::new(),
             focused_terminal: None,
+            last_focused_terminal: None,
             next_terminal_id: 0,
             grid: farx_core::GridLayout::new(),
             terminal_event_tx: None,

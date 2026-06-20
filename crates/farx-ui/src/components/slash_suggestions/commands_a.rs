@@ -39,6 +39,14 @@ pub const PART_A: &[SlashCommand] = &[
         description: "Show SHA-256 checksums",
     },
     SlashCommand {
+        command: "/clear",
+        description: "Clear the focused agent tile's view",
+    },
+    SlashCommand {
+        command: "/clearall",
+        description: "Clear every agent tile's view",
+    },
+    SlashCommand {
         command: "/chmod",
         description: "Change file permissions",
     },

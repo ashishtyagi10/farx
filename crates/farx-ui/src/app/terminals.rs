@@ -89,11 +89,20 @@ impl App {
         }
     }
 
-    /// Cycle focus to the next agent tile — Tab / F4 key.
-    /// Walks `self.grid.full()` then `self.grid.minimized()` (wrapping).
-    /// Focusing a minimized id calls `self.grid.touch(id)` so it promotes
-    /// into the full set on the next rendered frame.
+    /// Cycle focus to the next agent tile — Tab / F4 key (and `/next`).
     pub(super) fn cycle_focus(&mut self) {
+        self.step_focus(1);
+    }
+
+    /// Cycle focus to the previous agent tile — `/prev`.
+    pub(super) fn cycle_focus_back(&mut self) {
+        self.step_focus(-1);
+    }
+
+    /// Move focus by `delta` steps through `grid.full()` then
+    /// `grid.minimized()` (wrapping). Focusing a minimized id calls
+    /// `grid.touch(id)` so it promotes into the full set on the next frame.
+    fn step_focus(&mut self, delta: isize) {
         let order: Vec<usize> = self
             .grid
             .full()
@@ -105,21 +114,31 @@ impl App {
             self.focused_terminal = None;
             return;
         }
+        let len = order.len() as isize;
         let next = match self.focused_terminal {
             Some(cur) => {
-                let i = order.iter().position(|x| *x == cur).unwrap_or(0);
-                order[(i + 1) % order.len()]
+                let i = order.iter().position(|x| *x == cur).unwrap_or(0) as isize;
+                order[(((i + delta) % len + len) % len) as usize]
             }
             None => order[0],
         };
-        self.focused_terminal = Some(next);
+        self.focus_tile(next);
+    }
+
+    /// Focus tile `id`: record the previously-focused tile for `/last`, promote
+    /// it if minimized, and clear its attention flag.
+    pub(crate) fn focus_tile(&mut self, id: usize) {
+        if self.focused_terminal != Some(id) {
+            self.last_focused_terminal = self.focused_terminal;
+        }
+        self.focused_terminal = Some(id);
         // Only reorder when focusing a currently-minimized tile (pull it up
         // into the grid). Cycling among full tiles keeps their positions
         // stable so they don't shuffle under the user.
-        if self.grid.minimized().contains(&next) {
-            self.grid.touch(next);
+        if self.grid.minimized().contains(&id) {
+            self.grid.touch(id);
         }
-        if let Some(t) = self.terminal_by_id_mut(next) {
+        if let Some(t) = self.terminal_by_id_mut(id) {
             t.has_attention = false;
         }
     }
