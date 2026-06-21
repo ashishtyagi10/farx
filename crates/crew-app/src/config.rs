@@ -8,13 +8,17 @@ fn default_nav_width() -> f32 {
     210.0
 }
 
+fn default_show_nav() -> bool {
+    true
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CrewConfig {
     #[serde(default = "default_font_size")]
     pub font_size: f32,
     #[serde(default = "default_nav_width")]
     pub nav_width: f32,
-    #[serde(default)]
+    #[serde(default = "default_show_nav")]
     pub show_nav: bool,
 }
 
@@ -23,7 +27,7 @@ impl Default for CrewConfig {
         Self {
             font_size: default_font_size(),
             nav_width: default_nav_width(),
-            show_nav: false,
+            show_nav: default_show_nav(),
         }
     }
 }
@@ -84,7 +88,7 @@ mod tests {
     fn default_values() {
         let cfg = CrewConfig::default();
         assert_eq!(cfg.font_size, 14.0);
-        assert!(!cfg.show_nav);
+        assert!(cfg.show_nav);
     }
 
     #[test]
@@ -105,7 +109,7 @@ mod tests {
         let cfg = CrewConfig::from_toml_str("font_size = 25.0\n");
         assert_eq!(cfg.font_size, 25.0);
         assert_eq!(cfg.nav_width, 210.0);
-        assert!(!cfg.show_nav);
+        assert!(cfg.show_nav);
     }
 
     #[test]
