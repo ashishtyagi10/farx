@@ -61,6 +61,20 @@ impl ApplicationHandler for CrewApp {
         if self.sidebar.refresh() {
             any_changed = true;
         }
+        // Close terminal panes whose shell has exited (e.g. the user typed `exit`).
+        let exited: Vec<usize> = self
+            .panes
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| matches!(&p.content, PaneContent::Terminal(t) if t.pty.exited()))
+            .map(|(i, _)| i)
+            .collect();
+        if !exited.is_empty() {
+            for i in exited.into_iter().rev() {
+                self.close_pane(i);
+            }
+            any_changed = true;
+        }
         let actions_ran = !collected_actions.is_empty();
         for action in collected_actions {
             use crate::chat::HostAction;

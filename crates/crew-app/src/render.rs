@@ -55,17 +55,21 @@ impl CrewApp {
         let mut scenes = build_scenes(&self.panes, self.focused);
 
         if self.panes.is_empty() {
+            // Use the SAME rect a single grid pane would occupy (gap-inset) so the
+            // welcome area matches a Cmd+T terminal exactly.
             let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
-            let wcols = (c.w / cw).floor() as u16;
-            let wrows = (c.h / ch).floor() as u16;
-            scenes.push(PaneScene {
-                cells: welcome::welcome_cells(wcols, wrows),
-                x: c.x,
-                y: c.y,
-                w: c.w,
-                h: c.h,
-                focused: false,
-            });
+            if let Some(r) = pane_rects_at(1, c.x, c.y, c.w, c.h, GAP).first() {
+                let wcols = (r.w / cw).floor() as u16;
+                let wrows = (r.h / ch).floor() as u16;
+                scenes.push(PaneScene {
+                    cells: welcome::welcome_cells(wcols, wrows),
+                    x: r.x,
+                    y: r.y,
+                    w: r.w,
+                    h: r.h,
+                    focused: false,
+                });
+            }
         }
 
         if self.config.show_nav {

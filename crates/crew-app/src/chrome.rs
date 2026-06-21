@@ -6,9 +6,11 @@ use crate::layout::Rect;
 /// Padding inset for the input bar card.
 pub const INPUT_PAD: f32 = 6.0;
 
-/// Height in physical px reserved for the bottom input bar (≈3 cell rows + padding).
+/// Height in physical px reserved for the bottom input bar. Must yield at least 3
+/// cell rows AFTER the `2*gap` inset (the card needs top border + input + bottom
+/// border), so reserve `3 rows + 2*gap + pad`.
 pub fn input_h(cell_h: f32) -> f32 {
-    cell_h * 3.0 + INPUT_PAD
+    cell_h * 3.0 + 2.0 * crate::app::GAP + INPUT_PAD
 }
 
 /// Bottom strip for the docked input bar, spanning the **action area** only

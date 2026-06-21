@@ -7,6 +7,7 @@ pub struct PtyTerm {
     core: TermCore,
     master: Box<dyn portable_pty::MasterPty + Send>,
     rx: Receiver<Vec<u8>>,
+    exited: bool,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
 }
 
@@ -52,8 +53,15 @@ impl PtyTerm {
             core: TermCore::new(size),
             master: pair.master,
             rx,
+            exited: false,
             _child: child,
         })
+    }
+
+    /// True once the child process has exited and all its output has been drained
+    /// (the reader thread ended and the channel disconnected). Set by `try_read`.
+    pub fn exited(&self) -> bool {
+        self.exited
     }
 
     /// Returns a fresh writer to the master PTY end (sends input to the shell).
@@ -64,10 +72,21 @@ impl PtyTerm {
     /// Drains all pending bytes from the reader thread into the terminal model.
     /// Returns the total number of bytes consumed.
     pub fn try_read(&mut self) -> usize {
+        use std::sync::mpsc::TryRecvError;
         let mut total = 0;
-        while let Ok(chunk) = self.rx.try_recv() {
-            total += chunk.len();
-            self.core.feed(&chunk);
+        loop {
+            match self.rx.try_recv() {
+                Ok(chunk) => {
+                    total += chunk.len();
+                    self.core.feed(&chunk);
+                }
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    // Reader thread ended → child exited and output is drained.
+                    self.exited = true;
+                    break;
+                }
+            }
         }
         total
     }
