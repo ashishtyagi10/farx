@@ -68,6 +68,7 @@ impl CrewApp {
                     w: r.w,
                     h: r.h,
                     focused: false,
+                    bordered: true,
                 });
             }
         }
@@ -83,6 +84,7 @@ impl CrewApp {
                 w: sb.w,
                 h: sb.h,
                 focused: false,
+                bordered: true,
             });
         }
 
@@ -98,6 +100,7 @@ impl CrewApp {
             w: ib.w,
             h: ib.h,
             focused: false,
+            bordered: false,
         });
 
         scenes
