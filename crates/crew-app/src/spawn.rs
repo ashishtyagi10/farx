@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::app::{CrewApp, FALLBACK_SIZE, GAP};
+use crate::app::{CrewApp, FALLBACK_SIZE};
 use crate::chat::ChatPane;
 use crate::config::CrewConfig;
 use crate::layout::Rect;
@@ -36,7 +36,9 @@ impl CrewApp {
         match PtyTerm::spawn_args(grid, command, args) {
             Ok(pty) => {
                 let input = pty.writer();
-                let mut pane = Pane {
+                // rect/grid are placeholders; build_frame's relayout sizes the pane
+                // to the content area (right of the sidebar) on the next frame.
+                let pane = Pane {
                     content: PaneContent::Terminal(Box::new(TermPane { pty, input })),
                     grid,
                     rect: Rect {
@@ -47,18 +49,6 @@ impl CrewApp {
                     },
                     label: Some(label),
                 };
-                if let Some(renderer) = &self.renderer {
-                    let (cell_w, cell_h) = renderer.cell_size();
-                    let (sw, sh) = renderer.surface_size();
-                    let n = self.panes.len() + 1;
-                    let rects = crate::layout::pane_rects(n, sw as f32, sh as f32, GAP);
-                    if let Some(r) = rects.last() {
-                        pane.rect = *r;
-                        let cols = ((r.w / cell_w).floor() as u16).max(1);
-                        let rows = ((r.h / cell_h).floor() as u16).max(1);
-                        pane.grid = GridSize { cols, rows };
-                    }
-                }
                 self.panes.push(pane);
                 self.focused = self.panes.len() - 1;
                 self.redraw();
