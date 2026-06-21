@@ -1,4 +1,4 @@
-use crew_term::{GridSize, RenderCell};
+use crew_term::RenderCell;
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, NamedKey};
 
@@ -18,16 +18,18 @@ pub fn key_to_bytes(event: &KeyEvent) -> Option<Vec<u8>> {
     }
 }
 
-/// Flatten visible cells into rows of text for the single-string renderer.
-pub fn cells_to_string(cells: &[RenderCell], size: GridSize) -> String {
-    let mut grid = vec![vec![' '; size.cols as usize]; size.rows as usize];
-    for c in cells {
-        if (c.row as usize) < grid.len() && (c.col as usize) < grid[0].len() {
-            grid[c.row as usize][c.col as usize] = c.c;
-        }
-    }
-    grid.into_iter()
-        .map(|row| row.into_iter().collect::<String>())
-        .collect::<Vec<_>>()
-        .join("\n")
+/// Map `crew_term::RenderCell` slices to `crew_render::CellView` — field-for-field.
+pub fn to_cellviews(cells: &[RenderCell]) -> Vec<crew_render::CellView> {
+    cells
+        .iter()
+        .map(|c| crew_render::CellView {
+            col: c.col,
+            row: c.row,
+            c: c.c,
+            fg: c.fg,
+            bg: c.bg,
+            bold: c.bold,
+            italic: c.italic,
+        })
+        .collect()
 }
