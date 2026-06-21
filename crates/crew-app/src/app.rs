@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -9,7 +10,7 @@ use winit::window::{Window, WindowId};
 use crew_render::{Gpu, TextLayer};
 use crew_term::{GridSize, PtyTerm, TermModel};
 
-use crate::session::cells_to_string;
+use crate::session::{cells_to_string, key_to_bytes};
 
 const PTY_SIZE: GridSize = GridSize { cols: 80, rows: 24 };
 const POLL_MS: u64 = 16;
@@ -20,6 +21,7 @@ pub struct CrewApp {
     gpu: Option<Gpu>,
     text: Option<TextLayer>,
     pty: Option<PtyTerm>,
+    input: Option<Box<dyn std::io::Write + Send>>,
 }
 
 impl ApplicationHandler for CrewApp {
@@ -33,9 +35,12 @@ impl ApplicationHandler for CrewApp {
                 let pty = PtyTerm::spawn(PTY_SIZE, "bash")
                     .or_else(|_| PtyTerm::spawn(PTY_SIZE, "sh"))
                     .ok();
+                // Take the single-use writer before storing the pty.
+                let input = pty.as_ref().map(|p| p.writer());
                 self.gpu = Some(gpu);
                 self.text = Some(text);
                 self.pty = pty;
+                self.input = input;
                 self.window = Some(window.clone());
                 window.request_redraw();
             }
@@ -67,6 +72,18 @@ impl ApplicationHandler for CrewApp {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::KeyboardInput { event, .. } => {
+                if let Some(bytes) = key_to_bytes(&event) {
+                    if let Some(writer) = &mut self.input {
+                        if let Err(e) = writer.write_all(&bytes).and_then(|_| writer.flush()) {
+                            eprintln!("pty write error: {e}");
+                        }
+                    }
+                }
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
             WindowEvent::Resized(size) => {
                 if let Some(gpu) = &mut self.gpu {
                     gpu.resize(size.width, size.height);
