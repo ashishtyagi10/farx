@@ -7,6 +7,7 @@ pub mod config;
 mod gauges;
 mod handler;
 pub(crate) mod inputbar;
+mod keys;
 mod layout;
 mod pane;
 mod render;

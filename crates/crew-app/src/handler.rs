@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -6,13 +5,11 @@ use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::Key;
 use winit::window::{Window, WindowId};
 
 use crate::app::{CrewApp, POLL_MS};
 use crate::config::CrewConfig;
 use crate::pane::PaneContent;
-use crate::session::key_to_bytes;
 use crew_render::Renderer;
 
 impl ApplicationHandler for CrewApp {
@@ -103,60 +100,7 @@ impl ApplicationHandler for CrewApp {
                 self.redraw();
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                let mstate = self.mods.state();
-                // Cmd+Q / Ctrl+Q quits the app.
-                if event.state.is_pressed()
-                    && (mstate.super_key() || mstate.control_key())
-                    && matches!(&event.logical_key, Key::Character(s) if s.as_str() == "q")
-                {
-                    event_loop.exit();
-                    return;
-                }
-                // Enter submits the input bar when it is focused (key handler task wires focus).
-                if event.state.is_pressed()
-                    && self.input.focused
-                    && matches!(
-                        &event.logical_key,
-                        Key::Named(winit::keyboard::NamedKey::Enter)
-                    )
-                {
-                    let _ = self.submit_input();
-                    self.redraw();
-                    return;
-                }
-                if self.mods.state().super_key() && event.state.is_pressed() {
-                    if let Key::Character(s) = &event.logical_key {
-                        let s = s.to_string();
-                        if self.handle_super_chord(&s) {
-                            event_loop.exit();
-                        }
-                    }
-                    self.redraw();
-                } else {
-                    let focused = self.focused;
-                    let mut applied: Option<CrewConfig> = None;
-                    if let Some(pane) = self.panes.get_mut(focused) {
-                        match &mut pane.content {
-                            PaneContent::Terminal(t) => {
-                                if let Some(bytes) = key_to_bytes(&event) {
-                                    if let Err(e) =
-                                        t.input.write_all(&bytes).and_then(|_| t.input.flush())
-                                    {
-                                        eprintln!("pty write error: {e}");
-                                    }
-                                }
-                            }
-                            PaneContent::Chat(c) => c.on_key(&event),
-                            PaneContent::Settings(s) => {
-                                applied = s.on_key(&event).map(|c| c.config);
-                            }
-                        }
-                    }
-                    if let Some(cfg) = applied {
-                        self.apply_settings(cfg);
-                    }
-                    self.redraw();
-                }
+                self.on_key_event(event_loop, &event);
             }
             WindowEvent::Resized(size) => {
                 if let Some(renderer) = &mut self.renderer {

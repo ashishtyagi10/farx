@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::sync::Arc;
 
 use winit::event::Modifiers;
@@ -5,7 +6,7 @@ use winit::window::Window;
 
 use crate::config::CrewConfig;
 use crate::inputbar::InputBar;
-use crate::pane::Pane;
+use crate::pane::{Pane, PaneContent};
 use crate::session::grid_for;
 use crate::statspane::StatsPane;
 use crew_render::Renderer;
@@ -57,6 +58,7 @@ impl CrewApp {
     pub(crate) fn handle_super_chord(&mut self, s: &str) -> bool {
         let n = self.panes.len().max(1);
         match s {
+            "i" => self.input.focused = !self.input.focused,
             "," => self.spawn_settings_pane(),
             "g" => self.toggle_sidebar(),
             "t" => self.spawn_new_pane(),
@@ -91,10 +93,25 @@ impl CrewApp {
         false
     }
 
-    /// Submit the input bar text (called by key handler on Enter).
-    /// Returns the submitted text if any.
-    pub(crate) fn submit_input(&mut self) -> Option<String> {
-        self.input.submit()
+    /// Write `line + "\n"` to the focused pane if it is a Terminal.
+    /// Does nothing if `line` is empty or the focused pane is not a Terminal.
+    pub(crate) fn submit_input(&mut self, line: String) {
+        if line.is_empty() {
+            return;
+        }
+        let focused = self.focused;
+        if let Some(pane) = self.panes.get_mut(focused) {
+            if let PaneContent::Terminal(t) = &mut pane.content {
+                if let Err(e) = t
+                    .input
+                    .write_all(line.as_bytes())
+                    .and_then(|_| t.input.write_all(b"\n"))
+                    .and_then(|_| t.input.flush())
+                {
+                    eprintln!("submit_input write error: {e}");
+                }
+            }
+        }
     }
 
     pub(crate) fn toggle_sidebar(&mut self) {

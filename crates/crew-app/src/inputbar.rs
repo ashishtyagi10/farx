@@ -1,5 +1,6 @@
 //! Docked bottom command bar: a single-line text input rendered as a titled card.
 use crew_render::CellView;
+use winit::keyboard::{Key, NamedKey};
 
 use crate::boxdraw::{self, BoxRect};
 
@@ -62,13 +63,22 @@ impl InputBar {
         out
     }
 
-    /// If `text` is non-empty, take it and return `Some`; otherwise `None`.
-    pub fn submit(&mut self) -> Option<String> {
-        if self.text.is_empty() {
-            None
-        } else {
-            Some(std::mem::take(&mut self.text))
+    /// Handle a winit key event: translate and delegate to `input_reduce`.
+    ///
+    /// Returns `Some(submitted_line)` when Enter is pressed (the text before clearing),
+    /// or `None` for all other keys.
+    pub fn on_key(&mut self, key: &winit::event::KeyEvent) -> Option<String> {
+        if !key.state.is_pressed() {
+            return None;
         }
+        let (ch, enter, backspace) = match &key.logical_key {
+            Key::Named(NamedKey::Enter) => (None, true, false),
+            Key::Named(NamedKey::Backspace) => (None, false, true),
+            Key::Named(NamedKey::Space) => (Some(' '), false, false),
+            Key::Character(s) => (s.chars().next(), false, false),
+            _ => (None, false, false),
+        };
+        crate::chatlayout::input_reduce(&mut self.text, ch, enter, backspace)
     }
 }
 
@@ -89,23 +99,6 @@ mod tests {
         assert!(has('>'), "missing prompt '>'");
         assert!(has('l'), "missing 'l'");
         assert!(has('s'), "missing 's'");
-    }
-
-    #[test]
-    fn submit_returns_text_and_clears() {
-        let mut bar = InputBar {
-            text: "hi".into(),
-            focused: false,
-        };
-        let result = bar.submit();
-        assert_eq!(result, Some("hi".to_string()));
-        assert!(bar.text.is_empty());
-    }
-
-    #[test]
-    fn submit_empty_returns_none() {
-        let mut bar = InputBar::default();
-        assert_eq!(bar.submit(), None);
     }
 
     #[test]
