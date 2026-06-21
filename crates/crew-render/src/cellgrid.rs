@@ -3,13 +3,16 @@ use glyphon::{
     TextBounds, TextRenderer, Viewport, Wrap,
 };
 
+use crate::celltext::{probe_cell_width, FontParams};
 use crate::gpu::Gpu;
-use crate::quads::{Quad, QuadLayer};
+use crate::quads::QuadLayer;
+use crate::scene::{build_scene, PaneBuffer, PaneScene};
 
-use crate::celltext::{build_rich_text, probe_cell_width};
+/// Default terminal background colour (must match scene.rs).
+pub(crate) const DEFAULT_BG: (u8, u8, u8) = (10, 10, 18);
 
-// Default terminal background colour.
-const DEFAULT_BG: (u8, u8, u8) = (10, 10, 18);
+pub(crate) const FONT_SIZE: f32 = 16.0;
+pub(crate) const LINE_HEIGHT: f32 = 20.0;
 
 /// A single terminal cell to be rendered.
 pub struct CellView {
@@ -30,17 +33,18 @@ pub struct GridMetrics {
     pub rows: u16,
 }
 
-/// Renders a terminal grid: per-cell background quads + per-cell colored text.
+/// Renders a scene of panes: per-cell bg quads, pane borders, per-pane text.
 pub struct CellGrid {
-    font_system: FontSystem,
+    pub(crate) font_system: FontSystem,
     swash: SwashCache,
     viewport: Viewport,
     atlas: TextAtlas,
     renderer: TextRenderer,
-    buffer: Buffer,
+    /// One Buffer per pane, plus (origin_x, origin_y, pane_w, pane_h).
+    pane_buffers: Vec<PaneBuffer>,
     quad_layer: QuadLayer,
-    cell_w: f32,
-    cell_h: f32,
+    pub(crate) cell_w: f32,
+    pub(crate) cell_h: f32,
 }
 
 impl CellGrid {
@@ -57,18 +61,15 @@ impl CellGrid {
             None,
         );
 
-        const FONT_SIZE: f32 = 16.0;
-        const LINE_HEIGHT: f32 = 20.0;
-
-        let mut buffer = Buffer::new(&mut font_system, Metrics::new(FONT_SIZE, LINE_HEIGHT));
-        buffer.set_wrap(&mut font_system, Wrap::None);
-        buffer.set_size(
+        let mut probe_buf = Buffer::new(&mut font_system, Metrics::new(FONT_SIZE, LINE_HEIGHT));
+        probe_buf.set_wrap(&mut font_system, Wrap::None);
+        probe_buf.set_size(
             &mut font_system,
             Some(gpu.config.width as f32),
             Some(gpu.config.height as f32),
         );
 
-        let cell_w = probe_cell_width(&mut buffer, &mut font_system, FONT_SIZE);
+        let cell_w = probe_cell_width(&mut probe_buf, &mut font_system, FONT_SIZE);
         let cell_h = LINE_HEIGHT;
         let quad_layer = QuadLayer::new(&gpu.device, gpu.format);
 
@@ -78,7 +79,7 @@ impl CellGrid {
             viewport,
             atlas,
             renderer,
-            buffer,
+            pane_buffers: Vec::new(),
             quad_layer,
             cell_w,
             cell_h,
@@ -90,36 +91,27 @@ impl CellGrid {
         (self.cell_w, self.cell_h)
     }
 
-    /// Update the text buffer's layout bounds to match the new surface size.
-    pub fn resize(&mut self, width: f32, height: f32) {
-        self.buffer
-            .set_size(&mut self.font_system, Some(width), Some(height));
-    }
+    /// Update the text buffer layout bounds on resize (no-op now; sizing per pane).
+    pub fn resize(&mut self, _width: f32, _height: f32) {}
 
-    /// Upload cell data: builds background quads + rich-text foreground.
-    /// `gpu` is needed to upload quad instance data to the GPU.
-    pub fn set_cells(&mut self, gpu: &Gpu, cells: &[CellView], metrics: &GridMetrics) {
-        let quads: Vec<Quad> = cells
-            .iter()
-            .filter(|c| c.bg != DEFAULT_BG)
-            .map(|c| Quad {
-                x: f32::from(c.col) * metrics.cell_w,
-                y: f32::from(c.row) * metrics.cell_h,
-                w: metrics.cell_w,
-                h: metrics.cell_h,
-                color: [
-                    c.bg.0 as f32 / 255.0,
-                    c.bg.1 as f32 / 255.0,
-                    c.bg.2 as f32 / 255.0,
-                    1.0,
-                ],
-            })
-            .collect();
+    /// Upload a scene of panes: backgrounds + borders as quads, one Buffer per pane.
+    pub fn set_scene(&mut self, gpu: &Gpu, panes: &[PaneScene]) {
+        let params = FontParams {
+            font_size: FONT_SIZE,
+            line_height: LINE_HEIGHT,
+        };
+        let (quads, buffers) = build_scene(
+            panes,
+            self.cell_w,
+            self.cell_h,
+            &mut self.font_system,
+            &params,
+        );
         self.quad_layer.set_quads(&gpu.device, &quads);
-        build_rich_text(&mut self.buffer, &mut self.font_system, cells, metrics);
+        self.pane_buffers = buffers;
     }
 
-    /// Update viewports and prepare GPU uploads.
+    /// Update viewports and prepare GPU uploads for all pane text areas.
     pub fn prepare(&mut self, gpu: &Gpu) {
         self.quad_layer.set_viewport(
             &gpu.queue,
@@ -133,20 +125,26 @@ impl CellGrid {
                 height: gpu.config.height,
             },
         );
-        let area = TextArea {
-            buffer: &self.buffer,
-            left: 0.0,
-            top: 0.0,
-            scale: 1.0,
-            bounds: TextBounds {
-                left: 0,
-                top: 0,
-                right: gpu.config.width as i32,
-                bottom: gpu.config.height as i32,
-            },
-            default_color: Color::rgb(220, 220, 220),
-            custom_glyphs: &[],
-        };
+
+        let areas: Vec<TextArea<'_>> = self
+            .pane_buffers
+            .iter()
+            .map(|(buf, ox, oy, pw, ph)| TextArea {
+                buffer: buf,
+                left: *ox,
+                top: *oy,
+                scale: 1.0,
+                bounds: TextBounds {
+                    left: *ox as i32,
+                    top: *oy as i32,
+                    right: (*ox + *pw) as i32,
+                    bottom: (*oy + *ph) as i32,
+                },
+                default_color: Color::rgb(220, 220, 220),
+                custom_glyphs: &[],
+            })
+            .collect();
+
         self.renderer
             .prepare(
                 &gpu.device,
@@ -154,13 +152,13 @@ impl CellGrid {
                 &mut self.font_system,
                 &mut self.atlas,
                 &self.viewport,
-                [area],
+                areas,
                 &mut self.swash,
             )
             .expect("glyphon prepare failed");
     }
 
-    /// Draw backgrounds then text into the active render pass.
+    /// Draw backgrounds + borders then all pane text into the active render pass.
     pub fn draw<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
         self.quad_layer.draw(pass);
         self.renderer
