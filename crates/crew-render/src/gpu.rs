@@ -7,8 +7,6 @@ pub struct Gpu {
     pub queue: wgpu::Queue,
     pub surface: wgpu::Surface<'static>,
     pub config: wgpu::SurfaceConfiguration,
-    // Used by Task 6 (text rendering).
-    #[allow(dead_code)]
     pub format: wgpu::TextureFormat,
 }
 
@@ -55,57 +53,5 @@ impl Gpu {
         self.config.width = w.max(1);
         self.config.height = h.max(1);
         self.surface.configure(&self.device, &self.config);
-    }
-
-    pub fn frame_clear(&self) -> anyhow::Result<()> {
-        // get_current_texture() returns an enum, not a Result.
-        let frame = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t) => t,
-            wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-            wgpu::CurrentSurfaceTexture::Timeout => {
-                anyhow::bail!("surface texture timeout")
-            }
-            wgpu::CurrentSurfaceTexture::Occluded => return Ok(()),
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                anyhow::bail!("surface outdated — reconfigure needed")
-            }
-            wgpu::CurrentSurfaceTexture::Lost => {
-                anyhow::bail!("surface lost")
-            }
-            wgpu::CurrentSurfaceTexture::Validation => {
-                anyhow::bail!("surface validation error")
-            }
-        };
-
-        let view = frame.texture.create_view(&Default::default());
-        let mut enc = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        {
-            let _pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("clear"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.05,
-                            g: 0.05,
-                            b: 0.07,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-        }
-        self.queue.submit(Some(enc.finish()));
-        frame.present();
-        Ok(())
     }
 }
