@@ -4,5 +4,7 @@ mod celltext;
 mod gpu;
 mod quads;
 mod renderer;
-pub use cellgrid::{CellView, GridMetrics};
+mod scene;
+pub use cellgrid::CellView;
 pub use renderer::Renderer;
+pub use scene::PaneScene;

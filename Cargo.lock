@@ -761,7 +761,6 @@ dependencies = [
  "anyhow",
  "crew-render",
  "crew-term",
- "wgpu",
  "winit",
 ]
 

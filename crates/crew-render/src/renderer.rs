@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use winit::window::Window;
 
-use crate::cellgrid::{CellGrid, CellView, GridMetrics};
+use crate::cellgrid::CellGrid;
 use crate::gpu::Gpu;
+use crate::scene::PaneScene;
 
 /// Top-level renderer: owns `Gpu` + `CellGrid` and orchestrates the full frame.
 pub struct Renderer {
@@ -33,10 +34,10 @@ impl Renderer {
         (self.gpu.config.width, self.gpu.config.height)
     }
 
-    /// Upload cells, acquire texture, clear, draw, submit, and present.
+    /// Upload a scene of panes, render, and present the frame.
     /// Skips the frame on surface errors (Outdated/Lost).
-    pub fn frame(&mut self, cells: &[CellView], metrics: GridMetrics) {
-        self.cell_grid.set_cells(&self.gpu, cells, &metrics);
+    pub fn frame(&mut self, panes: &[PaneScene]) {
+        self.cell_grid.set_scene(&self.gpu, panes);
         self.cell_grid.prepare(&self.gpu);
 
         let frame = match self.gpu.surface.get_current_texture() {

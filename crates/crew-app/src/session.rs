@@ -2,6 +2,15 @@ use crew_term::{GridSize, RenderCell};
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, NamedKey};
 
+use crate::layout::Rect;
+
+/// Return the index of the first rect that contains physical pixel `(x, y)`.
+pub fn pane_at(rects: &[Rect], x: f32, y: f32) -> Option<usize> {
+    rects
+        .iter()
+        .position(|r| x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
+}
+
 /// Compute the terminal grid size that fits in `width x height` pixels given
 /// the font cell dimensions.  Each dimension is clamped to a minimum of 1.
 pub fn grid_for(width: u32, height: u32, cell_w: f32, cell_h: f32) -> GridSize {
@@ -45,6 +54,16 @@ pub fn to_cellviews(cells: &[RenderCell]) -> Vec<crew_render::CellView> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout::pane_rects;
+
+    #[test]
+    fn pane_at_two_panes() {
+        // 2 panes side-by-side in 800x600 with no gap → left pane [0,400) right [400,800)
+        let rects = pane_rects(2, 800.0, 600.0, 0.0);
+        assert_eq!(pane_at(&rects, 10.0, 10.0), Some(0));
+        assert_eq!(pane_at(&rects, 410.0, 10.0), Some(1));
+        assert_eq!(pane_at(&rects, 800.0, 10.0), None);
+    }
 
     #[test]
     fn grid_for_basic() {

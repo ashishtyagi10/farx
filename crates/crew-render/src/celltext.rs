@@ -1,7 +1,13 @@
 //! Rich-text buffer builder for CellGrid.
-use glyphon::{Attrs, Buffer, Color, Family, FontSystem, Shaping, Style, Weight};
+use glyphon::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, Style, Weight, Wrap};
 
-use crate::cellgrid::{CellView, GridMetrics};
+use crate::cellgrid::CellView;
+
+/// Font metrics shared across all pane buffers.
+pub(crate) struct FontParams {
+    pub font_size: f32,
+    pub line_height: f32,
+}
 
 /// Shape "M" and return its advance as the monospace cell width.
 pub(crate) fn probe_cell_width(
@@ -19,17 +25,36 @@ pub(crate) fn probe_cell_width(
     font_size * 0.6
 }
 
-/// Build a rich-text Buffer from cell data: one logical row per terminal row,
-/// with per-character Attrs for colour, weight, and style.
-pub(crate) fn build_rich_text(
+/// Build a new `Buffer` for one pane's cells at the given cols/rows.
+/// The buffer is sized to `(w, h)` pixels and laid out as a cols×rows grid.
+pub(crate) fn build_pane_buffer(
+    font_system: &mut FontSystem,
+    cells: &[CellView],
+    cols: usize,
+    rows: usize,
+    w: f32,
+    h: f32,
+    params: &FontParams,
+) -> Buffer {
+    let mut buffer = Buffer::new(
+        font_system,
+        Metrics::new(params.font_size, params.line_height),
+    );
+    buffer.set_wrap(font_system, Wrap::None);
+    buffer.set_size(font_system, Some(w), Some(h));
+
+    fill_rich_text(&mut buffer, font_system, cells, cols, rows);
+    buffer
+}
+
+/// Fill an existing `Buffer` with rich-text spans for `cells` laid out in cols×rows.
+pub(crate) fn fill_rich_text(
     buffer: &mut Buffer,
     font_system: &mut FontSystem,
     cells: &[CellView],
-    metrics: &GridMetrics,
+    cols: usize,
+    rows: usize,
 ) {
-    let rows = metrics.rows as usize;
-    let cols = metrics.cols as usize;
-
     // Bucket cells into a 2-D grid (row × col).
     let mut grid: Vec<Vec<Option<&CellView>>> = vec![vec![None; cols]; rows];
     for cell in cells {
