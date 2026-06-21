@@ -50,6 +50,8 @@ impl ChatPane {
                 PluginEvent::Error { .. } => {
                     self.connected = false;
                 }
+                // handled in Task 3
+                PluginEvent::SpawnPane { .. } | PluginEvent::SendPane { .. } => {}
             }
         }
         true
