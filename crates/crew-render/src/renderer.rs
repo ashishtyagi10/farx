@@ -24,6 +24,16 @@ impl Renderer {
         self.cell_grid.set_font_size(font_size);
     }
 
+    /// Switch the font family at runtime (`None`/empty → system monospace).
+    pub fn set_font_family(&mut self, family: Option<String>) {
+        self.cell_grid.set_font_family(family);
+    }
+
+    /// Sorted, de-duplicated names of all installed monospace font families.
+    pub fn monospace_families(&self) -> Vec<String> {
+        self.cell_grid.monospace_families()
+    }
+
     pub fn resize(&mut self, w: u32, h: u32) {
         self.gpu.resize(w, h);
         self.cell_grid.resize(w as f32, h as f32);

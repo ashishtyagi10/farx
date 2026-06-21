@@ -83,8 +83,13 @@ impl CrewApp {
             .as_ref()
             .map(Self::current_grid)
             .unwrap_or(FALLBACK_SIZE);
+        let families = self
+            .renderer
+            .as_ref()
+            .map(|r| r.monospace_families())
+            .unwrap_or_default();
         self.panes.push(Pane {
-            content: PaneContent::Settings(SettingsPane::new(self.config)),
+            content: PaneContent::Settings(SettingsPane::new(self.config.clone(), families)),
             grid,
             rect: Rect {
                 x: 0.0,
@@ -97,7 +102,7 @@ impl CrewApp {
         self.focus_new_pane();
     }
 
-    /// Apply updated config: set font size live, persist to disk, and redraw.
+    /// Apply updated config: set font family + size live, persist to disk, and redraw.
     pub(crate) fn apply_settings(&mut self, cfg: CrewConfig) {
         self.config = cfg;
         let scale = self
@@ -106,6 +111,7 @@ impl CrewApp {
             .map(|w| w.scale_factor() as f32)
             .unwrap_or(1.0);
         if let Some(r) = &mut self.renderer {
+            r.set_font_family(self.config.font_family.clone());
             r.set_font_size(self.config.font_size * scale);
         }
         self.config.save();

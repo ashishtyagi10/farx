@@ -7,15 +7,39 @@ use crate::cellgrid::CellView;
 pub(crate) struct FontParams {
     pub font_size: f32,
     pub line_height: f32,
+    /// Chosen family name; `None`/empty falls back to the system monospace.
+    pub family: Option<String>,
 }
 
-/// Shape "M" and return its advance as the monospace cell width.
+/// The cosmic-text `Family` for an optional family name (empty/`None` → system monospace).
+pub(crate) fn family_from(opt: &Option<String>) -> Family<'_> {
+    match opt {
+        Some(name) if !name.is_empty() => Family::Name(name),
+        _ => Family::Monospace,
+    }
+}
+
+/// Sorted, de-duplicated names of all installed monospace font families.
+pub(crate) fn monospace_families(font_system: &FontSystem) -> Vec<String> {
+    let mut names: Vec<String> = font_system
+        .db()
+        .faces()
+        .filter(|f| f.monospaced)
+        .flat_map(|f| f.families.iter().map(|(name, _)| name.clone()))
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Shape "M" and return its advance as the cell width for `family`.
 pub(crate) fn probe_cell_width(
     buffer: &mut Buffer,
     font_system: &mut FontSystem,
     font_size: f32,
+    family: Family,
 ) -> f32 {
-    let attrs = Attrs::new().family(Family::Monospace);
+    let attrs = Attrs::new().family(family);
     buffer.set_text(font_system, "M", &attrs, Shaping::Advanced, None);
     for run in buffer.layout_runs() {
         if let Some(g) = run.glyphs.first() {
@@ -43,18 +67,20 @@ pub(crate) fn build_pane_buffer(
     buffer.set_wrap(font_system, Wrap::None);
     buffer.set_size(font_system, Some(w), Some(h));
 
-    fill_rich_text(&mut buffer, font_system, cells, cols, rows);
+    fill_rich_text(&mut buffer, font_system, cells, cols, rows, &params.family);
     buffer
 }
 
 /// Fill an existing `Buffer` with rich-text spans for `cells` laid out in cols×rows.
-pub(crate) fn fill_rich_text(
+pub(crate) fn fill_rich_text<'a>(
     buffer: &mut Buffer,
     font_system: &mut FontSystem,
     cells: &[CellView],
     cols: usize,
     rows: usize,
+    family: &'a Option<String>,
 ) {
+    let fam = family_from(family);
     // Bucket cells into a 2-D grid (row × col).
     let mut grid: Vec<Vec<Option<&CellView>>> = vec![vec![None; cols]; rows];
     for cell in cells {
@@ -65,18 +91,18 @@ pub(crate) fn fill_rich_text(
         }
     }
 
-    let default_attrs = Attrs::new().family(Family::Monospace);
+    let default_attrs = Attrs::new().family(fam);
 
     // Collect span strings + attrs; keep strings alive so we can borrow them.
     let mut span_strings: Vec<String> = Vec::new();
-    let mut span_attrs: Vec<Attrs<'static>> = Vec::new();
+    let mut span_attrs: Vec<Attrs<'a>> = Vec::new();
 
     for (row_i, row) in grid.iter().enumerate() {
         for cell_opt in row.iter() {
             let (ch, attrs) = match cell_opt {
                 Some(cell) => {
                     let mut a = Attrs::new()
-                        .family(Family::Monospace)
+                        .family(fam)
                         .color(Color::rgb(cell.fg.0, cell.fg.1, cell.fg.2));
                     if cell.bold {
                         a = a.weight(Weight::BOLD);
@@ -108,12 +134,16 @@ pub(crate) fn fill_rich_text(
 
 /// Compute monospace cell dimensions for the given font size without a GPU.
 /// Returns `(cell_w, cell_h)` where `cell_h = font_size * 1.25`.
-pub(crate) fn cell_metrics(fs: &mut FontSystem, font_size: f32) -> (f32, f32) {
+pub(crate) fn cell_metrics(
+    fs: &mut FontSystem,
+    font_size: f32,
+    family: &Option<String>,
+) -> (f32, f32) {
     let cell_h = font_size * 1.25;
     let mut probe_buf = Buffer::new(fs, Metrics::new(font_size, cell_h));
     probe_buf.set_wrap(fs, Wrap::None);
     probe_buf.set_size(fs, Some(4096.0), Some(4096.0));
-    let cell_w = probe_cell_width(&mut probe_buf, fs, font_size);
+    let cell_w = probe_cell_width(&mut probe_buf, fs, font_size, family_from(family));
     (cell_w, cell_h)
 }
 
@@ -124,8 +154,8 @@ mod tests {
     #[test]
     fn cell_metrics_larger_font_gives_larger_dimensions() {
         let mut fs = FontSystem::new();
-        let small = cell_metrics(&mut fs, 12.0);
-        let large = cell_metrics(&mut fs, 24.0);
+        let small = cell_metrics(&mut fs, 12.0, &None);
+        let large = cell_metrics(&mut fs, 24.0, &None);
         assert!(
             large.0 > small.0,
             "cell_w(24) {:.2} should be > cell_w(12) {:.2}",

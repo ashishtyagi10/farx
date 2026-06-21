@@ -5,9 +5,9 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
 
 use crate::app::CrewApp;
-use crate::config::CrewConfig;
 use crate::pane::PaneContent;
 use crate::session::key_to_bytes;
+use crate::settingspane::SettingsAction;
 
 impl CrewApp {
     /// Dispatch a single `KeyEvent` from `window_event`.
@@ -61,7 +61,8 @@ impl CrewApp {
 
         // Route non-super keys to the focused pane.
         let focused = self.focused;
-        let mut applied: Option<CrewConfig> = None;
+        let shift = mstate.shift_key();
+        let mut settings_action: Option<SettingsAction> = None;
         if let Some(pane) = self.panes.get_mut(focused) {
             match &mut pane.content {
                 PaneContent::Terminal(t) => {
@@ -73,12 +74,16 @@ impl CrewApp {
                 }
                 PaneContent::Chat(c) => c.on_key(event),
                 PaneContent::Settings(s) => {
-                    applied = s.on_key(event).map(|c| c.config);
+                    settings_action = s.on_key(event, shift);
                 }
             }
         }
-        if let Some(cfg) = applied {
-            self.apply_settings(cfg);
+        if let Some(action) = settings_action {
+            if let SettingsAction::Apply(cfg) = action {
+                self.apply_settings(cfg);
+            }
+            // Save and Cancel both close the settings pane.
+            self.close_pane(focused);
         }
         self.redraw();
     }
