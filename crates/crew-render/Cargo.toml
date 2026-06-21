@@ -9,3 +9,4 @@ winit.workspace = true
 wgpu.workspace = true
 glyphon.workspace = true
 anyhow.workspace = true
+pollster = "0.4"
