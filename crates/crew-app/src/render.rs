@@ -52,7 +52,13 @@ impl CrewApp {
         let ih = chrome::input_h(ch);
         let rects = self.grid_rects();
         relayout(&mut self.panes, &rects, cw, ch);
-        let mut scenes = build_scenes(&self.panes, self.focused);
+        // A pane highlights only when the input bar is NOT focused (one active surface).
+        let pane_focus = if self.input.focused {
+            None
+        } else {
+            Some(self.focused)
+        };
+        let mut scenes = build_scenes(&self.panes, pane_focus);
 
         if self.panes.is_empty() {
             // Use the SAME rect a single grid pane would occupy (gap-inset) so the
@@ -99,7 +105,7 @@ impl CrewApp {
             y: ib.y,
             w: ib.w,
             h: ib.h,
-            focused: false,
+            focused: self.input.focused,
             bordered: true,
         });
 

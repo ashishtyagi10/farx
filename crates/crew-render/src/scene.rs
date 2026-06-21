@@ -22,8 +22,10 @@ pub struct PaneScene {
     pub bordered: bool,
 }
 
-/// All panes share one border colour (no focused/unfocused distinction).
-const BORDER_COLOR: [f32; 4] = [40.0 / 255.0, 80.0 / 255.0, 95.0 / 255.0, 1.0];
+/// Unfocused panes use a muted teal-green; the focused pane highlights in the
+/// neon accent green (same hue family — no jarring contrast colour).
+const BORDER_NORMAL: [f32; 4] = [40.0 / 255.0, 80.0 / 255.0, 95.0 / 255.0, 1.0];
+const BORDER_FOCUSED: [f32; 4] = [0.0, 1.0, 160.0 / 255.0, 1.0];
 const BORDER_RADIUS: f32 = 10.0;
 const BORDER_THICKNESS: f32 = 2.0;
 
@@ -64,6 +66,11 @@ pub(crate) fn build_scene(
 
         // Rounded-corner border for this pane (unless it draws its own).
         if pane.bordered {
+            let color = if pane.focused {
+                BORDER_FOCUSED
+            } else {
+                BORDER_NORMAL
+            };
             borders.push(Border {
                 x: pane.x,
                 y: pane.y,
@@ -71,7 +78,7 @@ pub(crate) fn build_scene(
                 h: pane.h,
                 radius: BORDER_RADIUS,
                 thickness: BORDER_THICKNESS,
-                color: BORDER_COLOR,
+                color,
             });
         }
 

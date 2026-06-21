@@ -84,7 +84,7 @@ pub fn relayout(panes: &mut [Pane], rects: &[Rect], cell_w: f32, cell_h: f32) {
 }
 
 /// Build a `Vec<PaneScene>` from the current pane state (for `renderer.frame`).
-pub fn build_scenes(panes: &[Pane], focused: usize) -> Vec<PaneScene> {
+pub fn build_scenes(panes: &[Pane], focused: Option<usize>) -> Vec<PaneScene> {
     panes
         .iter()
         .enumerate()
@@ -94,7 +94,7 @@ pub fn build_scenes(panes: &[Pane], focused: usize) -> Vec<PaneScene> {
             y: p.rect.y,
             w: p.rect.w,
             h: p.rect.h,
-            focused: i == focused,
+            focused: focused == Some(i),
             bordered: true,
         })
         .collect()
