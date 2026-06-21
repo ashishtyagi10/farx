@@ -1,6 +1,14 @@
-use crew_term::RenderCell;
+use crew_term::{GridSize, RenderCell};
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, NamedKey};
+
+/// Compute the terminal grid size that fits in `width x height` pixels given
+/// the font cell dimensions.  Each dimension is clamped to a minimum of 1.
+pub fn grid_for(width: u32, height: u32, cell_w: f32, cell_h: f32) -> GridSize {
+    let cols = ((width as f32 / cell_w).floor() as u16).max(1);
+    let rows = ((height as f32 / cell_h).floor() as u16).max(1);
+    GridSize { cols, rows }
+}
 
 /// Map a winit key press event to the bytes that should be sent to the PTY.
 pub fn key_to_bytes(event: &KeyEvent) -> Option<Vec<u8>> {
@@ -32,4 +40,31 @@ pub fn to_cellviews(cells: &[RenderCell]) -> Vec<crew_render::CellView> {
             italic: c.italic,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn grid_for_basic() {
+        let g = grid_for(800, 600, 10.0, 20.0);
+        assert_eq!(g.cols, 80);
+        assert_eq!(g.rows, 30);
+    }
+
+    #[test]
+    fn grid_for_clamps_to_one() {
+        let g = grid_for(0, 0, 10.0, 20.0);
+        assert_eq!(g.cols, 1);
+        assert_eq!(g.rows, 1);
+    }
+
+    #[test]
+    fn grid_for_floors_partial_cells() {
+        // 805 / 10 = 80.5 → floor → 80
+        let g = grid_for(805, 601, 10.0, 20.0);
+        assert_eq!(g.cols, 80);
+        assert_eq!(g.rows, 30);
+    }
 }

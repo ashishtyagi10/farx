@@ -10,17 +10,32 @@ use winit::window::{Window, WindowId};
 use crew_render::{GridMetrics, Renderer};
 use crew_term::{GridSize, PtyTerm, TermModel};
 
-use crate::session::{key_to_bytes, to_cellviews};
+use crate::session::{grid_for, key_to_bytes, to_cellviews};
 
-const PTY_SIZE: GridSize = GridSize { cols: 80, rows: 24 };
+/// Fallback grid size when the GPU cell size is not yet known (zero).
+const FALLBACK_SIZE: GridSize = GridSize { cols: 80, rows: 24 };
 const POLL_MS: u64 = 16;
 
-#[derive(Default)]
 pub struct CrewApp {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer>,
     pty: Option<PtyTerm>,
     input: Option<Box<dyn std::io::Write + Send>>,
+    /// Current terminal grid dimensions — kept in sync with both the renderer
+    /// viewport and the PTY so the shell reflows on every window resize.
+    grid: GridSize,
+}
+
+impl Default for CrewApp {
+    fn default() -> Self {
+        Self {
+            window: None,
+            renderer: None,
+            pty: None,
+            input: None,
+            grid: FALLBACK_SIZE,
+        }
+    }
 }
 
 impl ApplicationHandler for CrewApp {
@@ -30,8 +45,18 @@ impl ApplicationHandler for CrewApp {
 
         match Renderer::new(window.clone()) {
             Ok(renderer) => {
-                let pty = PtyTerm::spawn(PTY_SIZE, "bash")
-                    .or_else(|_| PtyTerm::spawn(PTY_SIZE, "sh"))
+                // Derive initial grid from actual surface + cell dimensions.
+                let (cell_w, cell_h) = renderer.cell_size();
+                let initial_grid = if cell_w > 0.0 && cell_h > 0.0 {
+                    let (sw, sh) = renderer.surface_size();
+                    grid_for(sw, sh, cell_w, cell_h)
+                } else {
+                    FALLBACK_SIZE
+                };
+                self.grid = initial_grid;
+
+                let pty = PtyTerm::spawn(initial_grid, "bash")
+                    .or_else(|_| PtyTerm::spawn(initial_grid, "sh"))
                     .ok();
                 let input = pty.as_ref().map(|p| p.writer());
                 self.renderer = Some(renderer);
@@ -80,6 +105,19 @@ impl ApplicationHandler for CrewApp {
             WindowEvent::Resized(size) => {
                 if let Some(renderer) = &mut self.renderer {
                     renderer.resize(size.width, size.height);
+                    let (cell_w, cell_h) = renderer.cell_size();
+                    if cell_w > 0.0 && cell_h > 0.0 {
+                        let new_grid = grid_for(size.width, size.height, cell_w, cell_h);
+                        if new_grid.cols != self.grid.cols || new_grid.rows != self.grid.rows {
+                            self.grid = new_grid;
+                            if let Some(pty) = &mut self.pty {
+                                pty.resize(new_grid);
+                            }
+                        }
+                    }
+                }
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
             }
             WindowEvent::RedrawRequested => {
@@ -91,8 +129,8 @@ impl ApplicationHandler for CrewApp {
                 let metrics = GridMetrics {
                     cell_w,
                     cell_h,
-                    cols: PTY_SIZE.cols,
-                    rows: PTY_SIZE.rows,
+                    cols: self.grid.cols,
+                    rows: self.grid.rows,
                 };
                 let views = to_cellviews(&pty.cells());
                 renderer.frame(&views, metrics);
