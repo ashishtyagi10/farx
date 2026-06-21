@@ -93,10 +93,14 @@ impl CrewApp {
         false
     }
 
-    /// Write `line + "\n"` to the focused pane if it is a Terminal.
-    /// Does nothing if `line` is empty or the focused pane is not a Terminal.
+    /// Handle a submitted input line: `/command`s are run; everything else is
+    /// written (with a newline) to the focused Terminal pane.
     pub(crate) fn submit_input(&mut self, line: String) {
         if line.is_empty() {
+            return;
+        }
+        if let Some(cmd) = slash_command(&line) {
+            self.run_slash_command(cmd);
             return;
         }
         let focused = self.focused;
@@ -114,6 +118,17 @@ impl CrewApp {
         }
     }
 
+    /// Run a `/command` typed in the input bar.
+    fn run_slash_command(&mut self, cmd: &str) {
+        match cmd {
+            "settings" => {
+                self.spawn_settings_pane();
+                self.input.focused = false;
+            }
+            _ => {}
+        }
+    }
+
     pub(crate) fn toggle_sidebar(&mut self) {
         self.config.show_nav = !self.config.show_nav;
         self.config.save();
@@ -124,5 +139,23 @@ impl CrewApp {
         if let Some(w) = &self.window {
             w.request_redraw();
         }
+    }
+}
+
+/// If `line` is a `/command`, return the trimmed command name; else `None`.
+pub(crate) fn slash_command(line: &str) -> Option<&str> {
+    line.strip_prefix('/').map(str::trim)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::slash_command;
+
+    #[test]
+    fn slash_command_parses() {
+        assert_eq!(slash_command("/settings"), Some("settings"));
+        assert_eq!(slash_command("/ settings "), Some("settings"));
+        assert_eq!(slash_command("ls -la"), None);
+        assert_eq!(slash_command("/"), Some(""));
     }
 }
