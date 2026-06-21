@@ -54,12 +54,12 @@ pub fn to_cellviews(cells: &[RenderCell]) -> Vec<crew_render::CellView> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::pane_rects;
+    use crate::layout::pane_rects_at;
 
     #[test]
     fn pane_at_two_panes() {
         // 2 panes side-by-side in 800x600 with no gap → left pane [0,400) right [400,800)
-        let rects = pane_rects(2, 800.0, 600.0, 0.0);
+        let rects = pane_rects_at(2, 0.0, 0.0, 800.0, 600.0, 0.0);
         assert_eq!(pane_at(&rects, 10.0, 10.0), Some(0));
         assert_eq!(pane_at(&rects, 410.0, 10.0), Some(1));
         assert_eq!(pane_at(&rects, 800.0, 10.0), None);
