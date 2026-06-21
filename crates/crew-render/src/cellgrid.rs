@@ -90,6 +90,12 @@ impl CellGrid {
         (self.cell_w, self.cell_h)
     }
 
+    /// Update the text buffer's layout bounds to match the new surface size.
+    pub fn resize(&mut self, width: f32, height: f32) {
+        self.buffer
+            .set_size(&mut self.font_system, Some(width), Some(height));
+    }
+
     /// Upload cell data: builds background quads + rich-text foreground.
     /// `gpu` is needed to upload quad instance data to the GPU.
     pub fn set_cells(&mut self, gpu: &Gpu, cells: &[CellView], metrics: &GridMetrics) {

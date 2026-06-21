@@ -20,6 +20,7 @@ impl Renderer {
 
     pub fn resize(&mut self, w: u32, h: u32) {
         self.gpu.resize(w, h);
+        self.cell_grid.resize(w as f32, h as f32);
     }
 
     /// Returns the monospace cell size `(width, height)` in pixels.
