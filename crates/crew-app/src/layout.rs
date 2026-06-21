@@ -29,11 +29,6 @@ pub fn pane_rects_at(n: usize, ox: f32, oy: f32, w: f32, h: f32, gap: f32) -> Ve
     out
 }
 
-/// Pack `n` tiles near-square into `width`x`height`, each inset by `gap`.
-pub fn pane_rects(n: usize, width: f32, height: f32, gap: f32) -> Vec<Rect> {
-    pane_rects_at(n, 0.0, 0.0, width, height, gap)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -44,7 +39,7 @@ mod tests {
 
     #[test]
     fn one_pane_fills_minus_gap() {
-        let r = pane_rects(1, 800.0, 600.0, 0.0);
+        let r = pane_rects_at(1, 0.0, 0.0, 800.0, 600.0, 0.0);
         assert_eq!(r.len(), 1);
         approx(r[0].x, 0.0);
         approx(r[0].y, 0.0);
@@ -54,7 +49,7 @@ mod tests {
 
     #[test]
     fn two_panes_side_by_side() {
-        let r = pane_rects(2, 800.0, 600.0, 0.0);
+        let r = pane_rects_at(2, 0.0, 0.0, 800.0, 600.0, 0.0);
         assert_eq!(r.len(), 2);
         approx(r[0].w, 400.0);
         approx(r[1].x, 400.0);
@@ -63,7 +58,7 @@ mod tests {
 
     #[test]
     fn four_panes_two_by_two() {
-        let r = pane_rects(4, 800.0, 600.0, 0.0);
+        let r = pane_rects_at(4, 0.0, 0.0, 800.0, 600.0, 0.0);
         assert_eq!(r.len(), 4);
         approx(r[0].w, 400.0);
         approx(r[0].h, 300.0);
@@ -72,7 +67,14 @@ mod tests {
     }
 
     #[test]
+    fn offset_shifts_origin() {
+        let r = pane_rects_at(1, 50.0, 30.0, 800.0, 600.0, 0.0);
+        approx(r[0].x, 50.0);
+        approx(r[0].y, 30.0);
+    }
+
+    #[test]
     fn zero_panes_empty() {
-        assert!(pane_rects(0, 800.0, 600.0, 4.0).is_empty());
+        assert!(pane_rects_at(0, 0.0, 0.0, 800.0, 600.0, 4.0).is_empty());
     }
 }

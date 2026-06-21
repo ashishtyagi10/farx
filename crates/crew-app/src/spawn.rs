@@ -7,7 +7,7 @@ use crate::layout::Rect;
 use crate::pane::{spawn_pane, Pane, PaneContent, TermPane};
 use crate::settingspane::SettingsPane;
 use crew_plugin::{Plugin, PluginCommand};
-use crew_term::{GridSize, PtyTerm};
+use crew_term::PtyTerm;
 
 impl CrewApp {
     /// Spawn a new terminal pane and focus it.
