@@ -1,5 +1,8 @@
 use crew_render::CellView;
 
+type Color = (u8, u8, u8);
+type ColoredLine = Vec<(char, Color)>;
+
 pub const DEFAULT_BG: (u8, u8, u8) = (8, 8, 16);
 pub const ACCENT_FG: (u8, u8, u8) = (0, 255, 160);
 pub const TEXT_FG: (u8, u8, u8) = (200, 200, 200);
@@ -46,7 +49,7 @@ pub fn layout_cells(messages: &[Message], input: &str, cols: u16, rows: u16) -> 
     }
 
     // Build wrapped lines from messages
-    let mut all_lines: Vec<Vec<(char, (u8, u8, u8))>> = Vec::new();
+    let mut all_lines: Vec<ColoredLine> = Vec::new();
     for msg in messages {
         let prefix = format!("{}: ", msg.sender);
         let prefix_len = prefix.chars().count();
