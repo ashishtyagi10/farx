@@ -69,7 +69,7 @@ impl CrewApp {
         }
 
         if self.config.show_nav {
-            let sb = chrome::sidebar_rect(sh, self.nav_px(scale), GAP, ih);
+            let sb = chrome::sidebar_rect(sh, self.nav_px(scale), GAP);
             let sc = (sb.w / cw).floor() as u16;
             let sr = (sb.h / ch).floor() as u16;
             scenes.push(PaneScene {
@@ -82,7 +82,9 @@ impl CrewApp {
             });
         }
 
-        let ib = chrome::inputbar_rect(sw, sh, ih, GAP);
+        let content =
+            chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
+        let ib = chrome::inputbar_rect(content, sh, ih, GAP);
         let ic = (ib.w / cw).floor() as u16;
         let ir = (ib.h / ch).floor() as u16;
         scenes.push(PaneScene {

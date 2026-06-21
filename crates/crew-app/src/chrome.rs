@@ -11,25 +11,25 @@ pub fn input_h(cell_h: f32) -> f32 {
     cell_h * 3.0 + INPUT_PAD
 }
 
-/// Full-width bottom strip for the docked input bar, inset by `gap` on all sides.
-pub fn inputbar_rect(sw: f32, sh: f32, ih: f32, gap: f32) -> Rect {
+/// Bottom strip for the docked input bar, spanning the **action area** only
+/// (`content`'s x/width, gap-inset to match pane width) — never under the sidebar.
+pub fn inputbar_rect(content: Rect, sh: f32, ih: f32, gap: f32) -> Rect {
     Rect {
-        x: gap,
+        x: content.x + gap,
         y: sh - ih + gap,
-        w: sw - 2.0 * gap,
+        w: content.w - 2.0 * gap,
         h: ih - 2.0 * gap,
     }
 }
 
-/// Fixed-width sidebar column on the left, inset by `gap` top/bottom/left so it
-/// aligns vertically with the gap-inset grid panes. `ih` is the input-bar height
-/// reserved at the bottom.
-pub fn sidebar_rect(sh: f32, nav_px: f32, gap: f32, ih: f32) -> Rect {
+/// Fixed-width sidebar column on the left spanning the **entire** height (inset by
+/// `gap` on all sides) — it runs alongside both the panes and the input bar.
+pub fn sidebar_rect(sh: f32, nav_px: f32, gap: f32) -> Rect {
     Rect {
         x: gap,
         y: gap,
         w: nav_px,
-        h: sh - 2.0 * gap - ih,
+        h: sh - 2.0 * gap,
     }
 }
 
@@ -84,28 +84,30 @@ mod tests {
     }
 
     #[test]
-    fn sidebar_rect_inset_by_gap_and_ih() {
-        // h = sh - 2*gap - ih = 800 - 16 - 60 = 724
+    fn sidebar_rect_full_height() {
+        // full height: h = sh - 2*gap = 800 - 16 = 784 (input bar does NOT shrink it)
         assert_eq!(
-            sidebar_rect(800.0, 200.0, 8.0, 60.0),
+            sidebar_rect(800.0, 200.0, 8.0),
             Rect {
                 x: 8.0,
                 y: 8.0,
                 w: 200.0,
-                h: 724.0
+                h: 784.0
             }
         );
     }
 
     #[test]
-    fn inputbar_rect_geometry() {
-        // x=gap=8, y=sh-ih+gap=800-60+8=748, w=sw-2*gap=1000-16=984, h=ih-2*gap=60-16=44
+    fn inputbar_rect_spans_action_area() {
+        // content (with nav) = {x:208, w:792}; input: x=208+8=216,
+        // y=800-60+8=748, w=792-16=776, h=60-16=44
+        let content = content_rect(1000.0, 800.0, true, 200.0, 8.0, 60.0);
         assert_eq!(
-            inputbar_rect(1000.0, 800.0, 60.0, 8.0),
+            inputbar_rect(content, 800.0, 60.0, 8.0),
             Rect {
-                x: 8.0,
+                x: 216.0,
                 y: 748.0,
-                w: 984.0,
+                w: 776.0,
                 h: 44.0
             }
         );
