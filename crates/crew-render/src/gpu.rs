@@ -17,15 +17,7 @@ impl Gpu {
         let size = window.inner_size();
         let instance = wgpu::Instance::default();
 
-        // SAFETY: The Arc<Window> is stored in CrewApp alongside Gpu, ensuring
-        // the window outlives the surface.
-        let surface: wgpu::Surface<'static> = unsafe {
-            let target = wgpu::SurfaceTargetUnsafe::from_display_and_window(
-                window.as_ref(),
-                window.as_ref(),
-            )?;
-            instance.create_surface_unsafe(target)?
-        };
+        let surface = instance.create_surface(window.clone())?;
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
