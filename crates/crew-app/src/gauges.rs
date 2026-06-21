@@ -1,16 +1,14 @@
 //! Pure rendering of the system-stats sidebar section: a header + spaced gauges.
 use crew_render::CellView;
 
+use crate::boxdraw;
 use crate::stats::Stats;
 
 const FILL: (u8, u8, u8) = (0, 255, 160);
 const TRACK: (u8, u8, u8) = (40, 80, 95);
 const BG: (u8, u8, u8) = (8, 8, 16);
 const LABEL: (u8, u8, u8) = (200, 200, 200);
-
-/// Left/right padding (cols) and the header text for the section.
-const PAD_L: u16 = 2;
-const PAD_R: u16 = 2;
+const BORDER: (u8, u8, u8) = (70, 130, 140);
 const HEADER: &str = "SYSTEM";
 
 /// One gauge row laid out within `cols`: `label | space | bar | NNN%`.
@@ -79,31 +77,38 @@ fn cell(col: u16, row: u16, c: char, fg: (u8, u8, u8)) -> CellView {
     }
 }
 
-/// Render the stats section: a `SYSTEM` header (row 1) then CPU/MEM/DISK gauges
-/// on rows 3, 5, 7 — left/right padded and vertically spaced for breathing room.
+/// Render the stats section as a rounded card: a border around a `SYSTEM` header
+/// and CPU/MEM/DISK gauges spaced on rows 3, 5, 7. The card groups this section so
+/// future sidebar sections can stack as their own cards below it.
 pub(crate) fn render_stats(stats: Stats, cols: u16, rows: u16) -> Vec<CellView> {
     let mut out = Vec::new();
-    if cols <= PAD_L + PAD_R || rows == 0 {
+    if cols < 8 || rows < 6 {
         return out;
     }
-    let inner = cols - PAD_L - PAD_R;
+    let left = 1u16;
+    let right = cols - 2;
+    let top = 0u16;
+    let bottom = (top + 8).min(rows - 1);
+    out.extend(boxdraw::rounded_box(left, top, right, bottom, BORDER, BG));
 
-    if rows > 1 {
-        for (i, c) in HEADER.chars().enumerate() {
-            let col = PAD_L + i as u16;
-            if col >= cols {
-                break;
-            }
-            out.push(CellView {
-                col,
-                row: 1,
-                c,
-                fg: FILL,
-                bg: BG,
-                bold: true,
-                italic: false,
-            });
+    // Content indented one column inside the card border.
+    let cstart = left + 2;
+    let inner = right.saturating_sub(cstart + 1);
+
+    for (i, c) in HEADER.chars().enumerate() {
+        let col = cstart + i as u16;
+        if col >= right {
+            break;
         }
+        out.push(CellView {
+            col,
+            row: top + 1,
+            c,
+            fg: FILL,
+            bg: BG,
+            bold: true,
+            italic: false,
+        });
     }
 
     let gauges = [
@@ -111,13 +116,13 @@ pub(crate) fn render_stats(stats: Stats, cols: u16, rows: u16) -> Vec<CellView> 
         ("MEM ", stats.mem),
         ("DISK", stats.disk),
     ];
-    let mut row = 3u16;
+    let mut row = top + 3;
     for (label, frac) in gauges {
-        if row >= rows {
+        if row >= bottom {
             break;
         }
         for mut g in gauge_cells(label, frac, 0, inner) {
-            g.col += PAD_L;
+            g.col += cstart;
             g.row = row;
             out.push(g);
         }
@@ -152,19 +157,20 @@ mod tests {
     }
 
     #[test]
-    fn render_stats_spaced_and_padded() {
+    fn render_stats_card_with_header_and_gauges() {
         let stats = Stats {
             cpu: 0.1,
             mem: 0.2,
             disk: 0.3,
         };
-        let cells = render_stats(stats, 40, 12);
+        let cells = render_stats(stats, 24, 12);
+        let has = |ch: char| cells.iter().any(|c| c.c == ch);
+        // rounded card border
+        assert!(has('╭') && has('╮') && has('╰') && has('╯'));
+        // gauge bars present
+        assert!(cells.iter().any(|c| c.c == '█' || c.c == '░'));
+        // gauges spaced on rows 3/5/7
         let rows: std::collections::HashSet<u16> = cells.iter().map(|c| c.row).collect();
-        // header on 1, gauges spaced on 3/5/7
-        assert!(rows.contains(&1) && rows.contains(&3) && rows.contains(&5) && rows.contains(&7));
-        // blank spacer rows
-        assert!(!rows.contains(&0) && !rows.contains(&2) && !rows.contains(&4));
-        // left padding
-        assert!(cells.iter().all(|c| c.col >= PAD_L));
+        assert!(rows.contains(&3) && rows.contains(&5) && rows.contains(&7));
     }
 }

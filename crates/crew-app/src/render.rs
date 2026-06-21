@@ -37,14 +37,14 @@ impl CrewApp {
         let Some((_cw, _ch, sw, sh, scale)) = self.frame_geometry() else {
             return Vec::new();
         };
-        let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale));
+        let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP);
         pane_rects_at(self.panes.len(), c.x, c.y, c.w, c.h, GAP)
     }
 
     /// Build all PaneScenes for one frame: grid panes in the content area, plus
     /// the docked full-height sidebar when shown.
     pub(crate) fn build_frame(&mut self) -> Vec<PaneScene> {
-        let Some((cw, ch, sw, sh, scale)) = self.frame_geometry() else {
+        let Some((cw, ch, _sw, sh, scale)) = self.frame_geometry() else {
             return Vec::new();
         };
         let rects = self.grid_rects();
@@ -52,7 +52,7 @@ impl CrewApp {
         let mut scenes = build_scenes(&self.panes, self.focused);
 
         if self.config.show_nav {
-            let sb = chrome::sidebar_rect(sw, sh, self.nav_px(scale));
+            let sb = chrome::sidebar_rect(sh, self.nav_px(scale), GAP);
             let sc = (sb.w / cw).floor() as u16;
             let sr = (sb.h / ch).floor() as u16;
             scenes.push(PaneScene {
@@ -71,7 +71,7 @@ impl CrewApp {
     /// area, so clicks on the sidebar do not steal focus.
     pub(crate) fn pane_at_cursor(&self) -> Option<usize> {
         let (_cw, _ch, sw, sh, scale) = self.frame_geometry()?;
-        let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale));
+        let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP);
         if !chrome::point_in(c, self.cursor.0, self.cursor.1) {
             return None;
         }

@@ -1,4 +1,5 @@
 mod app;
+mod boxdraw;
 mod chat;
 mod chatlayout;
 pub mod chrome;
