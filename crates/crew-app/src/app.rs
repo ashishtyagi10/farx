@@ -3,6 +3,7 @@ use std::sync::Arc;
 use winit::event::Modifiers;
 use winit::window::Window;
 
+use crate::config::CrewConfig;
 use crate::session::grid_for;
 use crew_render::Renderer;
 use crew_term::GridSize;
@@ -22,6 +23,7 @@ pub struct CrewApp {
     pub(crate) focused: usize,
     pub(crate) mods: Modifiers,
     pub(crate) cursor: (f32, f32),
+    pub(crate) config: CrewConfig,
 }
 
 impl CrewApp {
@@ -61,6 +63,11 @@ impl CrewApp {
                 self.spawn_chat_pane(&cmd);
             }
             "w" => return self.close_pane(self.focused),
+            "m" => {
+                if let Some(w) = &self.window {
+                    w.set_maximized(!w.is_maximized());
+                }
+            }
             "[" => self.focused = (self.focused + n - 1) % n,
             "]" => self.focused = (self.focused + 1) % n,
             s if s.len() == 1 => {

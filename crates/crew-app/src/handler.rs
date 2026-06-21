@@ -3,12 +3,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use winit::application::ApplicationHandler;
+use winit::dpi::LogicalSize;
 use winit::event::{ElementState, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::Key;
 use winit::window::{Window, WindowId};
 
 use crate::app::{CrewApp, GAP, POLL_MS};
+use crate::config::CrewConfig;
 use crate::layout::pane_rects;
 use crate::pane::{build_scenes, relayout, spawn_pane, PaneContent};
 use crate::session::{key_to_bytes, pane_at};
@@ -16,10 +18,16 @@ use crew_render::Renderer;
 
 impl ApplicationHandler for CrewApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let attrs = Window::default_attributes().with_title("Crew");
+        let attrs = Window::default_attributes()
+            .with_title("Crew")
+            .with_resizable(true)
+            .with_inner_size(LogicalSize::new(1200.0, 800.0));
         let window = Arc::new(event_loop.create_window(attrs).expect("create window"));
 
-        match Renderer::new(window.clone(), 18.0) {
+        // Font size is in logical points; multiply by the display scale so text is
+        // the right physical size on HiDPI/Retina (the surface is in physical px).
+        let font_px = self.config.font_size * window.scale_factor() as f32;
+        match Renderer::new(window.clone(), font_px) {
             Ok(renderer) => {
                 let initial_grid = Self::current_grid(&renderer);
                 self.renderer = Some(renderer);
@@ -102,6 +110,15 @@ impl ApplicationHandler for CrewApp {
                 self.redraw();
             }
             WindowEvent::KeyboardInput { event, .. } => {
+                let mstate = self.mods.state();
+                // Cmd+Q / Ctrl+Q quits the app.
+                if event.state.is_pressed()
+                    && (mstate.super_key() || mstate.control_key())
+                    && matches!(&event.logical_key, Key::Character(s) if s.as_str() == "q")
+                {
+                    event_loop.exit();
+                    return;
+                }
                 if self.mods.state().super_key() && event.state.is_pressed() {
                     if let Key::Character(s) = &event.logical_key {
                         let s = s.to_string();
@@ -135,6 +152,12 @@ impl ApplicationHandler for CrewApp {
                 }
                 self.redraw();
             }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.set_font_size(self.config.font_size * scale_factor as f32);
+                }
+                self.redraw();
+            }
             WindowEvent::RedrawRequested => {
                 let Some(renderer) = &mut self.renderer else {
                     return;
@@ -158,7 +181,10 @@ impl ApplicationHandler for CrewApp {
 
 pub fn run() -> anyhow::Result<()> {
     let event_loop = EventLoop::new()?;
-    let mut app = CrewApp::default();
+    let mut app = CrewApp {
+        config: CrewConfig::load(),
+        ..Default::default()
+    };
     event_loop.run_app(&mut app)?;
     Ok(())
 }
