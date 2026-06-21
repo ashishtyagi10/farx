@@ -7,21 +7,35 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
-use crew_render::{Gpu, TextLayer};
+use crew_render::{GridMetrics, Renderer};
 use crew_term::{GridSize, PtyTerm, TermModel};
 
-use crate::session::{cells_to_string, key_to_bytes};
+use crate::session::{grid_for, key_to_bytes, to_cellviews};
 
-const PTY_SIZE: GridSize = GridSize { cols: 80, rows: 24 };
+/// Fallback grid size when the GPU cell size is not yet known (zero).
+const FALLBACK_SIZE: GridSize = GridSize { cols: 80, rows: 24 };
 const POLL_MS: u64 = 16;
 
-#[derive(Default)]
 pub struct CrewApp {
     window: Option<Arc<Window>>,
-    gpu: Option<Gpu>,
-    text: Option<TextLayer>,
+    renderer: Option<Renderer>,
     pty: Option<PtyTerm>,
     input: Option<Box<dyn std::io::Write + Send>>,
+    /// Current terminal grid dimensions — kept in sync with both the renderer
+    /// viewport and the PTY so the shell reflows on every window resize.
+    grid: GridSize,
+}
+
+impl Default for CrewApp {
+    fn default() -> Self {
+        Self {
+            window: None,
+            renderer: None,
+            pty: None,
+            input: None,
+            grid: FALLBACK_SIZE,
+        }
+    }
 }
 
 impl ApplicationHandler for CrewApp {
@@ -29,16 +43,23 @@ impl ApplicationHandler for CrewApp {
         let attrs = Window::default_attributes().with_title("Crew");
         let window = Arc::new(event_loop.create_window(attrs).expect("create window"));
 
-        match Gpu::new(window.clone()) {
-            Ok(gpu) => {
-                let text = TextLayer::new(&gpu);
-                let pty = PtyTerm::spawn(PTY_SIZE, "bash")
-                    .or_else(|_| PtyTerm::spawn(PTY_SIZE, "sh"))
+        match Renderer::new(window.clone()) {
+            Ok(renderer) => {
+                // Derive initial grid from actual surface + cell dimensions.
+                let (cell_w, cell_h) = renderer.cell_size();
+                let initial_grid = if cell_w > 0.0 && cell_h > 0.0 {
+                    let (sw, sh) = renderer.surface_size();
+                    grid_for(sw, sh, cell_w, cell_h)
+                } else {
+                    FALLBACK_SIZE
+                };
+                self.grid = initial_grid;
+
+                let pty = PtyTerm::spawn(initial_grid, "bash")
+                    .or_else(|_| PtyTerm::spawn(initial_grid, "sh"))
                     .ok();
-                // Take the single-use writer before storing the pty.
                 let input = pty.as_ref().map(|p| p.writer());
-                self.gpu = Some(gpu);
-                self.text = Some(text);
+                self.renderer = Some(renderer);
                 self.pty = pty;
                 self.input = input;
                 self.window = Some(window.clone());
@@ -52,15 +73,12 @@ impl ApplicationHandler for CrewApp {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        let (Some(pty), Some(text), Some(window)) = (&mut self.pty, &mut self.text, &self.window)
-        else {
+        let (Some(pty), Some(window)) = (&mut self.pty, &self.window) else {
             return;
         };
 
         let new_bytes = pty.try_read();
         if new_bytes > 0 {
-            let s = cells_to_string(&pty.cells(), PTY_SIZE);
-            text.set_text(&s);
             window.request_redraw();
         }
 
@@ -85,62 +103,37 @@ impl ApplicationHandler for CrewApp {
                 }
             }
             WindowEvent::Resized(size) => {
-                if let Some(gpu) = &mut self.gpu {
-                    gpu.resize(size.width, size.height);
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.resize(size.width, size.height);
+                    let (cell_w, cell_h) = renderer.cell_size();
+                    if cell_w > 0.0 && cell_h > 0.0 {
+                        let new_grid = grid_for(size.width, size.height, cell_w, cell_h);
+                        if new_grid.cols != self.grid.cols || new_grid.rows != self.grid.rows {
+                            self.grid = new_grid;
+                            if let Some(pty) = &mut self.pty {
+                                pty.resize(new_grid);
+                            }
+                        }
+                    }
+                }
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
             }
             WindowEvent::RedrawRequested => {
-                let (Some(gpu), Some(text)) = (&self.gpu, &mut self.text) else {
+                let (Some(renderer), Some(pty)) = (&mut self.renderer, &self.pty) else {
                     return;
                 };
 
-                text.prepare(gpu);
-
-                let frame = match gpu.surface.get_current_texture() {
-                    wgpu::CurrentSurfaceTexture::Success(t) => t,
-                    wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-                    wgpu::CurrentSurfaceTexture::Timeout
-                    | wgpu::CurrentSurfaceTexture::Occluded => return,
-                    wgpu::CurrentSurfaceTexture::Outdated
-                    | wgpu::CurrentSurfaceTexture::Lost
-                    | wgpu::CurrentSurfaceTexture::Validation => {
-                        eprintln!("surface lost/outdated/validation — skipping frame");
-                        return;
-                    }
+                let (cell_w, cell_h) = renderer.cell_size();
+                let metrics = GridMetrics {
+                    cell_w,
+                    cell_h,
+                    cols: self.grid.cols,
+                    rows: self.grid.rows,
                 };
-
-                let view = frame.texture.create_view(&Default::default());
-                let mut enc = gpu
-                    .device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-                {
-                    let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("crew frame"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            depth_slice: None,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: 0.05,
-                                    g: 0.05,
-                                    b: 0.07,
-                                    a: 1.0,
-                                }),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                        multiview_mask: None,
-                    });
-                    text.draw(&mut pass);
-                }
-
-                gpu.queue.submit(Some(enc.finish()));
-                frame.present();
+                let views = to_cellviews(&pty.cells());
+                renderer.frame(&views, metrics);
             }
             _ => {}
         }
