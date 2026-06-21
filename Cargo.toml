@@ -10,6 +10,7 @@ members = [
     "crates/crew-term",
     "crates/crew-render",
     "crates/crew-app",
+    "crates/crew-plugin",
 ]
 
 [workspace.package]

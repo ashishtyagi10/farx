@@ -10,7 +10,7 @@ use winit::window::{Window, WindowId};
 
 use crate::app::{CrewApp, GAP, POLL_MS};
 use crate::layout::pane_rects;
-use crate::pane::{build_scenes, relayout, spawn_pane};
+use crate::pane::{build_scenes, relayout, spawn_pane, PaneContent};
 use crate::session::{key_to_bytes, pane_at};
 use crew_render::Renderer;
 
@@ -41,8 +41,18 @@ impl ApplicationHandler for CrewApp {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let Some(window) = &self.window else { return };
 
-        let total: usize = self.panes.iter_mut().map(|p| p.pty.try_read()).sum();
-        if total > 0 {
+        // Drain EVERY pane each tick. A `for` loop (not `any()`/`fold`) so all
+        // panes are polled for their side effects — `any()` would short-circuit
+        // and starve later panes when an earlier one has output.
+        let mut any_changed = false;
+        for p in self.panes.iter_mut() {
+            let changed = match &mut p.content {
+                PaneContent::Terminal(t) => t.pty.try_read() > 0,
+                PaneContent::Chat(c) => c.poll(),
+            };
+            any_changed |= changed;
+        }
+        if any_changed {
             window.request_redraw();
         }
 
@@ -82,15 +92,19 @@ impl ApplicationHandler for CrewApp {
                     }
                     self.redraw();
                 } else {
-                    if let Some(bytes) = key_to_bytes(&event) {
-                        if let Some(pane) = self.panes.get_mut(self.focused) {
-                            if let Err(e) = pane
-                                .input
-                                .write_all(&bytes)
-                                .and_then(|_| pane.input.flush())
-                            {
-                                eprintln!("pty write error: {e}");
+                    let focused = self.focused;
+                    if let Some(pane) = self.panes.get_mut(focused) {
+                        match &mut pane.content {
+                            PaneContent::Terminal(t) => {
+                                if let Some(bytes) = key_to_bytes(&event) {
+                                    if let Err(e) =
+                                        t.input.write_all(&bytes).and_then(|_| t.input.flush())
+                                    {
+                                        eprintln!("pty write error: {e}");
+                                    }
+                                }
                             }
+                            PaneContent::Chat(c) => c.on_key(&event),
                         }
                     }
                     self.redraw();
