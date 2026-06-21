@@ -41,10 +41,17 @@ impl ApplicationHandler for CrewApp {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let Some(window) = &self.window else { return };
 
-        let any_changed = self.panes.iter_mut().any(|p| match &mut p.content {
-            PaneContent::Terminal(t) => t.pty.try_read() > 0,
-            PaneContent::Chat(c) => c.poll(),
-        });
+        // Drain EVERY pane each tick. A `for` loop (not `any()`/`fold`) so all
+        // panes are polled for their side effects — `any()` would short-circuit
+        // and starve later panes when an earlier one has output.
+        let mut any_changed = false;
+        for p in self.panes.iter_mut() {
+            let changed = match &mut p.content {
+                PaneContent::Terminal(t) => t.pty.try_read() > 0,
+                PaneContent::Chat(c) => c.poll(),
+            };
+            any_changed |= changed;
+        }
         if any_changed {
             window.request_redraw();
         }
