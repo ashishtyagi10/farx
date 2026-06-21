@@ -12,7 +12,7 @@ use winit::window::{Window, WindowId};
 use crate::app::{CrewApp, GAP, POLL_MS};
 use crate::config::CrewConfig;
 use crate::layout::pane_rects;
-use crate::pane::{build_scenes, relayout, spawn_pane, PaneContent};
+use crate::pane::{spawn_pane, PaneContent};
 use crate::session::{key_to_bytes, pane_at};
 use crew_render::Renderer;
 
@@ -64,10 +64,12 @@ impl ApplicationHandler for CrewApp {
                     collected_actions.extend(result.actions);
                     result.changed
                 }
-                PaneContent::Stats(s) => s.refresh(),
                 PaneContent::Settings(_) => false,
             };
             any_changed |= changed;
+        }
+        if self.sidebar.refresh() {
+            any_changed = true;
         }
         let actions_ran = !collected_actions.is_empty();
         for action in collected_actions {
@@ -144,7 +146,6 @@ impl ApplicationHandler for CrewApp {
                                 }
                             }
                             PaneContent::Chat(c) => c.on_key(&event),
-                            PaneContent::Stats(_) => {}
                             PaneContent::Settings(s) => {
                                 applied = s.on_key(&event).map(|c| c.config);
                             }
@@ -169,20 +170,13 @@ impl ApplicationHandler for CrewApp {
                 self.redraw();
             }
             WindowEvent::RedrawRequested => {
-                let Some(renderer) = &mut self.renderer else {
-                    return;
-                };
-                if self.panes.is_empty() {
+                if self.renderer.is_none() || self.panes.is_empty() {
                     return;
                 }
-                let (cell_w, cell_h) = renderer.cell_size();
-                let (sw, sh) = renderer.surface_size();
-                let rects = pane_rects(self.panes.len(), sw as f32, sh as f32, GAP);
-                if cell_w > 0.0 && cell_h > 0.0 {
-                    relayout(&mut self.panes, &rects, cell_w, cell_h);
+                let scenes = self.build_frame();
+                if let Some(r) = &mut self.renderer {
+                    r.frame(&scenes);
                 }
-                let scenes = build_scenes(&self.panes, self.focused);
-                renderer.frame(&scenes);
             }
             _ => {}
         }

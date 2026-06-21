@@ -8,7 +8,6 @@ use crate::chat::ChatPane;
 use crate::layout::Rect;
 use crate::session::to_cellviews;
 use crate::settingspane::SettingsPane;
-use crate::statspane::StatsPane;
 
 /// Raw terminal pane: owns its PTY and writer.
 pub struct TermPane {
@@ -20,7 +19,6 @@ pub struct TermPane {
 pub enum PaneContent {
     Terminal(Box<TermPane>),
     Chat(ChatPane),
-    Stats(Box<StatsPane>),
     Settings(SettingsPane),
 }
 
@@ -39,7 +37,6 @@ impl Pane {
         match &self.content {
             PaneContent::Terminal(t) => to_cellviews(&t.pty.cells()),
             PaneContent::Chat(c) => c.cells(self.grid.cols, self.grid.rows),
-            PaneContent::Stats(s) => s.cells(self.grid.cols, self.grid.rows),
             PaneContent::Settings(s) => s.cells(self.grid.cols, self.grid.rows),
         }
     }

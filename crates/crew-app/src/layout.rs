@@ -6,27 +6,32 @@ pub struct Rect {
     pub h: f32,
 }
 
-/// Pack `n` tiles near-square into `width`x`height`, each inset by `gap`.
-pub fn pane_rects(n: usize, width: f32, height: f32, gap: f32) -> Vec<Rect> {
+/// Pack `n` tiles near-square into `w`x`h` offset by `(ox, oy)`, each inset by `gap`.
+pub fn pane_rects_at(n: usize, ox: f32, oy: f32, w: f32, h: f32, gap: f32) -> Vec<Rect> {
     if n == 0 {
         return Vec::new();
     }
     let cols = (n as f32).sqrt().ceil() as usize;
     let rows = n.div_ceil(cols);
-    let tile_w = width / cols as f32;
-    let tile_h = height / rows as f32;
+    let tile_w = w / cols as f32;
+    let tile_h = h / rows as f32;
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
         let c = i % cols;
         let r = i / cols;
         out.push(Rect {
-            x: c as f32 * tile_w + gap,
-            y: r as f32 * tile_h + gap,
+            x: ox + c as f32 * tile_w + gap,
+            y: oy + r as f32 * tile_h + gap,
             w: tile_w - 2.0 * gap,
             h: tile_h - 2.0 * gap,
         });
     }
     out
+}
+
+/// Pack `n` tiles near-square into `width`x`height`, each inset by `gap`.
+pub fn pane_rects(n: usize, width: f32, height: f32, gap: f32) -> Vec<Rect> {
+    pane_rects_at(n, 0.0, 0.0, width, height, gap)
 }
 
 #[cfg(test)]

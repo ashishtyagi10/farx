@@ -6,6 +6,7 @@ use winit::window::Window;
 use crate::config::CrewConfig;
 use crate::pane::Pane;
 use crate::session::grid_for;
+use crate::statspane::StatsPane;
 use crew_render::Renderer;
 use crew_term::GridSize;
 
@@ -23,6 +24,7 @@ pub struct CrewApp {
     pub(crate) mods: Modifiers,
     pub(crate) cursor: (f32, f32),
     pub(crate) config: CrewConfig,
+    pub(crate) sidebar: Box<StatsPane>,
 }
 
 impl CrewApp {
@@ -53,7 +55,7 @@ impl CrewApp {
         let n = self.panes.len().max(1);
         match s {
             "," => self.spawn_settings_pane(),
-            "g" => self.spawn_stats_pane(),
+            "g" => self.toggle_sidebar(),
             "t" => self.spawn_new_pane(),
             "j" => {
                 let cmd = Self::echo_plugin_cmd();
@@ -84,6 +86,12 @@ impl CrewApp {
             _ => {}
         }
         false
+    }
+
+    pub(crate) fn toggle_sidebar(&mut self) {
+        self.config.show_nav = !self.config.show_nav;
+        self.config.save();
+        self.redraw();
     }
 
     pub(crate) fn redraw(&self) {

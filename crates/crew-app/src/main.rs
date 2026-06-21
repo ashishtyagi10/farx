@@ -6,6 +6,7 @@ pub mod config;
 mod handler;
 mod layout;
 mod pane;
+mod render;
 mod session;
 mod settingspane;
 mod spawn;

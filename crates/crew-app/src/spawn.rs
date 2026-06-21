@@ -86,27 +86,6 @@ impl CrewApp {
         }
     }
 
-    /// Spawn a new stats pane showing CPU/MEM/DISK gauges and focus it.
-    pub(crate) fn spawn_stats_pane(&mut self) {
-        let grid = self
-            .renderer
-            .as_ref()
-            .map(Self::current_grid)
-            .unwrap_or(FALLBACK_SIZE);
-        self.panes.push(Pane {
-            content: PaneContent::Stats(Box::default()),
-            grid,
-            rect: Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 0.0,
-                h: 0.0,
-            },
-            label: None,
-        });
-        self.focused = self.panes.len() - 1;
-    }
-
     /// Spawn a settings pane showing the app config and focus it.
     pub(crate) fn spawn_settings_pane(&mut self) {
         let grid = self
