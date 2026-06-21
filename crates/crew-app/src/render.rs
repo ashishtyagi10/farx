@@ -100,7 +100,7 @@ impl CrewApp {
             w: ib.w,
             h: ib.h,
             focused: false,
-            bordered: false,
+            bordered: true,
         });
 
         scenes

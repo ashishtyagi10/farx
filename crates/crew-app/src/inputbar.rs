@@ -1,13 +1,12 @@
-//! Docked bottom command bar: a single-line text input rendered as a titled card.
+//! Docked bottom command bar: a single-line text input. The surrounding pane
+//! draws the rounded border (so it bottom-aligns with the sidebar/panes); this
+//! only renders the `> text` content inside it.
 use crew_render::CellView;
 use winit::keyboard::{Key, NamedKey};
 
-use crate::boxdraw::{self, BoxRect};
-
 const BG: (u8, u8, u8) = (8, 8, 16);
-const BORDER_DIM: (u8, u8, u8) = (70, 130, 140);
-const TITLE_DIM: (u8, u8, u8) = (200, 200, 200);
 const ACCENT: (u8, u8, u8) = (0, 255, 160);
+const DIM: (u8, u8, u8) = (120, 130, 140);
 const TEXT_FG: (u8, u8, u8) = (220, 220, 220);
 
 #[derive(Default)]
@@ -17,44 +16,25 @@ pub struct InputBar {
 }
 
 impl InputBar {
-    /// Render the input card as a grid of `cols × rows` cells.
+    /// Render `> text` vertically centered inside the input pane. The prompt is
+    /// accent-green when focused, dim otherwise.
     pub fn cells(&self, cols: u16, rows: u16) -> Vec<CellView> {
-        if cols < 6 || rows < 3 {
+        if cols < 4 || rows == 0 {
             return Vec::new();
         }
-        let right = cols.saturating_sub(1);
-        let bottom = rows.saturating_sub(1);
-        let (border, title_fg) = if self.focused {
-            (ACCENT, ACCENT)
-        } else {
-            (BORDER_DIM, TITLE_DIM)
-        };
-        let mut out = boxdraw::titled_box(
-            BoxRect {
-                left: 0,
-                top: 0,
-                right,
-                bottom,
-            },
-            "INPUT",
-            border,
-            title_fg,
-            BG,
-        );
-        // Content row 1, starting at col 2: "> " then text, truncated to fit.
-        let content_col: u16 = 2;
-        let max_content = right.saturating_sub(content_col + 1) as usize;
-        let prompt = "> ";
-        let display: String = format!("{}{}", prompt, self.text)
-            .chars()
-            .take(max_content)
-            .collect();
+        let row = rows / 2;
+        let start = 2u16;
+        let prompt_fg = if self.focused { ACCENT } else { DIM };
+        let max = cols.saturating_sub(start + 1) as usize;
+        let display: String = format!("> {}", self.text).chars().take(max).collect();
+        let mut out = Vec::new();
         for (i, ch) in display.chars().enumerate() {
+            let fg = if i < 2 { prompt_fg } else { TEXT_FG };
             out.push(CellView {
-                col: content_col + i as u16,
-                row: 1,
+                col: start + i as u16,
+                row,
                 c: ch,
-                fg: TEXT_FG,
+                fg,
                 bg: BG,
                 bold: false,
                 italic: false,
@@ -87,24 +67,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cells_focused_contains_corners_and_text() {
+    fn cells_focused_shows_accent_prompt_and_text() {
         let bar = InputBar {
             text: "ls".into(),
             focused: true,
         };
         let cells = bar.cells(40, 3);
-        let has = |ch: char| cells.iter().any(|c| c.c == ch);
-        assert!(has('╭'), "missing top-left corner");
-        assert!(has('╯'), "missing bottom-right corner");
-        assert!(has('>'), "missing prompt '>'");
-        assert!(has('l'), "missing 'l'");
-        assert!(has('s'), "missing 's'");
+        // prompt + text present
+        assert!(cells.iter().any(|c| c.c == '>'));
+        assert!(cells.iter().any(|c| c.c == 'l'));
+        assert!(cells.iter().any(|c| c.c == 's'));
+        // the '>' prompt is accent-green when focused
+        let prompt = cells.iter().find(|c| c.c == '>').unwrap();
+        assert_eq!(prompt.fg, ACCENT);
+    }
+
+    #[test]
+    fn cells_unfocused_prompt_is_dim() {
+        let bar = InputBar {
+            text: String::new(),
+            focused: false,
+        };
+        let prompt = bar.cells(40, 3).into_iter().find(|c| c.c == '>').unwrap();
+        assert_eq!(prompt.fg, DIM);
     }
 
     #[test]
     fn cells_tiny_returns_empty() {
-        let bar = InputBar::default();
-        assert!(bar.cells(5, 3).is_empty());
-        assert!(bar.cells(40, 2).is_empty());
+        assert!(InputBar::default().cells(3, 3).is_empty());
+        assert!(InputBar::default().cells(40, 0).is_empty());
     }
 }
