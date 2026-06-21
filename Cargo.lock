@@ -762,6 +762,9 @@ dependencies = [
  "crew-plugin",
  "crew-render",
  "crew-term",
+ "dirs",
+ "serde",
+ "toml",
  "winit",
 ]
 
