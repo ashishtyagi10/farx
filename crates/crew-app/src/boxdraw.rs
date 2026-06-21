@@ -18,16 +18,26 @@ fn cell(col: u16, row: u16, c: char, fg: (u8, u8, u8), bg: (u8, u8, u8)) -> Cell
 /// Draw a rounded box `[left..=right] x [top..=bottom]` with `title` embedded in
 /// the top border (`╭─ TITLE ──╮`). Border glyphs use `border`; the title uses
 /// `title_fg`.
+pub struct BoxRect {
+    pub left: u16,
+    pub top: u16,
+    pub right: u16,
+    pub bottom: u16,
+}
+
 pub fn titled_box(
-    left: u16,
-    top: u16,
-    right: u16,
-    bottom: u16,
+    r: BoxRect,
     title: &str,
     border: (u8, u8, u8),
     title_fg: (u8, u8, u8),
     bg: (u8, u8, u8),
 ) -> Vec<CellView> {
+    let BoxRect {
+        left,
+        top,
+        right,
+        bottom,
+    } = r;
     let mut v = Vec::new();
     if right <= left || bottom <= top {
         return v;
@@ -80,10 +90,12 @@ mod tests {
     #[test]
     fn titled_box_has_corners_and_legend() {
         let cells = titled_box(
-            0,
-            0,
-            14,
-            4,
+            BoxRect {
+                left: 0,
+                top: 0,
+                right: 14,
+                bottom: 4,
+            },
             "SYS",
             (70, 130, 140),
             (0, 255, 160),
@@ -97,6 +109,12 @@ mod tests {
 
     #[test]
     fn titled_box_degenerate_is_empty() {
-        assert!(titled_box(5, 5, 5, 5, "x", (0, 0, 0), (0, 0, 0), (0, 0, 0)).is_empty());
+        let r = BoxRect {
+            left: 5,
+            top: 5,
+            right: 5,
+            bottom: 5,
+        };
+        assert!(titled_box(r, "x", (0, 0, 0), (0, 0, 0), (0, 0, 0)).is_empty());
     }
 }

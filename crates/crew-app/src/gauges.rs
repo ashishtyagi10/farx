@@ -90,7 +90,16 @@ pub(crate) fn render_stats(stats: Stats, cols: u16, rows: u16) -> Vec<CellView> 
     let top = 0u16;
     let bottom = (top + 7).min(rows - 1);
     out.extend(boxdraw::titled_box(
-        left, top, right, bottom, HEADER, BORDER, FILL, BG,
+        boxdraw::BoxRect {
+            left,
+            top,
+            right,
+            bottom,
+        },
+        HEADER,
+        BORDER,
+        FILL,
+        BG,
     ));
 
     // Content indented one column inside the card border.
