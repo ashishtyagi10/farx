@@ -83,6 +83,17 @@ fn history_up_down_recalls_entries() {
 }
 
 #[test]
+fn broadcast_prompt_is_magenta() {
+    let bar = InputBar {
+        focused: true,
+        broadcast: true,
+        ..Default::default()
+    };
+    let cells = bar.cells(40, 3);
+    assert!(cells.iter().any(|c| c.c == '»' && c.fg == BROADCAST));
+}
+
+#[test]
 fn cells_tiny_returns_empty() {
     assert!(InputBar::default().cells(3, 3).is_empty());
     assert!(InputBar::default().cells(40, 0).is_empty());

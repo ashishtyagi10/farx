@@ -7,6 +7,7 @@ const BG: (u8, u8, u8) = (0, 0, 0);
 const ACCENT: (u8, u8, u8) = (0, 255, 160);
 const DIM: (u8, u8, u8) = (120, 130, 140);
 const TEXT_FG: (u8, u8, u8) = (220, 220, 220);
+const BROADCAST: (u8, u8, u8) = (220, 120, 200);
 
 #[derive(Default)]
 pub struct InputBar {
@@ -18,6 +19,8 @@ pub struct InputBar {
     pub menu_sel: usize,
     /// Position while browsing history with Up/Down (`None` = editing fresh text).
     pub hist_pos: Option<usize>,
+    /// Whether broadcast (synchronized input to all panes) is active.
+    pub broadcast: bool,
 }
 
 impl InputBar {
@@ -29,8 +32,14 @@ impl InputBar {
         }
         let row = rows / 2;
         let start = 2u16;
-        let prompt_fg = if self.focused { ACCENT } else { DIM };
-        // Drawable columns after the gutter; the first 2 hold the "> " prompt.
+        // A distinct magenta "» " prompt signals broadcast (input → all panes).
+        let (prompt, base) = if self.broadcast {
+            ("» ", BROADCAST)
+        } else {
+            ("> ", ACCENT)
+        };
+        let prompt_fg = if self.focused { base } else { DIM };
+        // Drawable columns after the gutter; the first 2 hold the prompt.
         let max = cols.saturating_sub(start + 1) as usize;
         let text_area = max.saturating_sub(2);
         // Typed text (bright), then either the ghost suggestion (dim) or the
@@ -57,7 +66,7 @@ impl InputBar {
         // Follow the cursor: when the body overflows the field, show its tail.
         let skip = body.len().saturating_sub(text_area);
         let mut out = Vec::new();
-        for (i, ch) in "> ".chars().enumerate() {
+        for (i, ch) in prompt.chars().enumerate() {
             out.push(CellView {
                 col: start + i as u16,
                 row,

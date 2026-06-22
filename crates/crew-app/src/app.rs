@@ -36,6 +36,8 @@ pub struct CrewApp {
     pub(crate) zoomed: bool,
     /// Last OS window title set, to avoid redundant `set_title` calls.
     pub(crate) win_title: String,
+    /// Mirror input to every terminal pane (tmux-style synchronized input).
+    pub(crate) broadcast: bool,
 }
 
 impl CrewApp {
@@ -80,20 +82,28 @@ impl CrewApp {
         if let Some(cmd) = slash_command(&line) {
             return self.run_slash_command(cmd);
         }
+        let mut bytes = line.into_bytes();
+        bytes.push(b'\n');
+        self.write_to_terminals(&bytes);
+        false
+    }
+
+    /// Write `bytes` to the focused terminal — or, when broadcast is on, to every
+    /// terminal pane (tmux-style synchronized input). Each write snaps to bottom.
+    pub(crate) fn write_to_terminals(&mut self, bytes: &[u8]) {
+        let all = self.broadcast;
         let focused = self.focused;
-        if let Some(pane) = self.panes.get_mut(focused) {
+        for (i, pane) in self.panes.iter_mut().enumerate() {
+            if !all && i != focused {
+                continue;
+            }
             if let PaneContent::Terminal(t) = &mut pane.content {
-                if let Err(e) = t
-                    .input
-                    .write_all(line.as_bytes())
-                    .and_then(|_| t.input.write_all(b"\n"))
-                    .and_then(|_| t.input.flush())
-                {
-                    eprintln!("submit_input write error: {e}");
+                t.pty.scroll_to_bottom();
+                if let Err(e) = t.input.write_all(bytes).and_then(|_| t.input.flush()) {
+                    eprintln!("terminal write error: {e}");
                 }
             }
         }
-        false
     }
 
     /// Run a `/command` typed in the input bar. Returns `true` if the app should exit.
