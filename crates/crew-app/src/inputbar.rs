@@ -15,6 +15,8 @@ const BROADCAST: (u8, u8, u8) = (220, 120, 200);
 /// Border colour of the card: bright when focused, muted grey otherwise.
 const BORDER_ON: (u8, u8, u8) = (210, 210, 220);
 const BORDER_OFF: (u8, u8, u8) = (110, 110, 120);
+/// Transient status message colour (amber), shown on the bottom border.
+const STATUS_FG: (u8, u8, u8) = (230, 180, 90);
 
 #[derive(Default)]
 pub struct InputBar {
@@ -55,9 +57,9 @@ impl InputBar {
 
 impl InputBar {
     /// Render the input card: a rounded border with the working directory as its
-    /// top-border legend, and `> text` on the interior row. The prompt and border
-    /// brighten when focused.
-    pub fn cells(&self, cols: u16, rows: u16) -> Vec<CellView> {
+    /// top-border legend, `> text` on the interior row, and an optional transient
+    /// `status` message on the bottom border. Prompt and border brighten on focus.
+    pub fn cells(&self, cols: u16, rows: u16, status: Option<&str>) -> Vec<CellView> {
         if cols < 6 || rows < 3 {
             return Vec::new();
         }
@@ -99,6 +101,18 @@ impl InputBar {
         }
         for (i, &(ch, fg)) in body[skip..].iter().enumerate() {
             out.push(cell(tstart + i as u16, row, ch, fg));
+        }
+
+        // Transient status flashed on the bottom border, right-aligned.
+        if let Some(s) = status {
+            let label = format!(" {s} ");
+            let w = label.chars().count() as u16;
+            if w + 3 < cols {
+                let start = cols - 2 - w;
+                for (i, ch) in label.chars().enumerate() {
+                    out.push(cell(start + i as u16, rows - 1, ch, STATUS_FG));
+                }
+            }
         }
         out
     }

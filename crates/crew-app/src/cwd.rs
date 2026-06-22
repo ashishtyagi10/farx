@@ -98,9 +98,13 @@ impl CrewApp {
         } else {
             resolve(&self.cwd, arg)
         };
-        if let Some(dir) = target {
-            self.set_cwd(dir);
-            self.redraw();
+        match target {
+            Some(dir) => {
+                self.set_cwd(dir);
+                self.redraw();
+            }
+            None if arg == "-" => self.set_status("cd: no previous directory"),
+            None => self.set_status(format!("cd: no such directory: {arg}")),
         }
         true
     }

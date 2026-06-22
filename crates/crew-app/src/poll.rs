@@ -46,6 +46,10 @@ impl CrewApp {
         if self.sidebar.refresh(&self.cwd) {
             any_changed = true;
         }
+        // Clear a status message once it has aged out, repainting the border.
+        if self.expire_status() {
+            any_changed = true;
+        }
         // Animate the matrix-rain welcome screen while there are no panes.
         if self.panes.is_empty() {
             self.tick = self.tick.wrapping_add(1);

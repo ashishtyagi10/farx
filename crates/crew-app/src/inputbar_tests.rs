@@ -7,7 +7,7 @@ fn cells_focused_shows_accent_prompt_and_text() {
         focused: true,
         ..Default::default()
     };
-    let cells = bar.cells(40, 3);
+    let cells = bar.cells(40, 3, None);
     assert!(cells.iter().any(|c| c.c == '>'));
     assert!(cells.iter().any(|c| c.c == 'l'));
     assert!(cells.iter().any(|c| c.c == 's'));
@@ -25,7 +25,7 @@ fn cells_long_text_follows_cursor_tail() {
         focused: true,
         ..Default::default()
     };
-    let cells = bar.cells(20, 3);
+    let cells = bar.cells(20, 3, None);
     assert!(cells.iter().any(|c| c.c == 'E'));
     assert!(cells.iter().any(|c| c.c == '█'));
     assert!(!cells.iter().any(|c| c.c == 'S'));
@@ -38,7 +38,7 @@ fn cells_shows_dim_ghost_suggestion() {
         focused: true,
         ..Default::default()
     };
-    let cells = bar.cells(40, 3);
+    let cells = bar.cells(40, 3, None);
     assert!(cells.iter().any(|c| c.c == 't' && c.fg == DIM));
     assert!(!cells.iter().any(|c| c.c == '█'));
 }
@@ -50,7 +50,7 @@ fn cells_unfocused_has_no_cursor() {
         focused: false,
         ..Default::default()
     };
-    assert!(!bar.cells(40, 3).iter().any(|c| c.c == '█'));
+    assert!(!bar.cells(40, 3, None).iter().any(|c| c.c == '█'));
 }
 
 #[test]
@@ -60,7 +60,11 @@ fn cells_unfocused_prompt_is_dim() {
         focused: false,
         ..Default::default()
     };
-    let prompt = bar.cells(40, 3).into_iter().find(|c| c.c == '>').unwrap();
+    let prompt = bar
+        .cells(40, 3, None)
+        .into_iter()
+        .find(|c| c.c == '>')
+        .unwrap();
     assert_eq!(prompt.fg, DIM);
 }
 
@@ -89,7 +93,7 @@ fn broadcast_prompt_is_magenta() {
         broadcast: true,
         ..Default::default()
     };
-    let cells = bar.cells(40, 3);
+    let cells = bar.cells(40, 3, None);
     assert!(cells.iter().any(|c| c.c == '»' && c.fg == BROADCAST));
 }
 
@@ -101,7 +105,7 @@ fn cells_show_cwd_legend_on_top_border() {
         cwd: "/code/farx".into(),
         ..Default::default()
     };
-    let cells = bar.cells(40, 3);
+    let cells = bar.cells(40, 3, None);
     // the cwd legend rides the top border (row 0) in the accent colour
     assert!(cells
         .iter()
@@ -112,7 +116,23 @@ fn cells_show_cwd_legend_on_top_border() {
 }
 
 #[test]
+fn cells_show_status_on_bottom_border() {
+    let bar = InputBar {
+        focused: true,
+        ..Default::default()
+    };
+    let cells = bar.cells(40, 3, Some("copied 4 lines"));
+    // status characters appear on the bottom border row in the amber colour
+    assert!(cells
+        .iter()
+        .any(|c| c.c == 'c' && c.row == 2 && c.fg == STATUS_FG));
+    // without a status, the bottom row carries no amber text
+    let plain = bar.cells(40, 3, None);
+    assert!(!plain.iter().any(|c| c.fg == STATUS_FG));
+}
+
+#[test]
 fn cells_tiny_returns_empty() {
-    assert!(InputBar::default().cells(3, 3).is_empty());
-    assert!(InputBar::default().cells(40, 0).is_empty());
+    assert!(InputBar::default().cells(3, 3, None).is_empty());
+    assert!(InputBar::default().cells(40, 0, None).is_empty());
 }

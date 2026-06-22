@@ -85,6 +85,8 @@ The docked command bar supports:
 - **Working directory** — the bar's legend shows Crew's current directory
   (`~`-abbreviated). Type **`cd <path>`** (or bare `cd` for home) to move it; new
   shells (**Cmd+T** / `/shell`) open in that directory.
+- **Status flashes** — transient messages (e.g. "copied 12 lines", "cd: no such
+  directory") appear briefly on the input card's bottom border.
 - Anything that isn't a slash command or `cd` is sent to the focused terminal.
 
 ## Clipboard

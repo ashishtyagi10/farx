@@ -114,7 +114,7 @@ impl CrewApp {
         let ic = (ib.w / cw).floor() as u16;
         let ir = (ib.h / ch).floor() as u16;
         scenes.push(PaneScene {
-            cells: self.input.cells(ic, ir),
+            cells: self.input.cells(ic, ir, self.active_status()),
             x: ib.x,
             y: ib.y,
             w: ib.w,
