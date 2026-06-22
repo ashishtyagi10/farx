@@ -2,6 +2,7 @@ mod app;
 mod boxdraw;
 mod chat;
 mod chatlayout;
+mod chords;
 pub mod chrome;
 mod clipboard;
 mod clock;
