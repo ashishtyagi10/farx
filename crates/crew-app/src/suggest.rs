@@ -24,6 +24,10 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         desc: "Search scrollback (/find <text>)",
     },
     Cmd {
+        name: "/name",
+        desc: "Rename the focused pane (/name <text>)",
+    },
+    Cmd {
         name: "/update",
         desc: "Update Crew (git pull)",
     },
