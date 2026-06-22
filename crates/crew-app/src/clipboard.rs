@@ -1,8 +1,28 @@
-//! Clipboard paste into the focused surface (input bar, chat, or terminal).
+//! Clipboard copy/paste for the focused surface (input bar, chat, or terminal).
 use std::io::Write;
 
 use crate::app::CrewApp;
 use crate::pane::PaneContent;
+use crew_term::{RenderCell, TermModel};
+
+/// Reconstruct the visible terminal screen as text: each row trimmed of trailing
+/// spaces, with trailing blank rows dropped.
+fn screen_text(cells: &[RenderCell], cols: u16, rows: u16) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    for r in 0..rows {
+        let mut line = vec![' '; cols as usize];
+        for cell in cells.iter().filter(|c| c.row == r) {
+            if (cell.col as usize) < line.len() {
+                line[cell.col as usize] = cell.c;
+            }
+        }
+        lines.push(line.into_iter().collect::<String>().trim_end().to_string());
+    }
+    while lines.last().is_some_and(|l| l.is_empty()) {
+        lines.pop();
+    }
+    lines.join("\n")
+}
 
 /// Flatten clipboard text to a single line for single-line inputs.
 fn one_line(s: &str) -> String {
@@ -44,6 +64,21 @@ impl CrewApp {
         self.redraw();
     }
 
+    /// Copy the focused terminal's visible screen to the system clipboard.
+    pub(crate) fn copy_screen(&self) {
+        let Some(pane) = self.panes.get(self.focused) else {
+            return;
+        };
+        if let PaneContent::Terminal(t) = &pane.content {
+            let text = screen_text(&t.pty.cells(false), pane.grid.cols, pane.grid.rows);
+            if !text.is_empty() {
+                if let Ok(mut cb) = arboard::Clipboard::new() {
+                    let _ = cb.set_text(text);
+                }
+            }
+        }
+    }
+
     /// Take a pending OSC 52 clipboard-store request from any terminal pane.
     pub(crate) fn take_pane_clipboard(&self) -> Option<String> {
         self.panes.iter().find_map(|p| match &p.content {
@@ -55,11 +90,28 @@ impl CrewApp {
 
 #[cfg(test)]
 mod tests {
-    use super::one_line;
+    use super::{one_line, screen_text};
 
     #[test]
     fn one_line_flattens_newlines() {
         assert_eq!(one_line("a\nb\r\nc"), "a b  c");
         assert_eq!(one_line("plain"), "plain");
+    }
+
+    #[test]
+    fn screen_text_trims_and_drops_blank_tail() {
+        use crew_term::RenderCell;
+        let c = |col, row, ch| RenderCell {
+            col,
+            row,
+            c: ch,
+            fg: (0, 0, 0),
+            bg: (0, 0, 0),
+            bold: false,
+            italic: false,
+        };
+        // "hi" on row 0, "x" on row 1, row 2 blank → trailing blank dropped.
+        let cells = [c(0, 0, 'h'), c(1, 0, 'i'), c(0, 1, 'x')];
+        assert_eq!(screen_text(&cells, 5, 3), "hi\nx");
     }
 }
