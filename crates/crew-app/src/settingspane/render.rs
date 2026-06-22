@@ -15,7 +15,7 @@ use super::{Field, SettingsPane};
 const ACCENT: Color = Color::Rgb(0, 255, 160);
 const TEXT: Color = Color::Rgb(200, 200, 200);
 const DIM: Color = Color::Rgb(120, 130, 140);
-const BG: Color = Color::Rgb(8, 8, 16);
+const BG: Color = Color::Rgb(0, 0, 0);
 
 /// Render the form into a ratatui buffer, then hand the cells to the GPU.
 pub(crate) fn render(p: &SettingsPane, cols: u16, rows: u16) -> Vec<CellView> {

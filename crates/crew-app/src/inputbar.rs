@@ -4,7 +4,7 @@
 use crew_render::CellView;
 use winit::keyboard::{Key, NamedKey};
 
-const BG: (u8, u8, u8) = (8, 8, 16);
+const BG: (u8, u8, u8) = (0, 0, 0);
 const ACCENT: (u8, u8, u8) = (0, 255, 160);
 const DIM: (u8, u8, u8) = (120, 130, 140);
 const TEXT_FG: (u8, u8, u8) = (220, 220, 220);

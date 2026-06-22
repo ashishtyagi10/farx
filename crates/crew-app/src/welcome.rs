@@ -2,7 +2,7 @@ use crew_render::CellView;
 
 const ACCENT: (u8, u8, u8) = (0, 255, 160);
 const DIM: (u8, u8, u8) = (120, 120, 140);
-const BG: (u8, u8, u8) = (8, 8, 16);
+const BG: (u8, u8, u8) = (0, 0, 0);
 const TAGLINE: &str = "the next-gen terminal";
 const TOTAL_HEIGHT: u16 = 8; // 6 banner + 1 gap + 1 tagline
 

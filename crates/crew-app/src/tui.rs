@@ -6,7 +6,7 @@ use ratatui::buffer::Buffer;
 use ratatui::style::{Color, Modifier};
 
 const DEFAULT_FG: (u8, u8, u8) = (220, 220, 220);
-const DEFAULT_BG: (u8, u8, u8) = (8, 8, 16);
+const DEFAULT_BG: (u8, u8, u8) = (0, 0, 0);
 
 /// Convert a laid-out ratatui buffer into `CellView`s (origin-relative coords).
 /// Fully-blank cells (a space with the default background) are skipped so we

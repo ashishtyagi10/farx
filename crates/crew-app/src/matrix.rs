@@ -3,7 +3,7 @@
 //! a frame is a pure function of `(cols, rows, tick)`.
 use crew_render::CellView;
 
-const BG: (u8, u8, u8) = (8, 8, 16);
+const BG: (u8, u8, u8) = (0, 0, 0);
 const TRAIL: i64 = 14;
 const GAP: i64 = 8;
 

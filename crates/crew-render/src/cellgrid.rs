@@ -10,7 +10,7 @@ use crate::roundborder::RoundBorderLayer;
 use crate::scene::{build_scene, PaneBuffer, PaneScene};
 
 /// Default terminal background colour (must match scene.rs).
-pub(crate) const DEFAULT_BG: (u8, u8, u8) = (8, 8, 16);
+pub(crate) const DEFAULT_BG: (u8, u8, u8) = (0, 0, 0);
 
 /// A single terminal cell to be rendered.
 pub struct CellView {

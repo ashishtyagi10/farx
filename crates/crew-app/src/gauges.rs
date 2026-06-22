@@ -6,7 +6,7 @@ use crate::stats::Stats;
 
 const FILL: (u8, u8, u8) = (0, 255, 160);
 const TRACK: (u8, u8, u8) = (40, 80, 95);
-const BG: (u8, u8, u8) = (8, 8, 16);
+const BG: (u8, u8, u8) = (0, 0, 0);
 const LABEL: (u8, u8, u8) = (200, 200, 200);
 const BORDER: (u8, u8, u8) = (70, 130, 140);
 const HEADER: &str = "SYSTEM";
