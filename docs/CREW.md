@@ -78,6 +78,8 @@ The docked command bar supports:
 - **Autosuggest** — fish-style ghost text from history; Tab/→ accepts it.
 - **History** — **Up/Down** recall previous lines (persisted to
   `$XDG_CONFIG/crew/history` across sessions).
+- **`cd` completion** — typing `cd <partial>` ghost-completes the first matching
+  subdirectory; Tab/→ accepts it.
 - **Editing** — **Ctrl+W** delete the last word, **Ctrl+U** clear the line.
 - **Working directory** — the bar's legend shows Crew's current directory
   (`~`-abbreviated). Type **`cd <path>`** (or bare `cd` for home) to move it; new
@@ -99,9 +101,11 @@ back to the most recent line containing the text. Typing returns to the bottom.
 
 ## Sidebar
 
-A docked left panel (toggle with **Cmd+G**) with stacked cards: a live **TIME**
-clock, **SYSTEM** CPU/MEM/DISK gauges, a **HOST** card (hostname, OS, uptime),
-and a **NET** card (down/up byte rates).
+A docked left panel (toggle with **Cmd+G**) with stacked, line-divided sections:
+a live **TIME** clock, **SYSTEM** CPU/MEM/DISK gauges, a **HOST** section
+(hostname, OS, uptime), a **NET** section (down/up byte rates), and — when the
+working directory is a repository — a **GIT** section showing the current branch
+and a clean/dirty marker.
 
 ## Settings
 

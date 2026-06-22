@@ -10,6 +10,7 @@ mod cmdmenu;
 pub mod config;
 mod cwd;
 mod gauges;
+mod git;
 mod handler;
 mod help;
 mod history;
