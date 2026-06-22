@@ -3,7 +3,7 @@ use crew_render::PaneScene;
 use crate::app::{CrewApp, GAP};
 use crate::chrome;
 use crate::layout::{pane_rects_at, Rect};
-use crate::pane::{build_scenes, relayout};
+use crate::pane::{build_scenes, relayout, PaneContent};
 use crate::session::pane_at;
 use crate::welcome;
 
@@ -110,6 +110,22 @@ impl CrewApp {
         });
 
         scenes
+    }
+
+    /// Route a mouse-wheel scroll (in lines; positive = up/older) to the surface
+    /// under the cursor. Terminal panes scroll their scrollback.
+    pub(crate) fn scroll_at_cursor(&mut self, lines: i32) {
+        if lines == 0 {
+            return;
+        }
+        if let Some(i) = self.pane_at_cursor() {
+            if let Some(pane) = self.panes.get_mut(i) {
+                if let PaneContent::Terminal(t) = &mut pane.content {
+                    t.pty.scroll(lines);
+                    self.redraw();
+                }
+            }
+        }
     }
 
     /// Which grid pane (if any) sits under the cursor — only inside the content

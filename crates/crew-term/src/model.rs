@@ -1,5 +1,5 @@
 use alacritty_terminal::event::{Event, EventListener};
-use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::{Config, Term};
 use alacritty_terminal::vte::ansi::Processor;
@@ -84,11 +84,12 @@ impl TermCore {
     pub(crate) fn cells(&self) -> Vec<RenderCell> {
         let content = self.term.renderable_content();
         let palette = content.colors;
-        // display_iter yields Indexed<&Cell>; Indexed derefs to Cell, so .c is available.
-        // point.line is i32 (0 = top of viewport); point.column is usize.
+        // When scrolled into history, viewport lines are negative; add the display
+        // offset to map each line back to a 0-based viewport row.
+        let off = content.display_offset as i32;
         content
             .display_iter
-            .filter(|ind| ind.c != ' ' && ind.c != '\0' && ind.point.line.0 >= 0)
+            .filter(|ind| ind.c != ' ' && ind.c != '\0' && ind.point.line.0 + off >= 0)
             .map(|ind| {
                 let bold = ind.flags.contains(Flags::BOLD);
                 let italic = ind.flags.contains(Flags::ITALIC);
@@ -99,7 +100,7 @@ impl TermCore {
                 }
                 RenderCell {
                     col: ind.point.column.0 as u16,
-                    row: ind.point.line.0 as u16,
+                    row: (ind.point.line.0 + off) as u16,
                     c: ind.c,
                     fg,
                     bg,
@@ -117,6 +118,16 @@ impl TermCore {
         };
         self.term.resize(dims);
     }
+
+    /// Scroll the viewport by `delta` lines into scrollback (positive = older).
+    pub(crate) fn scroll(&mut self, delta: i32) {
+        self.term.scroll_display(Scroll::Delta(delta));
+    }
+
+    /// Jump back to the live bottom of the terminal.
+    pub(crate) fn scroll_to_bottom(&mut self) {
+        self.term.scroll_display(Scroll::Bottom);
+    }
 }
 
 pub struct HeadlessTerm {
@@ -128,6 +139,11 @@ impl HeadlessTerm {
         Self {
             core: TermCore::new(size),
         }
+    }
+
+    /// Scroll the viewport by `delta` lines into scrollback (positive = older).
+    pub fn scroll(&mut self, delta: i32) {
+        self.core.scroll(delta);
     }
 }
 

@@ -67,6 +67,8 @@ impl CrewApp {
             match &mut pane.content {
                 PaneContent::Terminal(t) => {
                     if let Some(bytes) = key_to_bytes(event) {
+                        // Typing snaps the view back to the live bottom.
+                        t.pty.scroll_to_bottom();
                         if let Err(e) = t.input.write_all(&bytes).and_then(|_| t.input.flush()) {
                             eprintln!("pty write error: {e}");
                         }

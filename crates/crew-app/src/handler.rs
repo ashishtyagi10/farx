@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -118,6 +118,13 @@ impl ApplicationHandler for CrewApp {
                     self.focused = i;
                 }
                 self.redraw();
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let lines = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y.round() as i32,
+                    MouseScrollDelta::PixelDelta(p) => (p.y / 24.0).round() as i32,
+                };
+                self.scroll_at_cursor(lines);
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 self.on_key_event(event_loop, &event);

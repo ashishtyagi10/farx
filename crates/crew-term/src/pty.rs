@@ -92,6 +92,18 @@ impl PtyTerm {
     }
 }
 
+impl PtyTerm {
+    /// Scroll the viewport by `delta` lines into scrollback (positive = older).
+    pub fn scroll(&mut self, delta: i32) {
+        self.core.scroll(delta);
+    }
+
+    /// Jump back to the live bottom of the terminal.
+    pub fn scroll_to_bottom(&mut self) {
+        self.core.scroll_to_bottom();
+    }
+}
+
 impl TermModel for PtyTerm {
     fn feed(&mut self, bytes: &[u8]) {
         self.core.feed(bytes);
