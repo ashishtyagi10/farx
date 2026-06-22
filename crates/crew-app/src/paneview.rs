@@ -20,7 +20,8 @@ struct Bar<'a> {
     index: Option<usize>,
     title: &'a str,
     focused: bool,
-    scrolled: bool,
+    /// Lines scrolled back from the live bottom (0 = at the bottom).
+    scroll: usize,
     activity: bool,
     bell: bool,
 }
@@ -61,13 +62,21 @@ fn title_bar(b: &Bar) -> Vec<CellView> {
         }
     }
 
-    // Right-aligned status glyphs, stepping leftward.
+    // Right-aligned status, stepping leftward: the scroll indicator `⇡N` (showing
+    // how many lines back you are), then the activity and bell dots.
     let mut rx = b.cols.saturating_sub(2);
-    for (on, c, fg) in [
-        (b.bell, '!', BELL),
-        (b.activity, '●', ACTIVITY),
-        (b.scrolled, '⇡', SCROLL_HINT),
-    ] {
+    if b.scroll > 0 {
+        let s = format!("⇡{}", b.scroll);
+        let w = s.chars().count() as u16;
+        if rx + 1 > x + w {
+            let start = rx + 1 - w;
+            for (i, ch) in s.chars().enumerate() {
+                set(&mut out, start + i as u16, ch, SCROLL_HINT, bg);
+            }
+            rx = start.saturating_sub(2);
+        }
+    }
+    for (on, c, fg) in [(b.activity, '●', ACTIVITY), (b.bell, '!', BELL)] {
         if on && rx > x {
             set(&mut out, rx, c, fg, bg);
             rx = rx.saturating_sub(2);
@@ -97,15 +106,17 @@ pub fn build_scenes(panes: &[Pane], focused: Option<usize>) -> Vec<PaneScene> {
             for c in cells.iter_mut() {
                 c.row += 1; // content sits below the title bar
             }
-            let scrolled =
-                matches!(&p.content, PaneContent::Terminal(t) if t.pty.display_offset() > 0);
+            let scroll = match &p.content {
+                PaneContent::Terminal(t) => t.pty.display_offset(),
+                _ => 0,
+            };
             let title = p.title_text();
             cells.extend(title_bar(&Bar {
                 cols: p.grid.cols,
                 index: multi.then_some(i + 1),
                 title: &title,
                 focused: foc,
-                scrolled,
+                scroll,
                 activity: p.activity && !foc,
                 bell: p.bell && !foc,
             }));
@@ -132,7 +143,7 @@ mod tests {
             index: Some(2),
             title: "~/code",
             focused,
-            scrolled: true,
+            scroll: 37,
             activity: true,
             bell: true,
         }
@@ -144,10 +155,25 @@ mod tests {
         assert_eq!(cells.len(), 40); // full-width bar
         assert!(cells.iter().any(|c| c.c == '2' && c.fg == ACCENT));
         assert!(cells.iter().any(|c| c.c == '~'));
+        // scroll indicator renders as `⇡37`
         assert!(cells.iter().any(|c| c.c == '⇡' && c.fg == SCROLL_HINT));
+        assert!(cells.iter().any(|c| c.c == '3' && c.fg == SCROLL_HINT));
+        assert!(cells.iter().any(|c| c.c == '7' && c.fg == SCROLL_HINT));
         assert!(cells.iter().any(|c| c.c == '●' && c.fg == ACTIVITY));
         assert!(cells.iter().any(|c| c.c == '!' && c.fg == BELL));
         assert!(cells.iter().all(|c| c.row == 0));
+    }
+
+    #[test]
+    fn title_bar_no_scroll_indicator_at_bottom() {
+        let b = Bar {
+            scroll: 0,
+            activity: false,
+            bell: false,
+            ..bar(true)
+        };
+        let cells = title_bar(&b);
+        assert!(!cells.iter().any(|c| c.c == '⇡'));
     }
 
     #[test]

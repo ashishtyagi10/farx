@@ -32,7 +32,7 @@ status glyphs:
 
 | Glyph | Meaning |
 |-------|---------|
-| `⇡`   | viewing scrollback (not at the live bottom) |
+| `⇡N`  | viewing scrollback, N lines back from the live bottom |
 | `●`   | new output in an unfocused pane |
 | `!`   | the program rang the bell |
 
