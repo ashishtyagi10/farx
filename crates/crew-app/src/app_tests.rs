@@ -41,7 +41,7 @@ fn cd_in_input_changes_cwd_and_legend() {
     // a `cd` to an existing dir is intercepted (not forwarded) and updates state.
     assert!(!app.submit_input("cd .".to_string()));
     assert_eq!(app.cwd, base);
-    assert_eq!(app.input.cwd, crate::cwd::display(&base));
+    assert_eq!(app.input.cwd, base);
     // a non-`cd` line is not treated as a directory change.
     assert!(!app.try_change_dir("ls -la"));
 }
