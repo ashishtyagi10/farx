@@ -1,6 +1,4 @@
 //! Keyboard event dispatch for CrewApp.
-use std::io::Write;
-
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
 
@@ -103,23 +101,20 @@ impl CrewApp {
         let focused = self.focused;
         let shift = mstate.shift_key();
         let mut settings_action: Option<SettingsAction> = None;
+        let mut is_terminal = false;
         if let Some(pane) = self.panes.get_mut(focused) {
             match &mut pane.content {
-                PaneContent::Terminal(t) => {
-                    if let Some(bytes) =
-                        key_to_bytes(event, mstate.control_key(), mstate.shift_key())
-                    {
-                        // Typing snaps the view back to the live bottom.
-                        t.pty.scroll_to_bottom();
-                        if let Err(e) = t.input.write_all(&bytes).and_then(|_| t.input.flush()) {
-                            eprintln!("pty write error: {e}");
-                        }
-                    }
-                }
+                // Terminal input is written below (so broadcast can reach all panes).
+                PaneContent::Terminal(_) => is_terminal = true,
                 PaneContent::Chat(c) => c.on_key(event),
                 PaneContent::Settings(s) => {
                     settings_action = s.on_key(event, shift);
                 }
+            }
+        }
+        if is_terminal {
+            if let Some(bytes) = key_to_bytes(event, mstate.control_key(), shift) {
+                self.write_to_terminals(&bytes);
             }
         }
         if let Some(action) = settings_action {

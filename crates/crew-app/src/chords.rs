@@ -51,6 +51,10 @@ impl CrewApp {
             "{" => self.move_pane(-1),
             "}" => self.move_pane(1),
             "z" => self.zoomed = !self.zoomed,
+            "s" => {
+                self.broadcast = !self.broadcast;
+                self.input.broadcast = self.broadcast;
+            }
             "v" => self.paste(),
             // Font zoom: Cmd+= / Cmd+- grow/shrink, Cmd+0 resets to default.
             "=" | "+" => self.set_font(self.config.font_size + 1.0),
