@@ -89,43 +89,28 @@ fn cell(col: u16, row: u16, c: char, fg: (u8, u8, u8)) -> CellView {
     }
 }
 
-/// Render the stats section as a rounded card with a `SYSTEM` legend embedded in
-/// the top border (fieldset/legend style) and CPU/MEM/DISK gauges spaced on rows
-/// 2, 4, 6. Future sidebar sections can stack as their own titled cards below.
+/// Render the stats section: a `SYSTEM` rule on row 0 (fieldset-legend style)
+/// with CPU/MEM/DISK gauges on rows 1/2/3 beneath it. Sidebar sections stack as
+/// their own dividers below.
 pub(crate) fn render_stats(stats: Stats, cols: u16, rows: u16) -> Vec<CellView> {
     let mut out = Vec::new();
-    if cols < 8 || rows < 6 {
+    if cols < 8 || rows < 4 {
         return out;
     }
-    let left = 1u16;
-    let right = cols - 2;
-    let top = 0u16;
-    let bottom = (top + 7).min(rows - 1);
-    out.extend(boxdraw::titled_box(
-        boxdraw::BoxRect {
-            left,
-            top,
-            right,
-            bottom,
-        },
-        HEADER,
-        BORDER,
-        FILL,
-        BG,
-    ));
+    out.extend(boxdraw::section_header(HEADER, cols, BORDER, FILL, BG));
 
-    // Content indented one column inside the card border.
-    let cstart = left + 2;
-    let inner = right.saturating_sub(cstart + 1);
+    // Content indented to align under the section legend (col 3).
+    let cstart = 3u16;
+    let inner = cols.saturating_sub(cstart + 1);
 
     let gauges = [
         ("CPU ", stats.cpu),
         ("MEM ", stats.mem),
         ("DISK", stats.disk),
     ];
-    let mut row = top + 2;
-    for (label, frac) in gauges {
-        if row >= bottom {
+    for (i, (label, frac)) in gauges.into_iter().enumerate() {
+        let row = 1 + i as u16;
+        if row >= rows {
             break;
         }
         for mut g in gauge_cells(label, frac, 0, inner) {
@@ -133,7 +118,6 @@ pub(crate) fn render_stats(stats: Stats, cols: u16, rows: u16) -> Vec<CellView> 
             g.row = row;
             out.push(g);
         }
-        row += 2;
     }
     out
 }
@@ -171,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn render_stats_card_legend_and_gauges() {
+    fn render_stats_legend_and_gauges() {
         let stats = Stats {
             cpu: 0.1,
             mem: 0.2,
@@ -179,14 +163,14 @@ mod tests {
             ..Default::default()
         };
         let cells = render_stats(stats, 24, 12);
-        let has = |ch: char| cells.iter().any(|c| c.c == ch);
-        // rounded card border
-        assert!(has('╭') && has('╮') && has('╰') && has('╯'));
-        // SYSTEM legend embedded on the top border row (row 0)
+        // flat divider, not a box
+        assert!(cells.iter().any(|c| c.c == '─' && c.row == 0));
+        assert!(!cells.iter().any(|c| matches!(c.c, '╭' | '╮' | '╰' | '╯')));
+        // SYSTEM legend on the divider row
         assert!(cells.iter().any(|c| c.c == 'S' && c.row == 0));
-        // gauge bars present, spaced on rows 2/4/6
+        // gauge bars present, stacked on rows 1/2/3
         assert!(cells.iter().any(|c| c.c == '█' || c.c == '░'));
         let rows: std::collections::HashSet<u16> = cells.iter().map(|c| c.row).collect();
-        assert!(rows.contains(&2) && rows.contains(&4) && rows.contains(&6));
+        assert!(rows.contains(&1) && rows.contains(&2) && rows.contains(&3));
     }
 }

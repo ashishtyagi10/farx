@@ -8,10 +8,10 @@ use crate::host;
 use crate::net;
 use crate::stats::SysSampler;
 
-/// Rows the SYSTEM card occupies (card body + a one-row gap below it).
-const SYS_BLOCK: u16 = 9;
-/// Rows a 4-row card + one-row gap occupies (HOST, NET).
-const CARD_BLOCK: u16 = 5;
+/// Rows the SYSTEM section occupies (rule + 3 gauges + a one-row gap below it).
+const SYS_BLOCK: u16 = 5;
+/// Rows a section with a rule + 2 content rows + one-row gap occupies (HOST, NET).
+const CARD_BLOCK: u16 = 4;
 
 /// The docked sidebar: a live clock card stacked above the system-stats card.
 pub struct StatsPane {

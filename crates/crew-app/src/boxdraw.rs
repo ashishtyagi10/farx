@@ -1,6 +1,7 @@
-//! Box-drawing helpers for grouping sidebar sections into bordered cards with an
-//! inline legend embedded in the top border — the HTML `<fieldset>`/`<legend>`
-//! pattern: `╭─ TITLE ──────╮`.
+//! Section dividers for the sidebar: a single horizontal rule with an inline
+//! legend embedded near the left edge — the HTML `<fieldset>`/`<legend>` look
+//! flattened to one line: `─ TITLE ──────────`. Sidebar sections stack as these
+//! rules (no enclosing box) with their content beneath.
 use crew_render::CellView;
 
 fn cell(col: u16, row: u16, c: char, fg: (u8, u8, u8), bg: (u8, u8, u8)) -> CellView {
@@ -15,69 +16,41 @@ fn cell(col: u16, row: u16, c: char, fg: (u8, u8, u8), bg: (u8, u8, u8)) -> Cell
     }
 }
 
-/// Draw a rounded box `[left..=right] x [top..=bottom]` with `title` embedded in
-/// the top border (`╭─ TITLE ──╮`). Border glyphs use `border`; the title uses
-/// `title_fg`.
-pub struct BoxRect {
-    pub left: u16,
-    pub top: u16,
-    pub right: u16,
-    pub bottom: u16,
-}
-
-pub fn titled_box(
-    r: BoxRect,
+/// Draw a horizontal rule across `[1..=cols-2]` on row 0 with `title` embedded
+/// near the left (`─ TITLE ──────`). The rule uses `border`; the title uses
+/// `title_fg`. Callers shift the returned cells to the section's top row.
+pub fn section_header(
     title: &str,
+    cols: u16,
     border: (u8, u8, u8),
     title_fg: (u8, u8, u8),
     bg: (u8, u8, u8),
 ) -> Vec<CellView> {
-    let BoxRect {
-        left,
-        top,
-        right,
-        bottom,
-    } = r;
     let mut v = Vec::new();
-    if right <= left || bottom <= top {
+    if cols < 4 {
         return v;
     }
-    // Corners + vertical sides + bottom edge.
-    v.push(cell(left, top, '╭', border, bg));
-    v.push(cell(right, top, '╮', border, bg));
-    v.push(cell(left, bottom, '╰', border, bg));
-    v.push(cell(right, bottom, '╯', border, bg));
-    for row in (top + 1)..bottom {
-        v.push(cell(left, row, '│', border, bg));
-        v.push(cell(right, row, '│', border, bg));
-    }
-    for col in (left + 1)..right {
-        v.push(cell(col, bottom, '─', border, bg));
-    }
-
-    // Top edge with the legend: ─ space TITLE space ─…
-    let mut col = left + 1;
-    if col < right {
-        v.push(cell(col, top, '─', border, bg));
-        col += 1;
-    }
-    if col < right {
-        v.push(cell(col, top, ' ', border, bg));
+    let right = cols - 2; // inclusive last column of the rule
+    let mut col = 1u16;
+    v.push(cell(col, 0, '─', border, bg));
+    col += 1;
+    if col <= right {
+        v.push(cell(col, 0, ' ', border, bg));
         col += 1;
     }
     for tc in title.chars() {
-        if col >= right {
+        if col > right {
             break;
         }
-        v.push(cell(col, top, tc, title_fg, bg));
+        v.push(cell(col, 0, tc, title_fg, bg));
         col += 1;
     }
-    if col < right {
-        v.push(cell(col, top, ' ', border, bg));
+    if col <= right {
+        v.push(cell(col, 0, ' ', border, bg));
         col += 1;
     }
-    while col < right {
-        v.push(cell(col, top, '─', border, bg));
+    while col <= right {
+        v.push(cell(col, 0, '─', border, bg));
         col += 1;
     }
     v
@@ -88,33 +61,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn titled_box_has_corners_and_legend() {
-        let cells = titled_box(
-            BoxRect {
-                left: 0,
-                top: 0,
-                right: 14,
-                bottom: 4,
-            },
-            "SYS",
-            (70, 130, 140),
-            (0, 255, 160),
-            (8, 8, 16),
-        );
-        let has = |ch: char| cells.iter().any(|c| c.c == ch);
-        assert!(has('╭') && has('╮') && has('╰') && has('╯'));
-        // legend sits on the top border row
+    fn section_header_has_rule_and_legend() {
+        let cells = section_header("SYS", 16, (70, 130, 140), (0, 255, 160), (8, 8, 16));
+        // a horizontal rule is drawn on row 0
+        assert!(cells.iter().any(|c| c.c == '─' && c.row == 0));
+        // the legend sits on the same row in the title colour
         assert!(cells.iter().any(|c| c.c == 'S' && c.row == 0));
+        // no box glyphs — this is a flat divider, not a card
+        assert!(!cells
+            .iter()
+            .any(|c| matches!(c.c, '╭' | '╮' | '╰' | '╯' | '│')));
     }
 
     #[test]
-    fn titled_box_degenerate_is_empty() {
-        let r = BoxRect {
-            left: 5,
-            top: 5,
-            right: 5,
-            bottom: 5,
-        };
-        assert!(titled_box(r, "x", (0, 0, 0), (0, 0, 0), (0, 0, 0)).is_empty());
+    fn section_header_too_narrow_is_empty() {
+        assert!(section_header("x", 3, (0, 0, 0), (0, 0, 0), (0, 0, 0)).is_empty());
     }
 }
