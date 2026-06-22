@@ -97,8 +97,19 @@ impl CrewApp {
             let sb = chrome::sidebar_rect(sh, self.nav_px(scale), GAP);
             let sc = (sb.w / cw).floor() as u16;
             let sr = (sb.h / ch).floor() as u16;
+            let pane_rows: Vec<crate::panelist::PaneRow> = self
+                .panes
+                .iter()
+                .enumerate()
+                .map(|(i, p)| crate::panelist::PaneRow {
+                    index: i + 1,
+                    title: p.title_text(),
+                    focused: i == self.focused,
+                    activity: p.activity,
+                })
+                .collect();
             scenes.push(PaneScene {
-                cells: self.sidebar.cells(sc, sr),
+                cells: self.sidebar.cells(sc, sr, &pane_rows),
                 x: sb.x,
                 y: sb.y,
                 w: sb.w,

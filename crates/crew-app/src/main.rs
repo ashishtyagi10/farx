@@ -26,6 +26,7 @@ mod load;
 mod matrix;
 mod net;
 mod pane;
+mod panelist;
 mod paneview;
 mod poll;
 mod quit;
