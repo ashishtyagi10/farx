@@ -32,6 +32,10 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         desc: "Clear the focused pane's scrollback",
     },
     Cmd {
+        name: "/pwd",
+        desc: "Copy the working directory to the clipboard",
+    },
+    Cmd {
         name: "/update",
         desc: "Update Crew (git pull)",
     },
@@ -138,6 +142,11 @@ mod tests {
     fn slash_prefix_completes_command() {
         assert_eq!(suggest("/se", &[]).as_deref(), Some("ttings"));
         assert_eq!(suggest("/sh", &[]).as_deref(), Some("ell"));
+    }
+
+    #[test]
+    fn slash_completes_pwd() {
+        assert_eq!(suggest("/pw", &[]).as_deref(), Some("d"));
     }
 
     #[test]

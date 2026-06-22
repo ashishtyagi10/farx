@@ -129,6 +129,7 @@ impl CrewApp {
                 "update".to_string(),
             ),
             "clear" => self.clear_focused_scrollback(),
+            "pwd" => self.copy_cwd(),
             "name" => self.name_focused_pane(""), // clear the pane's name
             other => {
                 if let Some(term) = other.strip_prefix("find ") {
