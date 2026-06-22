@@ -58,7 +58,7 @@ pub fn help_cells(cols: u16, rows: u16) -> Vec<CellView> {
         .border_style(Style::new().fg(ACCENT))
         .style(Style::new().bg(PANEL))
         .title(Span::styled(
-            " keyboard shortcuts ",
+            format!(" keyboard shortcuts · crew v{} ", env!("CARGO_PKG_VERSION")),
             Style::new().fg(ACCENT),
         ));
     let inner = block.inner(buf.area);
