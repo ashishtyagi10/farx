@@ -66,6 +66,7 @@ impl CrewApp {
             "}" => self.move_pane(1),
             "z" => self.zoomed = !self.zoomed,
             "a" => self.focus_next_active(),
+            "c" => self.copy_screen(),
             "s" => {
                 self.broadcast = !self.broadcast;
                 self.input.broadcast = self.broadcast;
