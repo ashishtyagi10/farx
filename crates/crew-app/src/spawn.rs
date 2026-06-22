@@ -9,6 +9,14 @@ use crate::settingspane::SettingsPane;
 use crew_plugin::{Plugin, PluginCommand};
 use crew_term::PtyTerm;
 
+/// The user's preferred shell from `$SHELL`, falling back to `/bin/sh`.
+pub(crate) fn default_shell() -> String {
+    std::env::var("SHELL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/bin/sh".to_string())
+}
+
 impl CrewApp {
     /// Spawn a new terminal pane and focus it.
     pub fn spawn_new_pane(&mut self) {
@@ -17,7 +25,8 @@ impl CrewApp {
             .as_ref()
             .map(Self::current_grid)
             .unwrap_or(FALLBACK_SIZE);
-        match spawn_pane("bash", "sh", grid) {
+        let shell = default_shell();
+        match spawn_pane(&shell, "/bin/sh", grid) {
             Ok(pane) => {
                 self.panes.push(pane);
                 self.focus_new_pane();

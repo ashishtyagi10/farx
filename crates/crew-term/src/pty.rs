@@ -28,6 +28,9 @@ impl PtyTerm {
         })?;
         let mut cmd = CommandBuilder::new(command);
         cmd.args(args);
+        // Advertise a capable terminal so TUI programs behave (env is otherwise
+        // inherited from the host process, so $HOME/$PATH etc. are present).
+        cmd.env("TERM", "xterm-256color");
         let child = pair.slave.spawn_command(cmd)?;
         // Drop the slave end so EOF propagates when the child exits.
         drop(pair.slave);

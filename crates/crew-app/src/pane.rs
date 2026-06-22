@@ -42,14 +42,17 @@ impl Pane {
     }
 }
 
-/// Spawn a terminal pane, trying `shell_primary` first and falling back to `shell_fallback`.
+/// Spawn a terminal pane running a **login** shell (so the user's full shell
+/// config — `.zprofile`/`.zshrc`, plugins, PATH — loads, like Ghostty/Terminal).
+/// Tries `shell_primary` first and falls back to `shell_fallback`.
 pub fn spawn_pane(
     shell_primary: &str,
     shell_fallback: &str,
     grid: GridSize,
 ) -> anyhow::Result<Pane> {
-    let pty = PtyTerm::spawn(grid, shell_primary)
-        .or_else(|_| PtyTerm::spawn(grid, shell_fallback))
+    let login = ["-l".to_string()];
+    let pty = PtyTerm::spawn_args(grid, shell_primary, &login)
+        .or_else(|_| PtyTerm::spawn_args(grid, shell_fallback, &login))
         .with_context(|| {
             format!("failed to spawn shell (tried {shell_primary}, {shell_fallback})")
         })?;
