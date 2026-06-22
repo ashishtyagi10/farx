@@ -23,6 +23,7 @@ mod pane;
 mod paneview;
 mod render;
 mod scroll;
+mod search;
 mod session;
 mod settingspane;
 mod spawn;

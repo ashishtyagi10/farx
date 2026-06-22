@@ -19,6 +19,10 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         desc: "New shell pane",
     },
     Cmd {
+        name: "/find",
+        desc: "Search scrollback (/find <text>)",
+    },
+    Cmd {
         name: "/update",
         desc: "Update Crew (git pull)",
     },

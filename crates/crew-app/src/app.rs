@@ -125,7 +125,11 @@ impl CrewApp {
                 &["-c".to_string(), "git pull; exec sh".to_string()],
                 "update".to_string(),
             ),
-            _ => {}
+            other => {
+                if let Some(term) = other.strip_prefix("find ") {
+                    self.find_in_terminal(term.trim());
+                }
+            }
         }
         false
     }
