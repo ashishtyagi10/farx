@@ -1,15 +1,15 @@
-//! Sidebar clock card: a rounded `TIME` fieldset showing the local time and date.
+//! Sidebar clock section: a `TIME` divider above the local time and date.
 use crew_render::CellView;
 
-use crate::boxdraw::{titled_box, BoxRect};
+use crate::boxdraw::section_header;
 
 const ACCENT: (u8, u8, u8) = (0, 255, 160);
 const LABEL: (u8, u8, u8) = (200, 200, 200);
 const BORDER: (u8, u8, u8) = (110, 110, 120);
 const BG: (u8, u8, u8) = (0, 0, 0);
 
-/// Rows the clock card occupies, including a one-row gap below it.
-pub const CLOCK_H: u16 = 5;
+/// Rows the clock section occupies, including a one-row gap below it.
+pub const CLOCK_H: u16 = 4;
 
 /// Current local `(time, date)` as display strings, e.g. `("14:03:09", "Sat 21 Jun")`.
 pub fn now_strings() -> (String, String) {
@@ -20,23 +20,13 @@ pub fn now_strings() -> (String, String) {
     )
 }
 
-/// Render the clock card (rows 0..3) with `time` and `date` centered inside.
+/// Render the clock section: a `TIME` rule on row 0, `time` and `date` centered
+/// on rows 1 and 2.
 pub fn clock_cells(time: &str, date: &str, cols: u16) -> Vec<CellView> {
     if cols < 10 {
         return Vec::new();
     }
-    let mut out = titled_box(
-        BoxRect {
-            left: 1,
-            top: 0,
-            right: cols - 2,
-            bottom: 3,
-        },
-        "TIME",
-        BORDER,
-        ACCENT,
-        BG,
-    );
+    let mut out = section_header("TIME", cols, BORDER, ACCENT, BG);
     put_centered(&mut out, time, 1, cols, ACCENT, true);
     put_centered(&mut out, date, 2, cols, LABEL, false);
     out
@@ -74,10 +64,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clock_card_has_border_and_centered_time() {
+    fn clock_section_has_rule_and_centered_time() {
         let cells = clock_cells("14:03:09", "Sat 21 Jun", 24);
-        assert!(cells.iter().any(|c| c.c == '╭'));
-        // TIME legend on the top border
+        // horizontal rule, not a box
+        assert!(cells.iter().any(|c| c.c == '─' && c.row == 0));
+        assert!(!cells.iter().any(|c| c.c == '╭'));
+        // TIME legend on the divider row
         assert!(cells.iter().any(|c| c.c == 'T' && c.row == 0));
         // time digits on row 1
         assert!(cells.iter().any(|c| c.c == '1' && c.row == 1));

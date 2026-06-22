@@ -1,8 +1,8 @@
-//! Sidebar host card: a rounded `HOST` fieldset showing the machine name, OS,
-//! and uptime — static system info that complements the live clock + gauges.
+//! Sidebar host section: a `HOST` divider above the machine name, OS, and
+//! uptime — static system info that complements the live clock + gauges.
 use crew_render::CellView;
 
-use crate::boxdraw::{titled_box, BoxRect};
+use crate::boxdraw::section_header;
 
 const ACCENT: (u8, u8, u8) = (0, 255, 160);
 const LABEL: (u8, u8, u8) = (200, 200, 200);
@@ -34,29 +34,18 @@ fn fmt_uptime(secs: u64) -> String {
     }
 }
 
-/// Render the host card (rows 0..3) with `name` and `uptime` inside.
+/// Render the host section: a `HOST` rule on row 0, `name` and `uptime` beneath.
 pub fn host_cells(name: &str, uptime: &str, cols: u16) -> Vec<CellView> {
     if cols < 10 {
         return Vec::new();
     }
-    let mut out = titled_box(
-        BoxRect {
-            left: 1,
-            top: 0,
-            right: cols - 2,
-            bottom: 3,
-        },
-        "HOST",
-        BORDER,
-        ACCENT,
-        BG,
-    );
+    let mut out = section_header("HOST", cols, BORDER, ACCENT, BG);
     put(&mut out, name, 1, cols, LABEL);
     put(&mut out, uptime, 2, cols, DIM);
     out
 }
 
-/// Draw `s` at `row`, indented one column inside the card border, clipped to `cols`.
+/// Draw `s` at `row`, indented to align under the section legend, clipped to `cols`.
 fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8)) {
     let max = cols.saturating_sub(4) as usize;
     for (i, c) in s.chars().take(max).enumerate() {
@@ -85,9 +74,10 @@ mod tests {
     }
 
     #[test]
-    fn host_card_has_border_and_name() {
+    fn host_section_has_rule_and_name() {
         let cells = host_cells("mbp · macOS", "up 1h 2m", 24);
-        assert!(cells.iter().any(|c| c.c == '╭'));
+        assert!(cells.iter().any(|c| c.c == '─' && c.row == 0));
+        assert!(!cells.iter().any(|c| c.c == '╭'));
         assert!(cells.iter().any(|c| c.c == 'H' && c.row == 0)); // HOST legend
         assert!(cells.iter().any(|c| c.c == 'm' && c.row == 1)); // name
     }

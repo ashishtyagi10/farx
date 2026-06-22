@@ -1,7 +1,7 @@
-//! Sidebar network card: a rounded `NET` fieldset showing down/up byte rates.
+//! Sidebar network section: a `NET` divider above down/up byte rates.
 use crew_render::CellView;
 
-use crate::boxdraw::{titled_box, BoxRect};
+use crate::boxdraw::section_header;
 
 const ACCENT: (u8, u8, u8) = (0, 255, 160);
 const LABEL: (u8, u8, u8) = (200, 200, 200);
@@ -21,23 +21,13 @@ pub fn rate(bytes: u64) -> String {
     }
 }
 
-/// Render the network card (rows 0..3): `↓ rx` on row 1, `↑ tx` on row 2.
+/// Render the network section: a `NET` rule on row 0, `↓ rx` on row 1, `↑ tx`
+/// on row 2.
 pub fn net_cells(rx: u64, tx: u64, cols: u16) -> Vec<CellView> {
     if cols < 10 {
         return Vec::new();
     }
-    let mut out = titled_box(
-        BoxRect {
-            left: 1,
-            top: 0,
-            right: cols - 2,
-            bottom: 3,
-        },
-        "NET",
-        BORDER,
-        ACCENT,
-        BG,
-    );
+    let mut out = section_header("NET", cols, BORDER, ACCENT, BG);
     put(&mut out, &format!("↓ {}", rate(rx)), 1, cols, LABEL);
     put(&mut out, &format!("↑ {}", rate(tx)), 2, cols, DIM);
     out
@@ -71,9 +61,10 @@ mod tests {
     }
 
     #[test]
-    fn net_card_has_border_and_arrows() {
+    fn net_section_has_rule_and_arrows() {
         let cells = net_cells(2048, 1024, 24);
-        assert!(cells.iter().any(|c| c.c == '╭'));
+        assert!(cells.iter().any(|c| c.c == '─' && c.row == 0));
+        assert!(!cells.iter().any(|c| c.c == '╭'));
         assert!(cells.iter().any(|c| c.c == '↓' && c.row == 1));
         assert!(cells.iter().any(|c| c.c == '↑' && c.row == 2));
     }
