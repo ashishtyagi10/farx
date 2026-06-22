@@ -18,6 +18,26 @@ impl CrewApp {
     ) {
         let mstate = self.mods.state();
 
+        // The help overlay swallows the next key press to dismiss itself.
+        if self.help_open && event.state.is_pressed() {
+            self.help_open = false;
+            self.redraw();
+            return;
+        }
+
+        // Shift+PageUp / Shift+PageDown scroll the focused pane's scrollback.
+        if event.state.is_pressed() && mstate.shift_key() {
+            let page = match &event.logical_key {
+                Key::Named(NamedKey::PageUp) => Some(true),
+                Key::Named(NamedKey::PageDown) => Some(false),
+                _ => None,
+            };
+            if let Some(up) = page {
+                self.scroll_focused_page(up);
+                return;
+            }
+        }
+
         // Cmd+Q / Ctrl+Q quits the app.
         if event.state.is_pressed()
             && (mstate.super_key() || mstate.control_key())
