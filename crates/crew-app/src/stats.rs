@@ -1,12 +1,15 @@
 use std::time::{Duration, Instant};
 
-use sysinfo::{Disks, System};
+use sysinfo::{Disks, Networks, System};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Stats {
     pub cpu: f32,
     pub mem: f32,
     pub disk: f32,
+    /// Bytes received / transmitted over the last sample interval (~1s).
+    pub net_rx: u64,
+    pub net_tx: u64,
 }
 
 pub fn fraction(used: u64, total: u64) -> f32 {
@@ -20,6 +23,7 @@ pub fn fraction(used: u64, total: u64) -> f32 {
 pub struct SysSampler {
     sys: System,
     disks: Disks,
+    nets: Networks,
     last: Option<Instant>,
     stats: Stats,
 }
@@ -29,6 +33,7 @@ impl SysSampler {
         let mut sampler = Self {
             sys: System::new(),
             disks: Disks::new_with_refreshed_list(),
+            nets: Networks::new_with_refreshed_list(),
             last: None,
             stats: Stats::default(),
         };
@@ -68,7 +73,18 @@ impl SysSampler {
         });
         let disk = fraction(disk_used, disk_total);
 
-        self.stats = Stats { cpu, mem, disk };
+        self.nets.refresh(false);
+        let (net_rx, net_tx) = self.nets.list().values().fold((0u64, 0u64), |acc, n| {
+            (acc.0 + n.received(), acc.1 + n.transmitted())
+        });
+
+        self.stats = Stats {
+            cpu,
+            mem,
+            disk,
+            net_rx,
+            net_tx,
+        };
     }
 }
 
@@ -104,7 +120,8 @@ mod tests {
             Stats {
                 cpu: 0.0,
                 mem: 0.0,
-                disk: 0.0
+                disk: 0.0,
+                ..Default::default()
             }
         );
     }

@@ -157,6 +157,7 @@ mod tests {
             cpu: 0.1,
             mem: 0.2,
             disk: 0.3,
+            ..Default::default()
         };
         let cells = render_stats(stats, 24, 12);
         let has = |ch: char| cells.iter().any(|c| c.c == ch);
