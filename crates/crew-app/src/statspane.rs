@@ -9,6 +9,7 @@ use crate::git::{self, GitInfo};
 use crate::host;
 use crate::load;
 use crate::net;
+use crate::panelist::{self, PaneRow};
 use crate::stats::SysSampler;
 
 /// Rows the SYSTEM section occupies (rule + 3 gauges + a one-row gap below it).
@@ -74,7 +75,7 @@ impl StatsPane {
         false
     }
 
-    pub fn cells(&self, cols: u16, rows: u16) -> Vec<CellView> {
+    pub fn cells(&self, cols: u16, rows: u16, panes: &[PaneRow]) -> Vec<CellView> {
         let (time, date) = clock::now_strings();
         let mut out = clock::clock_cells(&time, &date, cols);
 
@@ -114,12 +115,23 @@ impl StatsPane {
         }
 
         let git_off = net_off + CARD_BLOCK;
+        let mut next = git_off;
         if let Some(info) = &self.git {
             if rows > git_off + 3 {
                 for mut c in git::git_cells(info, cols) {
                     c.row += git_off;
                     out.push(c);
                 }
+            }
+            next = git_off + CARD_BLOCK; // only reserve the GIT block when shown
+        }
+
+        // PANES list fills the remaining height below the last stat section.
+        if !panes.is_empty() && rows > next + 1 {
+            let limit = (rows - next - 1) as usize;
+            for mut c in panelist::pane_cells(panes, cols, limit) {
+                c.row += next;
+                out.push(c);
             }
         }
         out
