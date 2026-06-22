@@ -70,51 +70,6 @@ impl CrewApp {
         self.input.focused = false;
     }
 
-    /// Handle a Super-chord key.  Returns `true` if the app should exit.
-    pub(crate) fn handle_super_chord(&mut self, s: &str) -> bool {
-        let n = self.panes.len().max(1);
-        match s {
-            "i" => self.input.focused = !self.input.focused,
-            "," => self.spawn_settings_pane(),
-            "g" => self.toggle_sidebar(),
-            "t" => self.spawn_new_pane(),
-            "j" => {
-                let cmd = Self::echo_plugin_cmd();
-                self.spawn_chat_pane(&cmd);
-            }
-            "o" => {
-                let cmd = Self::orchestrator_plugin_cmd();
-                self.spawn_chat_pane(&cmd);
-            }
-            "w" => return self.close_pane(self.focused),
-            "m" => {
-                if let Some(w) = &self.window {
-                    w.set_maximized(!w.is_maximized());
-                }
-            }
-            "[" => self.focused = (self.focused + n - 1) % n,
-            "]" => self.focused = (self.focused + 1) % n,
-            "z" => self.zoomed = !self.zoomed,
-            "v" => self.paste(),
-            // Font zoom: Cmd+= / Cmd+- grow/shrink, Cmd+0 resets to default.
-            "=" | "+" => self.set_font(self.config.font_size + 1.0),
-            "-" | "_" => self.set_font(self.config.font_size - 1.0),
-            "0" => self.set_font(14.0),
-            s if s.len() == 1 => {
-                if let Some(d) = s.chars().next().and_then(|c| c.to_digit(10)) {
-                    if d >= 1 {
-                        let i = (d - 1) as usize;
-                        if i < self.panes.len() {
-                            self.focused = i;
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-        false
-    }
-
     /// Handle a submitted input line: `/command`s are run; everything else is
     /// written (with a newline) to the focused Terminal pane. Returns `true` if the
     /// app should exit (e.g. `/exit`).
