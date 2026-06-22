@@ -47,6 +47,8 @@ pub struct CrewApp {
     /// Crew's working directory: shown in the input-bar legend and used as the
     /// start directory for new shells. Moved by typing `cd` in the input bar.
     pub(crate) cwd: PathBuf,
+    /// The directory before the last change, so `cd -` can toggle back.
+    pub(crate) prev_cwd: PathBuf,
 }
 
 impl CrewApp {

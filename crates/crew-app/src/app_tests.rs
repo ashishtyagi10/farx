@@ -45,3 +45,25 @@ fn cd_in_input_changes_cwd_and_legend() {
     // a non-`cd` line is not treated as a directory change.
     assert!(!app.try_change_dir("ls -la"));
 }
+
+#[test]
+fn cd_dash_toggles_previous_directory() {
+    let base = std::env::temp_dir();
+    let a = base.join("crew_cd_dash_a");
+    let b = base.join("crew_cd_dash_b");
+    std::fs::create_dir_all(&a).unwrap();
+    std::fs::create_dir_all(&b).unwrap();
+    let (a, b) = (a.canonicalize().unwrap(), b.canonicalize().unwrap());
+
+    let mut app = CrewApp {
+        cwd: a.clone(),
+        ..Default::default()
+    };
+    // move to b, then `cd -` returns to a, then toggles forward to b again.
+    assert!(!app.submit_input(format!("cd {}", b.to_str().unwrap())));
+    assert_eq!(app.cwd, b);
+    assert!(!app.submit_input("cd -".to_string()));
+    assert_eq!(app.cwd, a);
+    assert!(!app.submit_input("cd -".to_string()));
+    assert_eq!(app.cwd, b);
+}

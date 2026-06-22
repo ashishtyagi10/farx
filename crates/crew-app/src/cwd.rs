@@ -73,9 +73,13 @@ pub(crate) fn resolve(base: &Path, arg: &str) -> Option<PathBuf> {
 }
 
 impl CrewApp {
-    /// Point Crew at `dir`: update the tracked cwd and input-bar legend, and
-    /// persist it so the next launch reopens here.
+    /// Point Crew at `dir`: remember the current dir (for `cd -`), update the
+    /// tracked cwd and input-bar legend, and persist it so the next launch
+    /// reopens here.
     pub(crate) fn set_cwd(&mut self, dir: PathBuf) {
+        if dir != self.cwd && !self.cwd.as_os_str().is_empty() {
+            self.prev_cwd = self.cwd.clone();
+        }
         self.config.last_dir = Some(dir.to_string_lossy().into_owned());
         self.config.save();
         self.input.cwd = dir.clone();
@@ -83,12 +87,18 @@ impl CrewApp {
     }
 
     /// If `line` is a `cd` command, change directory (when the target exists)
-    /// and return `true` so it is not forwarded to a terminal pane.
+    /// and return `true` so it is not forwarded to a terminal pane. `cd -`
+    /// toggles back to the previous directory.
     pub(crate) fn try_change_dir(&mut self, line: &str) -> bool {
         let Some(arg) = cd_arg(line) else {
             return false;
         };
-        if let Some(dir) = resolve(&self.cwd, arg) {
+        let target = if arg == "-" {
+            (!self.prev_cwd.as_os_str().is_empty()).then(|| self.prev_cwd.clone())
+        } else {
+            resolve(&self.cwd, arg)
+        };
+        if let Some(dir) = target {
             self.set_cwd(dir);
             self.redraw();
         }
