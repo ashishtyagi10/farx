@@ -18,6 +18,7 @@ mod inputkeys;
 mod keys;
 mod layout;
 mod matrix;
+mod net;
 mod pane;
 mod paneview;
 mod render;
