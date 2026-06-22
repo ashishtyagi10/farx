@@ -143,13 +143,26 @@ impl CrewApp {
                 &["-c".to_string(), "git pull; exec sh".to_string()],
                 "update".to_string(),
             ),
+            "name" => self.name_focused_pane(""), // clear the pane's name
             other => {
                 if let Some(term) = other.strip_prefix("find ") {
                     self.find_in_terminal(term.trim());
+                } else if let Some(n) = other.strip_prefix("name ") {
+                    self.name_focused_pane(n.trim());
                 }
             }
         }
         false
+    }
+
+    /// Set (or, when `name` is empty, clear) the focused pane's title override.
+    pub(crate) fn name_focused_pane(&mut self, name: &str) {
+        if let Some(p) = self.panes.get_mut(self.focused) {
+            p.name = (!name.is_empty()).then(|| name.to_string());
+            self.redraw();
+        } else {
+            self.set_status("no pane to name");
+        }
     }
 
     /// Toggle the window's maximized state and persist it.

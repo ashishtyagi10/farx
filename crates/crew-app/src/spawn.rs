@@ -68,6 +68,7 @@ impl CrewApp {
                     grid,
                     rect: PLACEHOLDER_RECT,
                     label: Some(label),
+                    name: None,
                     activity: false,
                     bell: false,
                 };
@@ -115,6 +116,7 @@ impl CrewApp {
             grid,
             rect: PLACEHOLDER_RECT,
             label: None,
+            name: None,
             activity: false,
             bell: false,
         });
@@ -164,6 +166,7 @@ impl CrewApp {
                     grid,
                     rect: PLACEHOLDER_RECT,
                     label: None,
+                    name: None,
                     activity: false,
                     bell: false,
                 });

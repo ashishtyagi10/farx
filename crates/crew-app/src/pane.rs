@@ -30,6 +30,8 @@ pub struct Pane {
     pub rect: Rect,
     /// Optional label for routing host actions to this pane.
     pub label: Option<String>,
+    /// User-set pane name (via `/name`), shown in the title bar when present.
+    pub name: Option<String>,
     /// Unseen output since this pane was last focused (drives the activity dot).
     pub activity: bool,
     /// The program rang the bell since this pane was last focused.
@@ -37,8 +39,12 @@ pub struct Pane {
 }
 
 impl Pane {
-    /// Short label for the pane's title bar (the program-set title, or a kind).
+    /// Short label for the pane's title bar: the user-set name if any, else the
+    /// program-set title, else the pane kind.
     pub fn title_text(&self) -> String {
+        if let Some(name) = &self.name {
+            return name.clone();
+        }
         match &self.content {
             PaneContent::Terminal(t) => {
                 let ti = t.pty.title();
@@ -91,6 +97,7 @@ pub fn spawn_pane(
             h: 0.0,
         },
         label: None,
+        name: None,
         activity: false,
         bell: false,
     })
@@ -111,5 +118,33 @@ pub fn relayout(panes: &mut [Pane], rects: &[Rect], cell_w: f32, cell_h: f32) {
             }
             pane.grid = new_grid;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::CrewConfig;
+    use crate::settingspane::SettingsPane;
+
+    #[test]
+    fn title_text_prefers_user_name() {
+        let mut p = Pane {
+            content: PaneContent::Settings(SettingsPane::new(CrewConfig::default(), vec![])),
+            grid: GridSize { cols: 80, rows: 24 },
+            rect: Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 0.0,
+                h: 0.0,
+            },
+            label: None,
+            name: None,
+            activity: false,
+            bell: false,
+        };
+        assert_eq!(p.title_text(), "settings");
+        p.name = Some("build".into());
+        assert_eq!(p.title_text(), "build");
     }
 }

@@ -73,7 +73,7 @@ shell, so your full config and plugins load.
 The docked command bar supports:
 
 - **Slash commands** — type `/` for a command palette (↑/↓ to pick, Tab/→ to
-  fill, Enter to run): `/shell`, `/settings`, `/find <text>`, `/update`,
+  fill, Enter to run): `/shell`, `/settings`, `/find <text>`, `/name <text>`, `/update`,
   `/keys`, `/exit`.
 - **Autosuggest** — fish-style ghost text from history; Tab/→ accepts it.
 - **History** — **Up/Down** recall previous lines (persisted to
@@ -86,6 +86,8 @@ The docked command bar supports:
 - **Working directory** — the bar's legend shows Crew's current directory
   (`~`-abbreviated). Type **`cd <path>`** (or bare `cd` for home) to move it; new
   shells (**Cmd+T** / `/shell`) open in that directory.
+- **`/name <text>`** titles the focused pane (shown in its title bar); bare
+  `/name` clears it back to the program title.
 - **Status flashes** — transient messages (e.g. "copied 12 lines", "cd: no such
   directory") appear briefly on the input card's bottom border.
 - Anything that isn't a slash command or `cd` is sent to the focused terminal.
