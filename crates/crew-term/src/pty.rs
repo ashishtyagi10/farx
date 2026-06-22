@@ -120,6 +120,11 @@ impl PtyTerm {
     pub fn title(&self) -> String {
         self.core.title()
     }
+
+    /// Take any pending OSC 52 clipboard-store text (clearing it).
+    pub fn take_clipboard(&self) -> Option<String> {
+        self.core.take_clipboard()
+    }
 }
 
 impl TermModel for PtyTerm {

@@ -103,6 +103,12 @@ impl ApplicationHandler for CrewApp {
         if any_changed || actions_ran {
             self.redraw();
         }
+        // Honour OSC 52 copy requests from terminal programs.
+        if let Some(text) = self.take_pane_clipboard() {
+            if let Ok(mut cb) = arboard::Clipboard::new() {
+                let _ = cb.set_text(text);
+            }
+        }
         self.sync_window_title();
 
         event_loop.set_control_flow(ControlFlow::WaitUntil(

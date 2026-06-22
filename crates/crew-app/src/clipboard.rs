@@ -29,4 +29,12 @@ impl CrewApp {
         }
         self.redraw();
     }
+
+    /// Take a pending OSC 52 clipboard-store request from any terminal pane.
+    pub(crate) fn take_pane_clipboard(&self) -> Option<String> {
+        self.panes.iter().find_map(|p| match &p.content {
+            PaneContent::Terminal(t) => t.pty.take_clipboard(),
+            _ => None,
+        })
+    }
 }

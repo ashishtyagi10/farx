@@ -1,12 +1,10 @@
-use std::sync::{Arc, Mutex};
-
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::{Config, Term, TermMode};
 use alacritty_terminal::vte::ansi::Processor;
 
 use crate::color::{resolve_color, DEFAULT_BG, DEFAULT_FG};
-use crate::listener::TitleListener;
+use crate::listener::TermEvents;
 
 #[derive(Clone, Copy, Debug)]
 pub struct GridSize {
@@ -55,9 +53,9 @@ impl Dimensions for Dims {
 
 // Shared core: a Term + an ANSI processor. Used by HeadlessTerm and PtyTerm.
 pub(crate) struct TermCore {
-    term: Term<TitleListener>,
+    term: Term<TermEvents>,
     parser: Processor,
-    title: Arc<Mutex<String>>,
+    events: TermEvents,
 }
 
 impl TermCore {
@@ -66,21 +64,23 @@ impl TermCore {
             cols: size.cols as usize,
             rows: size.rows as usize,
         };
-        let title = Arc::new(Mutex::new(String::new()));
-        let listener = TitleListener {
-            title: title.clone(),
-        };
-        let term = Term::new(Config::default(), &dims, listener);
+        let events = TermEvents::default();
+        let term = Term::new(Config::default(), &dims, events.clone());
         Self {
             term,
             parser: Processor::new(),
-            title,
+            events,
         }
     }
 
     /// The current program-set window title (empty if none).
     pub(crate) fn title(&self) -> String {
-        self.title.lock().unwrap().clone()
+        self.events.title.lock().unwrap().clone()
+    }
+
+    /// Take any pending OSC 52 clipboard-store text (clearing it).
+    pub(crate) fn take_clipboard(&self) -> Option<String> {
+        self.events.clipboard.lock().unwrap().take()
     }
 
     pub(crate) fn feed(&mut self, bytes: &[u8]) {
@@ -173,6 +173,11 @@ impl HeadlessTerm {
     /// The program-set window title (empty if none).
     pub fn title(&self) -> String {
         self.core.title()
+    }
+
+    /// Take any pending OSC 52 clipboard-store text (clearing it).
+    pub fn take_clipboard(&self) -> Option<String> {
+        self.core.take_clipboard()
     }
 }
 
