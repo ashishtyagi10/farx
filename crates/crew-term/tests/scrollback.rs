@@ -43,6 +43,15 @@ fn osc_title_is_captured() {
 }
 
 #[test]
+fn osc52_clipboard_store_is_captured() {
+    let mut term = HeadlessTerm::new(GridSize { cols: 20, rows: 3 });
+    assert_eq!(term.take_clipboard(), None);
+    term.feed(b"\x1b]52;c;aGVsbG8=\x07"); // OSC 52 set clipboard to base64("hello")
+    assert_eq!(term.take_clipboard().as_deref(), Some("hello"));
+    assert_eq!(term.take_clipboard(), None, "taking clears it");
+}
+
+#[test]
 fn feeding_text_appears_in_cells() {
     let mut term = HeadlessTerm::new(GridSize { cols: 20, rows: 5 });
     term.feed(b"hi");
