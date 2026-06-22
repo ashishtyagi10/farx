@@ -103,7 +103,8 @@ back to the most recent line containing the text. Typing returns to the bottom.
 ## Sidebar
 
 A docked left panel (toggle with **Cmd+G**) with stacked, line-divided sections:
-a live **TIME** clock, **SYSTEM** CPU/MEM/DISK gauges, a **HOST** section
+a live **TIME** clock, **SYSTEM** CPU/MEM/DISK gauges, a **LOAD** section
+(1/5/15-minute load average, coloured by load-per-core), a **HOST** section
 (hostname, OS, uptime), a **NET** section (down/up byte rates), and — when the
 working directory is a repository — a **GIT** section showing the current branch
 and a clean/dirty marker.

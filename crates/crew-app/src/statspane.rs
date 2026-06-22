@@ -7,11 +7,14 @@ use crate::clock;
 use crate::gauges::render_stats;
 use crate::git::{self, GitInfo};
 use crate::host;
+use crate::load;
 use crate::net;
 use crate::stats::SysSampler;
 
 /// Rows the SYSTEM section occupies (rule + 3 gauges + a one-row gap below it).
 const SYS_BLOCK: u16 = 5;
+/// Rows the LOAD section occupies (rule + 1 line + a one-row gap below it).
+const LOAD_BLOCK: u16 = 3;
 /// Rows a section with a rule + 2 content rows + one-row gap occupies (HOST, NET, GIT).
 const CARD_BLOCK: u16 = 4;
 /// Minimum seconds between git queries while the directory is unchanged.
@@ -83,7 +86,16 @@ impl StatsPane {
             }
         }
 
-        let host_off = clock::CLOCK_H + SYS_BLOCK;
+        let load_off = clock::CLOCK_H + SYS_BLOCK;
+        if rows > load_off + 1 {
+            let (one, five, fifteen) = load::load_avg();
+            for mut c in load::load_cells(one, five, fifteen, load::cores(), cols) {
+                c.row += load_off;
+                out.push(c);
+            }
+        }
+
+        let host_off = load_off + LOAD_BLOCK;
         if rows > host_off + 3 {
             let (name, uptime) = host::host_strings();
             for mut c in host::host_cells(&name, &uptime, cols) {

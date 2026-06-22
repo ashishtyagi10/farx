@@ -20,6 +20,7 @@ pub(crate) mod inputbar;
 mod inputkeys;
 mod keys;
 mod layout;
+mod load;
 mod matrix;
 mod net;
 mod pane;
