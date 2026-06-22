@@ -5,7 +5,7 @@ use crate::boxdraw::{titled_box, BoxRect};
 
 const ACCENT: (u8, u8, u8) = (0, 255, 160);
 const LABEL: (u8, u8, u8) = (200, 200, 200);
-const BORDER: (u8, u8, u8) = (70, 130, 140);
+const BORDER: (u8, u8, u8) = (110, 110, 120);
 const BG: (u8, u8, u8) = (0, 0, 0);
 
 /// Rows the clock card occupies, including a one-row gap below it.
