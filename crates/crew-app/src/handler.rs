@@ -78,7 +78,7 @@ impl ApplicationHandler for CrewApp {
             }
             any_changed |= changed || rang;
         }
-        if self.sidebar.refresh() {
+        if self.sidebar.refresh(&self.cwd) {
             any_changed = true;
         }
         // Animate the matrix-rain welcome screen while there are no panes.
