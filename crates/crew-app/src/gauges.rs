@@ -11,6 +11,17 @@ const LABEL: (u8, u8, u8) = (200, 200, 200);
 const BORDER: (u8, u8, u8) = (110, 110, 120);
 const HEADER: &str = "SYSTEM";
 
+/// Bar colour by load: accent green when low, amber past 70%, red past 90%.
+fn fill_color(frac: f32) -> (u8, u8, u8) {
+    if frac < 0.7 {
+        FILL
+    } else if frac < 0.9 {
+        (230, 180, 90)
+    } else {
+        (230, 90, 90)
+    }
+}
+
 /// One gauge row laid out within `cols`: `label | space | bar | NNN%`.
 fn gauge_cells(label: &str, frac: f32, row: u16, cols: u16) -> Vec<CellView> {
     if cols == 0 {
@@ -38,12 +49,13 @@ fn gauge_cells(label: &str, frac: f32, row: u16, cols: u16) -> Vec<CellView> {
     let used = cells.len();
     let bar_width = cols.saturating_sub(label_len + 1 + pct_len);
     let filled = (frac.clamp(0.0, 1.0) * bar_width as f32).round() as usize;
+    let fill = fill_color(frac);
     for i in 0..bar_width {
         if cells.len() >= cols {
             break;
         }
         let (c, fg) = if i < filled {
-            ('█', FILL)
+            ('█', fill)
         } else {
             ('░', TRACK)
         };
@@ -129,6 +141,13 @@ pub(crate) fn render_stats(stats: Stats, cols: u16, rows: u16) -> Vec<CellView> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fill_color_thresholds() {
+        assert_eq!(fill_color(0.5), FILL);
+        assert_eq!(fill_color(0.8), (230, 180, 90));
+        assert_eq!(fill_color(0.95), (230, 90, 90));
+    }
 
     #[test]
     fn gauge_50_pct_balanced() {
