@@ -2,11 +2,11 @@
 # Crew installer — detects OS/arch and installs the latest release from GitHub.
 #
 # Usage:
-#   curl -sSfL https://raw.githubusercontent.com/ashishtyagi10/farx/main/install.sh | sh
+#   curl -sSfL https://raw.githubusercontent.com/ashishtyagi10/crew/main/install.sh | sh
 #
 set -e
 
-REPO="ashishtyagi10/farx"
+REPO="ashishtyagi10/crew"
 BIN_NAME="crew"
 
 # Always install to ~/.local/bin so neither install nor `/update` ever

@@ -12,8 +12,8 @@ Thank you for your interest in contributing! Farx is open source and welcomes co
 ### Setup
 
 ```sh
-git clone https://github.com/ashishtyagi10/farx.git
-cd farx
+git clone https://github.com/ashishtyagi10/crew.git
+cd crew
 cargo build
 cargo run
 ```
@@ -217,7 +217,7 @@ Keep PRs focused — one feature or fix per PR. If a change is large, open an is
 
 ## Reporting Bugs
 
-Open an issue at [github.com/ashishtyagi10/farx/issues](https://github.com/ashishtyagi10/farx/issues) with:
+Open an issue at [github.com/ashishtyagi10/crew/issues](https://github.com/ashishtyagi10/crew/issues) with:
 
 - Your OS and terminal emulator
 - Steps to reproduce

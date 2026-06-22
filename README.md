@@ -15,7 +15,7 @@ Works on **macOS**, **Linux**, and **Windows**.
 ### Quick install (macOS / Linux)
 
 ```sh
-curl -sSfL https://raw.githubusercontent.com/ashishtyagi10/farx/main/install.sh | sh
+curl -sSfL https://raw.githubusercontent.com/ashishtyagi10/crew/main/install.sh | sh
 ```
 
 Installs the prebuilt `crew` binary to `~/.local/bin`. Set `INSTALL_DIR` to
@@ -24,12 +24,12 @@ choose another location.
 ### With cargo (any platform with Rust)
 
 ```sh
-cargo install --git https://github.com/ashishtyagi10/farx crew-app
+cargo install --git https://github.com/ashishtyagi10/crew crew-app
 ```
 
 ### From GitHub Releases (standalone package)
 
-Download the latest archive for your platform from the [Releases page](https://github.com/ashishtyagi10/farx/releases), extract it, and move the `crew` binary to a directory on your `PATH`.
+Download the latest archive for your platform from the [Releases page](https://github.com/ashishtyagi10/crew/releases), extract it, and move the `crew` binary to a directory on your `PATH`.
 
 | Platform | Asset |
 |----------|-------|
@@ -42,8 +42,8 @@ Download the latest archive for your platform from the [Releases page](https://g
 ### Build from source
 
 ```sh
-git clone https://github.com/ashishtyagi10/farx.git
-cd farx
+git clone https://github.com/ashishtyagi10/crew.git
+cd crew
 cargo build --release -p crew-app
 # Binary is at target/release/crew
 ```
