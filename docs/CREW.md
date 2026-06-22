@@ -35,6 +35,7 @@ status glyphs:
 | `⇡N`  | viewing scrollback, N lines back from the live bottom |
 | `●`   | new output in an unfocused pane |
 | `!`   | the program rang the bell |
+| `»`   | receiving broadcast (synchronized) input |
 
 The focused pane has a near-white border and a bright block cursor; unfocused
 panes are grey with a dim cursor.

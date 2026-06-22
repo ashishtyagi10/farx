@@ -13,6 +13,7 @@ const BAR_FOCUSED: (u8, u8, u8) = (28, 40, 46);
 const BAR_DIM: (u8, u8, u8) = (20, 20, 28);
 const TITLE_ON: (u8, u8, u8) = (225, 225, 225);
 const TITLE_OFF: (u8, u8, u8) = (140, 140, 150);
+const BROADCAST: (u8, u8, u8) = (220, 120, 200);
 
 /// Inputs for one pane's title bar.
 struct Bar<'a> {
@@ -24,6 +25,8 @@ struct Bar<'a> {
     scroll: usize,
     activity: bool,
     bell: bool,
+    /// This pane is receiving broadcast (synchronized) input.
+    broadcast: bool,
 }
 
 fn cell(col: u16, c: char, fg: (u8, u8, u8), bg: (u8, u8, u8)) -> CellView {
@@ -54,6 +57,11 @@ fn title_bar(b: &Bar) -> Vec<CellView> {
     let mut out: Vec<CellView> = (0..b.cols).map(|c| cell(c, ' ', bg, bg)).collect();
 
     let mut x = 1u16;
+    // A magenta » marks panes receiving broadcast (synchronized) input.
+    if b.broadcast {
+        set(&mut out, x, '»', BROADCAST, bg);
+        x += 2;
+    }
     if let Some(n) = b.index {
         if (1..=9).contains(&n) {
             let d = char::from_digit(n as u32, 10).unwrap_or('?');
@@ -95,7 +103,8 @@ fn title_bar(b: &Bar) -> Vec<CellView> {
 }
 
 /// Build a `Vec<PaneScene>` from the current pane state (for `renderer.frame`).
-pub fn build_scenes(panes: &[Pane], focused: Option<usize>) -> Vec<PaneScene> {
+/// `broadcast` marks terminal panes that receive synchronized input.
+pub fn build_scenes(panes: &[Pane], focused: Option<usize>, broadcast: bool) -> Vec<PaneScene> {
     let multi = panes.len() > 1;
     panes
         .iter()
@@ -106,6 +115,7 @@ pub fn build_scenes(panes: &[Pane], focused: Option<usize>) -> Vec<PaneScene> {
             for c in cells.iter_mut() {
                 c.row += 1; // content sits below the title bar
             }
+            let is_term = matches!(&p.content, PaneContent::Terminal(_));
             let scroll = match &p.content {
                 PaneContent::Terminal(t) => t.pty.display_offset(),
                 _ => 0,
@@ -119,6 +129,7 @@ pub fn build_scenes(panes: &[Pane], focused: Option<usize>) -> Vec<PaneScene> {
                 scroll,
                 activity: p.activity && !foc,
                 bell: p.bell && !foc,
+                broadcast: broadcast && is_term,
             }));
             PaneScene {
                 cells,
@@ -134,50 +145,5 @@ pub fn build_scenes(panes: &[Pane], focused: Option<usize>) -> Vec<PaneScene> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn bar(focused: bool) -> Bar<'static> {
-        Bar {
-            cols: 40,
-            index: Some(2),
-            title: "~/code",
-            focused,
-            scroll: 37,
-            activity: true,
-            bell: true,
-        }
-    }
-
-    #[test]
-    fn title_bar_has_index_title_and_glyphs() {
-        let cells = title_bar(&bar(true));
-        assert_eq!(cells.len(), 40); // full-width bar
-        assert!(cells.iter().any(|c| c.c == '2' && c.fg == ACCENT));
-        assert!(cells.iter().any(|c| c.c == '~'));
-        // scroll indicator renders as `⇡37`
-        assert!(cells.iter().any(|c| c.c == '⇡' && c.fg == SCROLL_HINT));
-        assert!(cells.iter().any(|c| c.c == '3' && c.fg == SCROLL_HINT));
-        assert!(cells.iter().any(|c| c.c == '7' && c.fg == SCROLL_HINT));
-        assert!(cells.iter().any(|c| c.c == '●' && c.fg == ACTIVITY));
-        assert!(cells.iter().any(|c| c.c == '!' && c.fg == BELL));
-        assert!(cells.iter().all(|c| c.row == 0));
-    }
-
-    #[test]
-    fn title_bar_no_scroll_indicator_at_bottom() {
-        let b = Bar {
-            scroll: 0,
-            activity: false,
-            bell: false,
-            ..bar(true)
-        };
-        let cells = title_bar(&b);
-        assert!(!cells.iter().any(|c| c.c == '⇡'));
-    }
-
-    #[test]
-    fn title_bar_bg_differs_by_focus() {
-        assert_ne!(title_bar(&bar(true))[0].bg, title_bar(&bar(false))[0].bg);
-    }
-}
+#[path = "paneview_tests.rs"]
+mod tests;
