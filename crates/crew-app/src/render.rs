@@ -109,6 +109,23 @@ impl CrewApp {
             bordered: true,
         });
 
+        // Command palette: a popup just above the input bar when slash input matches.
+        let matches = crate::suggest::matches(&self.input.text);
+        if self.input.focused && !matches.is_empty() {
+            let mr = crate::cmdmenu::menu_rows(matches.len());
+            let mh = mr as f32 * ch;
+            let my = (ib.y - mh - GAP).max(0.0);
+            scenes.push(PaneScene {
+                cells: crate::cmdmenu::menu_cells(&matches, self.input.menu_sel, ic, mr),
+                x: ib.x,
+                y: my,
+                w: ib.w,
+                h: mh,
+                focused: false,
+                bordered: false,
+            });
+        }
+
         scenes
     }
 

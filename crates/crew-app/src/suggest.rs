@@ -2,8 +2,42 @@
 //! fish-style history autosuggestion. Returns the ghost *suffix* to display
 //! after the typed text (and to insert when the user accepts it).
 
-/// Slash commands offered for completion (kept in sync with `run_slash_command`).
-pub(crate) const SLASH_COMMANDS: &[&str] = &["/settings", "/shell", "/exit", "/update"];
+/// A slash command shown in the command palette.
+pub(crate) struct Cmd {
+    pub name: &'static str,
+    pub desc: &'static str,
+}
+
+/// Known slash commands (kept in sync with `run_slash_command`).
+pub(crate) const COMMANDS: &[Cmd] = &[
+    Cmd {
+        name: "/settings",
+        desc: "Open settings",
+    },
+    Cmd {
+        name: "/shell",
+        desc: "New shell pane",
+    },
+    Cmd {
+        name: "/update",
+        desc: "Update Crew (git pull)",
+    },
+    Cmd {
+        name: "/exit",
+        desc: "Quit Crew",
+    },
+];
+
+/// Commands whose name starts with `text` (empty unless `text` begins with `/`).
+pub(crate) fn matches(text: &str) -> Vec<&'static Cmd> {
+    if !text.starts_with('/') {
+        return Vec::new();
+    }
+    COMMANDS
+        .iter()
+        .filter(|c| c.name.starts_with(text))
+        .collect()
+}
 
 /// Suggested completion suffix for `text`, or `None` if nothing completes it.
 /// Slash input completes against the command list; everything else against the
@@ -13,10 +47,11 @@ pub(crate) fn suggest(text: &str, history: &[String]) -> Option<String> {
         return None;
     }
     if text.starts_with('/') {
-        return SLASH_COMMANDS
+        return COMMANDS
             .iter()
-            .find(|cmd| cmd.starts_with(text) && **cmd != text)
-            .map(|cmd| cmd[text.len()..].to_string());
+            .map(|c| c.name)
+            .find(|name| name.starts_with(text) && *name != text)
+            .map(|name| name[text.len()..].to_string());
     }
     history
         .iter()
@@ -62,5 +97,13 @@ mod tests {
     fn history_no_match_is_none() {
         let hist = vec!["ls -la".to_string()];
         assert_eq!(suggest("cargo", &hist), None);
+    }
+
+    #[test]
+    fn matches_filters_by_prefix() {
+        let names: Vec<&str> = matches("/s").iter().map(|c| c.name).collect();
+        assert!(names.contains(&"/settings") && names.contains(&"/shell"));
+        assert!(!names.contains(&"/exit"));
+        assert!(matches("ls").is_empty()); // non-slash → no palette
     }
 }
