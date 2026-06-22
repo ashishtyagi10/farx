@@ -210,7 +210,7 @@ pub fn run() -> anyhow::Result<()> {
             text: String::new(),
             focused: true,
             history: crate::history::load(),
-            cwd: crate::cwd::display(&cwd),
+            cwd: cwd.clone(),
             ..Default::default()
         },
         cwd,

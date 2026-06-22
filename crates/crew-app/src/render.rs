@@ -120,7 +120,9 @@ impl CrewApp {
             w: ib.w,
             h: ib.h,
             focused: self.input.focused,
-            bordered: true,
+            // The input bar draws its own fieldset card border (with the cwd
+            // legend), so it opts out of the GPU rounded border.
+            bordered: false,
         });
 
         // Keybindings help overlay, centered over everything.

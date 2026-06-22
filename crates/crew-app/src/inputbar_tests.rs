@@ -94,19 +94,20 @@ fn broadcast_prompt_is_magenta() {
 }
 
 #[test]
-fn cells_show_cwd_legend_on_top_row() {
+fn cells_show_cwd_legend_on_top_border() {
     let bar = InputBar {
         text: String::new(),
         focused: true,
-        cwd: "~/code/farx".into(),
+        cwd: "/code/farx".into(),
         ..Default::default()
     };
     let cells = bar.cells(40, 3);
-    // legend characters appear on row 0 in the accent colour
+    // the cwd legend rides the top border (row 0) in the accent colour
     assert!(cells
         .iter()
         .any(|c| c.c == 'f' && c.row == 0 && c.fg == ACCENT));
-    // the prompt still renders on the middle row
+    // the card has rounded corners and the prompt is on the interior row
+    assert!(cells.iter().any(|c| c.c == '╭'));
     assert!(cells.iter().any(|c| c.c == '>' && c.row == 1));
 }
 

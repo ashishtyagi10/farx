@@ -65,7 +65,7 @@ pub(crate) fn resolve(base: &Path, arg: &str) -> Option<PathBuf> {
 impl CrewApp {
     /// Point Crew at `dir`: update the tracked cwd and the input-bar legend.
     pub(crate) fn set_cwd(&mut self, dir: PathBuf) {
-        self.input.cwd = display(&dir);
+        self.input.cwd = dir.clone();
         self.cwd = dir;
     }
 
