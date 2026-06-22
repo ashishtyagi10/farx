@@ -59,10 +59,14 @@ impl CrewApp {
         if idx < self.panes.len() {
             self.panes.remove(idx);
         }
+        // Closing a pane returns to the grid; never linger zoomed on it.
+        self.zoomed = false;
         if self.panes.is_empty() {
-            // No panel selected → focus returns to the input bar.
+            // No panel selected → focus returns to the input bar; reset modes.
             self.focused = 0;
             self.input.focused = true;
+            self.broadcast = false;
+            self.input.broadcast = false;
             return false;
         }
         self.focused = self.focused.min(self.panes.len() - 1);
@@ -164,6 +168,19 @@ mod tests {
         assert_eq!(slash_command("/ settings "), Some("settings"));
         assert_eq!(slash_command("ls -la"), None);
         assert_eq!(slash_command("/"), Some(""));
+    }
+
+    #[test]
+    fn close_pane_resets_modes_when_empty() {
+        let mut app = CrewApp {
+            zoomed: true,
+            broadcast: true,
+            ..Default::default()
+        };
+        app.input.broadcast = true;
+        assert!(!app.close_pane(0));
+        assert!(!app.zoomed && !app.broadcast && !app.input.broadcast);
+        assert!(app.input.focused);
     }
 
     #[test]
