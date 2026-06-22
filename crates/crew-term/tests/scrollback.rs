@@ -1,5 +1,15 @@
-//! Scrollback behaviour of the headless terminal model.
+//! Scrollback + feed behaviour of the headless terminal model.
 use crew_term::{GridSize, HeadlessTerm, TermModel};
+
+#[test]
+fn feeding_text_appears_in_cells() {
+    let mut term = HeadlessTerm::new(GridSize { cols: 20, rows: 5 });
+    term.feed(b"hi");
+    let mut row0: Vec<_> = term.cells().into_iter().filter(|c| c.row == 0).collect();
+    row0.sort_by_key(|c| c.col);
+    let text: String = row0.iter().map(|c| c.c).collect();
+    assert_eq!(text, "hi");
+}
 
 #[test]
 fn scrolling_up_reveals_lines_pushed_into_history() {
@@ -14,7 +24,9 @@ fn scrolling_up_reveals_lines_pushed_into_history() {
         "TOPLINE should be off-screen at the live bottom"
     );
 
+    assert_eq!(term.display_offset(), 0, "starts at the live bottom");
     term.scroll(1000); // clamps to the top of the scrollback
+    assert!(term.display_offset() > 0, "scrolled back from the bottom");
     let scrolled: String = term.cells().iter().map(|c| c.c).collect();
     assert!(
         scrolled.contains('T') && scrolled.contains('P'),
