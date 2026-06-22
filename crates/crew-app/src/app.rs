@@ -51,6 +51,8 @@ pub struct CrewApp {
     pub(crate) prev_cwd: PathBuf,
     /// When the window was last resized; drives a debounced save of its size.
     pub(crate) resize_at: Option<Instant>,
+    /// Transient status message + when it was set, shown on the input bar.
+    pub(crate) status: Option<(String, Instant)>,
 }
 
 impl CrewApp {

@@ -64,8 +64,9 @@ impl CrewApp {
         self.redraw();
     }
 
-    /// Copy the focused terminal's visible screen to the system clipboard.
-    pub(crate) fn copy_screen(&self) {
+    /// Copy the focused terminal's visible screen to the system clipboard,
+    /// flashing a status message with the line count.
+    pub(crate) fn copy_screen(&mut self) {
         let Some(pane) = self.panes.get(self.focused) else {
             return;
         };
@@ -73,7 +74,9 @@ impl CrewApp {
             let text = screen_text(&t.pty.cells(false), pane.grid.cols, pane.grid.rows);
             if !text.is_empty() {
                 if let Ok(mut cb) = arboard::Clipboard::new() {
+                    let lines = text.lines().count();
                     let _ = cb.set_text(text);
+                    self.set_status(format!("copied {lines} lines"));
                 }
             }
         }

@@ -35,6 +35,7 @@ mod settingspane;
 mod spawn;
 pub mod stats;
 mod statspane;
+mod status;
 mod suggest;
 mod tui;
 mod welcome;
