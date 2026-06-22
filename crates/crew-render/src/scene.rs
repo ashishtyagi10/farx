@@ -17,10 +17,15 @@ pub struct PaneScene {
     pub w: f32,
     pub h: f32,
     pub focused: bool,
+    /// Whether to draw the rounded GPU border. Surfaces that draw their own
+    /// cell-based border (e.g. the input bar's titled card) set this `false`.
+    pub bordered: bool,
 }
 
+/// Unfocused panes use a muted teal-green; the focused pane highlights in the
+/// neon accent green (same hue family — no jarring contrast colour).
 const BORDER_NORMAL: [f32; 4] = [40.0 / 255.0, 80.0 / 255.0, 95.0 / 255.0, 1.0];
-const BORDER_FOCUSED: [f32; 4] = [1.0, 0.0, 170.0 / 255.0, 1.0];
+const BORDER_FOCUSED: [f32; 4] = [0.0, 1.0, 160.0 / 255.0, 1.0];
 const BORDER_RADIUS: f32 = 10.0;
 const BORDER_THICKNESS: f32 = 2.0;
 
@@ -59,21 +64,23 @@ pub(crate) fn build_scene(
             }
         }
 
-        // Rounded-corner border for this pane.
-        let color = if pane.focused {
-            BORDER_FOCUSED
-        } else {
-            BORDER_NORMAL
-        };
-        borders.push(Border {
-            x: pane.x,
-            y: pane.y,
-            w: pane.w,
-            h: pane.h,
-            radius: BORDER_RADIUS,
-            thickness: BORDER_THICKNESS,
-            color,
-        });
+        // Rounded-corner border for this pane (unless it draws its own).
+        if pane.bordered {
+            let color = if pane.focused {
+                BORDER_FOCUSED
+            } else {
+                BORDER_NORMAL
+            };
+            borders.push(Border {
+                x: pane.x,
+                y: pane.y,
+                w: pane.w,
+                h: pane.h,
+                radius: BORDER_RADIUS,
+                thickness: BORDER_THICKNESS,
+                color,
+            });
+        }
 
         // One text Buffer per pane.
         let buf = build_pane_buffer(font_system, &pane.cells, cols, rows, pane.w, pane.h, params);

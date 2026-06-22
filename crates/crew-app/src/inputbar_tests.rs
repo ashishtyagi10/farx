@@ -1,0 +1,71 @@
+use super::*;
+
+#[test]
+fn cells_focused_shows_accent_prompt_and_text() {
+    let bar = InputBar {
+        text: "ls".into(),
+        focused: true,
+        ..Default::default()
+    };
+    let cells = bar.cells(40, 3);
+    assert!(cells.iter().any(|c| c.c == '>'));
+    assert!(cells.iter().any(|c| c.c == 'l'));
+    assert!(cells.iter().any(|c| c.c == 's'));
+    let prompt = cells.iter().find(|c| c.c == '>').unwrap();
+    assert_eq!(prompt.fg, ACCENT);
+    // a block cursor is shown while focused with no suggestion
+    assert!(cells.iter().any(|c| c.c == '█'));
+}
+
+#[test]
+fn cells_long_text_follows_cursor_tail() {
+    let text = format!("S{}E", "x".repeat(80));
+    let bar = InputBar {
+        text,
+        focused: true,
+        ..Default::default()
+    };
+    let cells = bar.cells(20, 3);
+    assert!(cells.iter().any(|c| c.c == 'E'));
+    assert!(cells.iter().any(|c| c.c == '█'));
+    assert!(!cells.iter().any(|c| c.c == 'S'));
+}
+
+#[test]
+fn cells_shows_dim_ghost_suggestion() {
+    let bar = InputBar {
+        text: "/se".into(),
+        focused: true,
+        ..Default::default()
+    };
+    let cells = bar.cells(40, 3);
+    assert!(cells.iter().any(|c| c.c == 't' && c.fg == DIM));
+    assert!(!cells.iter().any(|c| c.c == '█'));
+}
+
+#[test]
+fn cells_unfocused_has_no_cursor() {
+    let bar = InputBar {
+        text: "ls".into(),
+        focused: false,
+        ..Default::default()
+    };
+    assert!(!bar.cells(40, 3).iter().any(|c| c.c == '█'));
+}
+
+#[test]
+fn cells_unfocused_prompt_is_dim() {
+    let bar = InputBar {
+        text: String::new(),
+        focused: false,
+        ..Default::default()
+    };
+    let prompt = bar.cells(40, 3).into_iter().find(|c| c.c == '>').unwrap();
+    assert_eq!(prompt.fg, DIM);
+}
+
+#[test]
+fn cells_tiny_returns_empty() {
+    assert!(InputBar::default().cells(3, 3).is_empty());
+    assert!(InputBar::default().cells(40, 0).is_empty());
+}

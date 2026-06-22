@@ -12,7 +12,7 @@ fn default_show_nav() -> bool {
     true
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CrewConfig {
     #[serde(default = "default_font_size")]
     pub font_size: f32,
@@ -20,6 +20,9 @@ pub struct CrewConfig {
     pub nav_width: f32,
     #[serde(default = "default_show_nav")]
     pub show_nav: bool,
+    /// Chosen font family; `None`/empty uses the system monospace.
+    #[serde(default)]
+    pub font_family: Option<String>,
 }
 
 impl Default for CrewConfig {
@@ -28,6 +31,7 @@ impl Default for CrewConfig {
             font_size: default_font_size(),
             nav_width: default_nav_width(),
             show_nav: default_show_nav(),
+            font_family: None,
         }
     }
 }
@@ -42,6 +46,7 @@ impl CrewConfig {
             font_size: self.font_size.clamp(12.0, 32.0),
             nav_width: self.nav_width.clamp(160.0, 320.0),
             show_nav: self.show_nav,
+            font_family: self.font_family.filter(|n| !n.is_empty()),
         }
     }
 
@@ -49,8 +54,8 @@ impl CrewConfig {
         toml::from_str::<Self>(s).unwrap_or_default().clamped()
     }
 
-    pub fn to_toml_str(self) -> String {
-        toml::to_string(&self).unwrap_or_default()
+    pub fn to_toml_str(&self) -> String {
+        toml::to_string(self).unwrap_or_default()
     }
 
     pub fn config_path() -> Option<PathBuf> {
@@ -97,6 +102,7 @@ mod tests {
             font_size: 99.0,
             nav_width: 9.0,
             show_nav: true,
+            font_family: None,
         }
         .clamped();
         assert_eq!(cfg.font_size, 32.0);
@@ -124,6 +130,7 @@ mod tests {
             font_size: 20.0,
             nav_width: 200.0,
             show_nav: true,
+            font_family: Some("Menlo".to_string()),
         };
         assert_eq!(CrewConfig::from_toml_str(&c.to_toml_str()), c);
     }

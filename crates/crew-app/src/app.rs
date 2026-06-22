@@ -1,10 +1,12 @@
+use std::io::Write;
 use std::sync::Arc;
 
 use winit::event::Modifiers;
 use winit::window::Window;
 
 use crate::config::CrewConfig;
-use crate::pane::Pane;
+use crate::inputbar::InputBar;
+use crate::pane::{Pane, PaneContent};
 use crate::session::grid_for;
 use crate::statspane::StatsPane;
 use crew_render::Renderer;
@@ -25,6 +27,9 @@ pub struct CrewApp {
     pub(crate) cursor: (f32, f32),
     pub(crate) config: CrewConfig,
     pub(crate) sidebar: Box<StatsPane>,
+    pub(crate) input: InputBar,
+    /// Animation frame counter, advanced while the welcome screen is showing.
+    pub(crate) tick: u64,
 }
 
 impl CrewApp {
@@ -44,16 +49,26 @@ impl CrewApp {
             self.panes.remove(idx);
         }
         if self.panes.is_empty() {
-            return true;
+            // No panel selected → focus returns to the input bar.
+            self.focused = 0;
+            self.input.focused = true;
+            return false;
         }
         self.focused = self.focused.min(self.panes.len() - 1);
         false
+    }
+
+    /// Focus the most-recently-pushed pane and move keyboard focus off the input bar.
+    pub(crate) fn focus_new_pane(&mut self) {
+        self.focused = self.panes.len().saturating_sub(1);
+        self.input.focused = false;
     }
 
     /// Handle a Super-chord key.  Returns `true` if the app should exit.
     pub(crate) fn handle_super_chord(&mut self, s: &str) -> bool {
         let n = self.panes.len().max(1);
         match s {
+            "i" => self.input.focused = !self.input.focused,
             "," => self.spawn_settings_pane(),
             "g" => self.toggle_sidebar(),
             "t" => self.spawn_new_pane(),
@@ -88,6 +103,48 @@ impl CrewApp {
         false
     }
 
+    /// Handle a submitted input line: `/command`s are run; everything else is
+    /// written (with a newline) to the focused Terminal pane. Returns `true` if the
+    /// app should exit (e.g. `/exit`).
+    pub(crate) fn submit_input(&mut self, line: String) -> bool {
+        if line.is_empty() {
+            return false;
+        }
+        if let Some(cmd) = slash_command(&line) {
+            return self.run_slash_command(cmd);
+        }
+        let focused = self.focused;
+        if let Some(pane) = self.panes.get_mut(focused) {
+            if let PaneContent::Terminal(t) = &mut pane.content {
+                if let Err(e) = t
+                    .input
+                    .write_all(line.as_bytes())
+                    .and_then(|_| t.input.write_all(b"\n"))
+                    .and_then(|_| t.input.flush())
+                {
+                    eprintln!("submit_input write error: {e}");
+                }
+            }
+        }
+        false
+    }
+
+    /// Run a `/command` typed in the input bar. Returns `true` if the app should exit.
+    fn run_slash_command(&mut self, cmd: &str) -> bool {
+        match cmd {
+            "exit" => return true,
+            "settings" => self.spawn_settings_pane(),
+            "shell" => self.spawn_new_pane(),
+            "update" => self.spawn_labeled_terminal(
+                "sh",
+                &["-c".to_string(), "git pull; exec sh".to_string()],
+                "update".to_string(),
+            ),
+            _ => {}
+        }
+        false
+    }
+
     pub(crate) fn toggle_sidebar(&mut self) {
         self.config.show_nav = !self.config.show_nav;
         self.config.save();
@@ -98,5 +155,23 @@ impl CrewApp {
         if let Some(w) = &self.window {
             w.request_redraw();
         }
+    }
+}
+
+/// If `line` is a `/command`, return the trimmed command name; else `None`.
+pub(crate) fn slash_command(line: &str) -> Option<&str> {
+    line.strip_prefix('/').map(str::trim)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::slash_command;
+
+    #[test]
+    fn slash_command_parses() {
+        assert_eq!(slash_command("/settings"), Some("settings"));
+        assert_eq!(slash_command("/ settings "), Some("settings"));
+        assert_eq!(slash_command("ls -la"), None);
+        assert_eq!(slash_command("/"), Some(""));
     }
 }

@@ -3,14 +3,14 @@ use glyphon::{
     TextRenderer, Viewport,
 };
 
-use crate::celltext::{cell_metrics, FontParams};
+use crate::celltext::{cell_metrics, monospace_families, FontParams};
 use crate::gpu::Gpu;
 use crate::quads::QuadLayer;
 use crate::roundborder::RoundBorderLayer;
 use crate::scene::{build_scene, PaneBuffer, PaneScene};
 
 /// Default terminal background colour (must match scene.rs).
-pub(crate) const DEFAULT_BG: (u8, u8, u8) = (8, 8, 16);
+pub(crate) const DEFAULT_BG: (u8, u8, u8) = (0, 0, 0);
 
 /// A single terminal cell to be rendered.
 pub struct CellView {
@@ -38,6 +38,7 @@ pub struct CellGrid {
     pub(crate) cell_h: f32,
     font_size: f32,
     line_height: f32,
+    font_family: Option<String>,
 }
 
 impl CellGrid {
@@ -54,7 +55,8 @@ impl CellGrid {
             None,
         );
 
-        let (cell_w, cell_h) = cell_metrics(&mut font_system, font_size);
+        let font_family: Option<String> = None;
+        let (cell_w, cell_h) = cell_metrics(&mut font_system, font_size, &font_family);
         let line_height = font_size * 1.25;
         let quad_layer = QuadLayer::new(&gpu.device, gpu.format);
         let round_border_layer = RoundBorderLayer::new(&gpu.device, gpu.format);
@@ -72,16 +74,32 @@ impl CellGrid {
             cell_h,
             font_size,
             line_height,
+            font_family,
         }
     }
 
     /// Update cell metrics when the font size changes at runtime.
     pub fn set_font_size(&mut self, font_size: f32) {
-        let (cell_w, cell_h) = cell_metrics(&mut self.font_system, font_size);
+        let (cell_w, cell_h) = cell_metrics(&mut self.font_system, font_size, &self.font_family);
         self.font_size = font_size;
         self.line_height = font_size * 1.25;
         self.cell_w = cell_w;
         self.cell_h = cell_h;
+    }
+
+    /// Switch the font family at runtime (`None`/empty → system monospace) and
+    /// recompute cell metrics for the new face.
+    pub fn set_font_family(&mut self, family: Option<String>) {
+        self.font_family = family.filter(|n| !n.is_empty());
+        let (cell_w, cell_h) =
+            cell_metrics(&mut self.font_system, self.font_size, &self.font_family);
+        self.cell_w = cell_w;
+        self.cell_h = cell_h;
+    }
+
+    /// Sorted, de-duplicated names of all installed monospace font families.
+    pub fn monospace_families(&self) -> Vec<String> {
+        monospace_families(&self.font_system)
     }
 
     /// Returns the monospace cell size `(width, height)` in pixels.
@@ -97,6 +115,7 @@ impl CellGrid {
         let params = FontParams {
             font_size: self.font_size,
             line_height: self.line_height,
+            family: self.font_family.clone(),
         };
         let (quads, buffers, borders) = build_scene(
             panes,

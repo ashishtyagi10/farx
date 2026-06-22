@@ -3,8 +3,9 @@ use crew_render::PaneScene;
 use crate::app::{CrewApp, GAP};
 use crate::chrome;
 use crate::layout::{pane_rects_at, Rect};
-use crate::pane::{build_scenes, relayout};
+use crate::pane::{build_scenes, relayout, PaneContent};
 use crate::session::pane_at;
+use crate::welcome;
 
 impl CrewApp {
     /// `(cell_w, cell_h, surface_w, surface_h, scale)` when the renderer is ready.
@@ -34,22 +35,49 @@ impl CrewApp {
 
     /// Grid pane rects packed into the content area (right of the sidebar).
     fn grid_rects(&self) -> Vec<Rect> {
-        let Some((_cw, _ch, sw, sh, scale)) = self.frame_geometry() else {
+        let Some((_cw, ch, sw, sh, scale)) = self.frame_geometry() else {
             return Vec::new();
         };
-        let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP);
+        let ih = chrome::input_h(ch);
+        let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
         pane_rects_at(self.panes.len(), c.x, c.y, c.w, c.h, GAP)
     }
 
     /// Build all PaneScenes for one frame: grid panes in the content area, plus
-    /// the docked full-height sidebar when shown.
+    /// the docked full-height sidebar when shown, plus the docked bottom input bar.
     pub(crate) fn build_frame(&mut self) -> Vec<PaneScene> {
-        let Some((cw, ch, _sw, sh, scale)) = self.frame_geometry() else {
+        let Some((cw, ch, sw, sh, scale)) = self.frame_geometry() else {
             return Vec::new();
         };
+        let ih = chrome::input_h(ch);
         let rects = self.grid_rects();
         relayout(&mut self.panes, &rects, cw, ch);
-        let mut scenes = build_scenes(&self.panes, self.focused);
+        // A pane highlights only when the input bar is NOT focused (one active surface).
+        let pane_focus = if self.input.focused {
+            None
+        } else {
+            Some(self.focused)
+        };
+        let mut scenes = build_scenes(&self.panes, pane_focus);
+
+        if self.panes.is_empty() {
+            // Use the SAME rect a single grid pane would occupy (gap-inset) so the
+            // welcome area matches a Cmd+T terminal exactly.
+            let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
+            if let Some(r) = pane_rects_at(1, c.x, c.y, c.w, c.h, GAP).first() {
+                let wcols = (r.w / cw).floor() as u16;
+                let wrows = (r.h / ch).floor() as u16;
+                scenes.push(PaneScene {
+                    cells: welcome::welcome_cells_animated(wcols, wrows, self.tick),
+                    x: r.x,
+                    y: r.y,
+                    w: r.w,
+                    h: r.h,
+                    focused: false,
+                    bordered: true,
+                });
+            }
+        }
 
         if self.config.show_nav {
             let sb = chrome::sidebar_rect(sh, self.nav_px(scale), GAP);
@@ -62,16 +90,69 @@ impl CrewApp {
                 w: sb.w,
                 h: sb.h,
                 focused: false,
+                bordered: true,
             });
         }
+
+        let content =
+            chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
+        let ib = chrome::inputbar_rect(content, sh, ih, GAP);
+        let ic = (ib.w / cw).floor() as u16;
+        let ir = (ib.h / ch).floor() as u16;
+        scenes.push(PaneScene {
+            cells: self.input.cells(ic, ir),
+            x: ib.x,
+            y: ib.y,
+            w: ib.w,
+            h: ib.h,
+            focused: self.input.focused,
+            bordered: true,
+        });
+
+        // Command palette: a popup just above the input bar when slash input matches.
+        let matches = crate::suggest::matches(&self.input.text);
+        if self.input.focused && !matches.is_empty() {
+            let mr = crate::cmdmenu::menu_rows(matches.len());
+            let mh = mr as f32 * ch;
+            let my = (ib.y - mh - GAP).max(0.0);
+            scenes.push(PaneScene {
+                cells: crate::cmdmenu::menu_cells(&matches, self.input.menu_sel, ic, mr),
+                x: ib.x,
+                y: my,
+                w: ib.w,
+                h: mh,
+                focused: false,
+                bordered: false,
+            });
+        }
+
         scenes
     }
 
+    /// Route a mouse-wheel scroll (in lines; positive = up/older) to the surface
+    /// under the cursor. Terminal panes scroll their scrollback.
+    pub(crate) fn scroll_at_cursor(&mut self, lines: i32) {
+        if lines == 0 {
+            return;
+        }
+        if let Some(i) = self.pane_at_cursor() {
+            if let Some(pane) = self.panes.get_mut(i) {
+                match &mut pane.content {
+                    PaneContent::Terminal(t) => t.pty.scroll(lines),
+                    PaneContent::Chat(c) => c.scroll(lines, pane.grid.cols, pane.grid.rows),
+                    PaneContent::Settings(_) => {}
+                }
+                self.redraw();
+            }
+        }
+    }
+
     /// Which grid pane (if any) sits under the cursor — only inside the content
-    /// area, so clicks on the sidebar do not steal focus.
+    /// area, so clicks on the sidebar or input bar do not steal focus.
     pub(crate) fn pane_at_cursor(&self) -> Option<usize> {
-        let (_cw, _ch, sw, sh, scale) = self.frame_geometry()?;
-        let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP);
+        let (_cw, ch, sw, sh, scale) = self.frame_geometry()?;
+        let ih = chrome::input_h(ch);
+        let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
         if !chrome::point_in(c, self.cursor.0, self.cursor.1) {
             return None;
         }

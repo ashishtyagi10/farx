@@ -1,18 +1,16 @@
-use std::io::Write;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::Key;
 use winit::window::{Window, WindowId};
 
 use crate::app::{CrewApp, POLL_MS};
 use crate::config::CrewConfig;
-use crate::pane::{spawn_pane, PaneContent};
-use crate::session::key_to_bytes;
+use crate::inputbar::InputBar;
+use crate::pane::PaneContent;
 use crew_render::Renderer;
 
 impl ApplicationHandler for CrewApp {
@@ -27,15 +25,11 @@ impl ApplicationHandler for CrewApp {
         // the right physical size on HiDPI/Retina (the surface is in physical px).
         let font_px = self.config.font_size * window.scale_factor() as f32;
         match Renderer::new(window.clone(), font_px) {
-            Ok(renderer) => {
-                let initial_grid = Self::current_grid(&renderer);
+            Ok(mut renderer) => {
+                // Apply the persisted font family up front, not just on Save.
+                renderer.set_font_family(self.config.font_family.clone());
                 self.renderer = Some(renderer);
                 self.window = Some(window.clone());
-
-                if let Ok(pane) = spawn_pane("bash", "sh", initial_grid) {
-                    self.panes.push(pane);
-                    self.focused = 0;
-                }
                 window.request_redraw();
             }
             Err(e) => {
@@ -68,6 +62,25 @@ impl ApplicationHandler for CrewApp {
             any_changed |= changed;
         }
         if self.sidebar.refresh() {
+            any_changed = true;
+        }
+        // Animate the matrix-rain welcome screen while there are no panes.
+        if self.panes.is_empty() {
+            self.tick = self.tick.wrapping_add(1);
+            any_changed = true;
+        }
+        // Close terminal panes whose shell has exited (e.g. the user typed `exit`).
+        let exited: Vec<usize> = self
+            .panes
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| matches!(&p.content, PaneContent::Terminal(t) if t.pty.exited()))
+            .map(|(i, _)| i)
+            .collect();
+        if !exited.is_empty() {
+            for i in exited.into_iter().rev() {
+                self.close_pane(i);
+            }
             any_changed = true;
         }
         let actions_ran = !collected_actions.is_empty();
@@ -108,49 +121,15 @@ impl ApplicationHandler for CrewApp {
                 }
                 self.redraw();
             }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let lines = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y.round() as i32,
+                    MouseScrollDelta::PixelDelta(p) => (p.y / 24.0).round() as i32,
+                };
+                self.scroll_at_cursor(lines);
+            }
             WindowEvent::KeyboardInput { event, .. } => {
-                let mstate = self.mods.state();
-                // Cmd+Q / Ctrl+Q quits the app.
-                if event.state.is_pressed()
-                    && (mstate.super_key() || mstate.control_key())
-                    && matches!(&event.logical_key, Key::Character(s) if s.as_str() == "q")
-                {
-                    event_loop.exit();
-                    return;
-                }
-                if self.mods.state().super_key() && event.state.is_pressed() {
-                    if let Key::Character(s) = &event.logical_key {
-                        let s = s.to_string();
-                        if self.handle_super_chord(&s) {
-                            event_loop.exit();
-                        }
-                    }
-                    self.redraw();
-                } else {
-                    let focused = self.focused;
-                    let mut applied: Option<CrewConfig> = None;
-                    if let Some(pane) = self.panes.get_mut(focused) {
-                        match &mut pane.content {
-                            PaneContent::Terminal(t) => {
-                                if let Some(bytes) = key_to_bytes(&event) {
-                                    if let Err(e) =
-                                        t.input.write_all(&bytes).and_then(|_| t.input.flush())
-                                    {
-                                        eprintln!("pty write error: {e}");
-                                    }
-                                }
-                            }
-                            PaneContent::Chat(c) => c.on_key(&event),
-                            PaneContent::Settings(s) => {
-                                applied = s.on_key(&event).map(|c| c.config);
-                            }
-                        }
-                    }
-                    if let Some(cfg) = applied {
-                        self.apply_settings(cfg);
-                    }
-                    self.redraw();
-                }
+                self.on_key_event(event_loop, &event);
             }
             WindowEvent::Resized(size) => {
                 if let Some(renderer) = &mut self.renderer {
@@ -165,7 +144,7 @@ impl ApplicationHandler for CrewApp {
                 self.redraw();
             }
             WindowEvent::RedrawRequested => {
-                if self.renderer.is_none() || self.panes.is_empty() {
+                if self.renderer.is_none() {
                     return;
                 }
                 let scenes = self.build_frame();
@@ -182,6 +161,12 @@ pub fn run() -> anyhow::Result<()> {
     let event_loop = EventLoop::new()?;
     let mut app = CrewApp {
         config: CrewConfig::load(),
+        // Default focus is the input bar (startup has no panes selected).
+        input: InputBar {
+            text: String::new(),
+            focused: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
     event_loop.run_app(&mut app)?;

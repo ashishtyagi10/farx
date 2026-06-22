@@ -9,6 +9,14 @@ use crate::settingspane::SettingsPane;
 use crew_plugin::{Plugin, PluginCommand};
 use crew_term::PtyTerm;
 
+/// The user's preferred shell from `$SHELL`, falling back to `/bin/sh`.
+pub(crate) fn default_shell() -> String {
+    std::env::var("SHELL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/bin/sh".to_string())
+}
+
 impl CrewApp {
     /// Spawn a new terminal pane and focus it.
     pub fn spawn_new_pane(&mut self) {
@@ -17,10 +25,11 @@ impl CrewApp {
             .as_ref()
             .map(Self::current_grid)
             .unwrap_or(FALLBACK_SIZE);
-        match spawn_pane("bash", "sh", grid) {
+        let shell = default_shell();
+        match spawn_pane(&shell, "/bin/sh", grid) {
             Ok(pane) => {
                 self.panes.push(pane);
-                self.focused = self.panes.len() - 1;
+                self.focus_new_pane();
             }
             Err(e) => eprintln!("spawn_new_pane failed: {e:#}"),
         }
@@ -50,7 +59,7 @@ impl CrewApp {
                     label: Some(label),
                 };
                 self.panes.push(pane);
-                self.focused = self.panes.len() - 1;
+                self.focus_new_pane();
                 self.redraw();
             }
             Err(e) => eprintln!("spawn_labeled_terminal failed: {e:#}"),
@@ -83,8 +92,13 @@ impl CrewApp {
             .as_ref()
             .map(Self::current_grid)
             .unwrap_or(FALLBACK_SIZE);
+        let families = self
+            .renderer
+            .as_ref()
+            .map(|r| r.monospace_families())
+            .unwrap_or_default();
         self.panes.push(Pane {
-            content: PaneContent::Settings(SettingsPane::new(self.config)),
+            content: PaneContent::Settings(SettingsPane::new(self.config.clone(), families)),
             grid,
             rect: Rect {
                 x: 0.0,
@@ -94,10 +108,10 @@ impl CrewApp {
             },
             label: None,
         });
-        self.focused = self.panes.len() - 1;
+        self.focus_new_pane();
     }
 
-    /// Apply updated config: set font size live, persist to disk, and redraw.
+    /// Apply updated config: set font family + size live, persist to disk, and redraw.
     pub(crate) fn apply_settings(&mut self, cfg: CrewConfig) {
         self.config = cfg;
         let scale = self
@@ -106,6 +120,7 @@ impl CrewApp {
             .map(|w| w.scale_factor() as f32)
             .unwrap_or(1.0);
         if let Some(r) = &mut self.renderer {
+            r.set_font_family(self.config.font_family.clone());
             r.set_font_size(self.config.font_size * scale);
         }
         self.config.save();
@@ -136,7 +151,7 @@ impl CrewApp {
                     },
                     label: None,
                 });
-                self.focused = self.panes.len() - 1;
+                self.focus_new_pane();
             }
             Err(e) => eprintln!("spawn_chat_pane failed: {e:#}"),
         }
