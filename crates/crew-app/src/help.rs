@@ -33,9 +33,11 @@ const BINDINGS: &[(&str, &str)] = &[
     ("Cmd+Q", "Quit"),
 ];
 
-/// Preferred overlay size in cells.
+/// Preferred overlay size in cells (bindings + a spacer + slash commands +
+/// borders/title/hint).
 pub fn size() -> (u16, u16) {
-    (52, BINDINGS.len() as u16 + 4)
+    let rows = BINDINGS.len() + crate::suggest::COMMANDS.len() + 1 + 4;
+    (52, rows as u16)
 }
 
 /// Render the help overlay into a `cols × rows` grid.
@@ -44,21 +46,23 @@ pub fn help_cells(cols: u16, rows: u16) -> Vec<CellView> {
         return Vec::new();
     }
     let mut buf = Buffer::empty(Rect::new(0, 0, cols, rows));
-    let items: Vec<ListItem> = BINDINGS
-        .iter()
-        .map(|(keys, desc)| {
-            ListItem::new(Line::from(vec![
-                Span::styled(format!("{keys:<26}"), Style::new().fg(ACCENT)),
-                Span::styled(*desc, Style::new().fg(TEXT)),
-            ]))
-        })
-        .collect();
+    let item = |left: &str, right: &str| {
+        ListItem::new(Line::from(vec![
+            Span::styled(format!("{left:<26}"), Style::new().fg(ACCENT)),
+            Span::styled(right.to_string(), Style::new().fg(TEXT)),
+        ]))
+    };
+    let mut items: Vec<ListItem> = BINDINGS.iter().map(|(k, d)| item(k, d)).collect();
+    items.push(ListItem::new(Line::from(""))); // spacer before the commands
+    for c in crate::suggest::COMMANDS {
+        items.push(item(c.name, c.desc));
+    }
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(ACCENT))
         .style(Style::new().bg(PANEL))
         .title(Span::styled(
-            format!(" keyboard shortcuts · crew v{} ", env!("CARGO_PKG_VERSION")),
+            format!(" keys & commands · crew v{} ", env!("CARGO_PKG_VERSION")),
             Style::new().fg(ACCENT),
         ));
     let inner = block.inner(buf.area);
@@ -86,6 +90,8 @@ mod tests {
         let cells = help_cells(w, h);
         assert!(cells.iter().any(|c| c.c == '╭'));
         assert!(cells.iter().any(|c| c.c == 'C')); // e.g. "Ctrl+Tab"
+                                                   // the slash commands are listed too (e.g. "/clear")
+        assert!(cells.iter().any(|c| c.c == '/'));
     }
 
     #[test]
