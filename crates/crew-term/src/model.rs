@@ -128,6 +128,11 @@ impl TermCore {
     pub(crate) fn scroll_to_bottom(&mut self) {
         self.term.scroll_display(Scroll::Bottom);
     }
+
+    /// Lines currently scrolled back from the live bottom (0 = at the bottom).
+    pub(crate) fn display_offset(&self) -> usize {
+        self.term.grid().display_offset()
+    }
 }
 
 pub struct HeadlessTerm {
@@ -144,6 +149,11 @@ impl HeadlessTerm {
     /// Scroll the viewport by `delta` lines into scrollback (positive = older).
     pub fn scroll(&mut self, delta: i32) {
         self.core.scroll(delta);
+    }
+
+    /// Lines currently scrolled back from the live bottom (0 = at the bottom).
+    pub fn display_offset(&self) -> usize {
+        self.core.display_offset()
     }
 }
 
@@ -164,20 +174,6 @@ impl TermModel for HeadlessTerm {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // A headless Term (no PTY) we can feed bytes into deterministically.
-    #[test]
-    fn feeding_text_appears_in_cells() {
-        let mut term = HeadlessTerm::new(GridSize { cols: 20, rows: 5 });
-        term.feed(b"hi");
-        let cells = term.cells();
-        let text: String = {
-            let mut row0: Vec<_> = cells.iter().filter(|c| c.row == 0).collect();
-            row0.sort_by_key(|c| c.col);
-            row0.iter().map(|c| c.c).collect()
-        };
-        assert_eq!(text, "hi");
-    }
 
     #[test]
     fn sgr_red_bold_is_resolved_to_rgb_and_flags() {

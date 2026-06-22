@@ -89,6 +89,24 @@ pub fn relayout(panes: &mut [Pane], rects: &[Rect], cell_w: f32, cell_h: f32) {
 /// Accent green for the focused pane's badge; muted grey otherwise.
 const BADGE_ON: (u8, u8, u8) = (0, 255, 160);
 const BADGE_OFF: (u8, u8, u8) = (110, 110, 120);
+/// Amber for the "viewing scrollback" indicator.
+const SCROLL_HINT: (u8, u8, u8) = (230, 180, 90);
+
+/// Mark a pane that's scrolled away from the live bottom with a top-corner arrow.
+fn add_scroll_badge(cells: &mut Vec<CellView>, cols: u16) {
+    if cols < 6 {
+        return;
+    }
+    cells.push(CellView {
+        col: cols - 4,
+        row: 0,
+        c: '⇡',
+        fg: SCROLL_HINT,
+        bg: (0, 0, 0),
+        bold: true,
+        italic: false,
+    });
+}
 
 /// Append a single-digit index badge to the pane's top-right corner so the
 /// Cmd+1..9 / Ctrl+Tab navigation is discoverable. Only shown for panes 1-9.
@@ -119,6 +137,11 @@ pub fn build_scenes(panes: &[Pane], focused: Option<usize>) -> Vec<PaneScene> {
             let mut cells = p.cells();
             if multi {
                 add_badge(&mut cells, i + 1, p.grid.cols, focused == Some(i));
+            }
+            if let PaneContent::Terminal(t) = &p.content {
+                if t.pty.display_offset() > 0 {
+                    add_scroll_badge(&mut cells, p.grid.cols);
+                }
             }
             PaneScene {
                 cells,
@@ -153,5 +176,14 @@ mod tests {
         add_badge(&mut cells, 12, 40, false);
         add_badge(&mut cells, 2, 2, false);
         assert!(cells.is_empty());
+    }
+
+    #[test]
+    fn scroll_badge_marks_top_corner() {
+        let mut cells = Vec::new();
+        add_scroll_badge(&mut cells, 40);
+        assert!(cells
+            .iter()
+            .any(|c| c.c == '⇡' && c.row == 0 && c.fg == SCROLL_HINT));
     }
 }

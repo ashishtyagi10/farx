@@ -105,6 +105,11 @@ impl PtyTerm {
     pub fn scroll_to_bottom(&mut self) {
         self.core.scroll_to_bottom();
     }
+
+    /// Lines currently scrolled back from the live bottom (0 = at the bottom).
+    pub fn display_offset(&self) -> usize {
+        self.core.display_offset()
+    }
 }
 
 impl TermModel for PtyTerm {
