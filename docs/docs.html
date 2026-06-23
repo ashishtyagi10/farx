@@ -52,6 +52,7 @@
         <a href="#panes">Panes</a>
         <a href="#shortcuts">Keyboard Shortcuts</a>
         <a href="#input-bar">Input Bar</a>
+        <a href="#multi-agent">Multi-Agent</a>
         <a href="#clipboard">Clipboard</a>
         <a href="#scrollback">Scrollback</a>
         <a href="#sidebar-panel">Sidebar</a>
@@ -167,16 +168,27 @@ cargo build --release -p crew-app
         <thead><tr><th>Command</th><th>Action</th></tr></thead>
         <tbody>
           <tr><td><code>/shell</code></td><td>Open a new shell pane in the current directory</td></tr>
+          <tr><td><code>/crew</code></td><td>Open the <a href="#multi-agent">multi-agent pane</a> (claude/codex/opencode relay)</td></tr>
+          <tr><td><code>/far</code></td><td>Open a Far Manager-style dual-pane file browser</td></tr>
+          <tr><td><code>/run &lt;cmd&gt;</code></td><td>Run a command in its own tiled pane that stays open</td></tr>
+          <tr><td><code>/edit &lt;file&gt;</code></td><td>Open a file in <code>$EDITOR</code> in a new pane</td></tr>
+          <tr><td><code>/open [target]</code></td><td>Open a URL or path with the OS default app</td></tr>
           <tr><td><code>/settings</code></td><td>Open the settings form</td></tr>
-          <tr><td><code>/find &lt;text&gt;</code></td><td>Scroll back to the most recent line containing the text</td></tr>
+          <tr><td><code>/find &lt;text&gt;</code></td><td>Scroll back to a match and highlight every hit in view</td></tr>
           <tr><td><code>/name &lt;text&gt;</code></td><td>Title the focused pane; bare <code>/name</code> clears it</td></tr>
-          <tr><td><code>/clear</code></td><td>Clear the focused terminal</td></tr>
-          <tr><td><code>/pwd</code></td><td>Show / copy the current working directory</td></tr>
+          <tr><td><code>/clear</code> · <code>/clearall</code></td><td>Clear the focused pane's scrollback — or every pane's</td></tr>
+          <tr><td><code>/copy</code> · <code>/dump [file]</code></td><td>Copy scrollback to the clipboard — or save it to a file</td></tr>
+          <tr><td><code>/only</code> · <code>/closeall</code></td><td>Close all panes but the focused one — or all of them</td></tr>
+          <tr><td><code>/font [n]</code></td><td>Set the font size (12–32); no arg reports the current size</td></tr>
+          <tr><td><code>/reload</code></td><td>Re-read <code>config.toml</code> from disk and apply it live</td></tr>
+          <tr><td><code>/broadcast</code> · <code>/zoom</code> · <code>/sidebar</code></td><td>Palette-discoverable toggles mirroring the chords</td></tr>
+          <tr><td><code>/pwd</code></td><td>Copy the current working directory to the clipboard</td></tr>
           <tr><td><code>/update</code></td><td>Fetch and install the latest release</td></tr>
-          <tr><td><code>/keys</code></td><td>Show the keyboard shortcut list in-app</td></tr>
+          <tr><td><code>/keys</code> · <code>/about</code></td><td>Show the keyboard shortcut list / version info in-app</td></tr>
           <tr><td><code>/exit</code></td><td>Quit Crew</td></tr>
         </tbody>
       </table>
+      <p style="color:var(--text-dim)">The palette is <strong>fuzzy</strong> — prefix matches rank first, then subsequence matches (so <code>/dmp</code> finds <code>/dump</code>) — and scrolls to the selection when the list is long.</p>
 
       <h3>Autosuggest &amp; History</h3>
       <ul>
@@ -192,6 +204,33 @@ cargo build --release -p crew-app
         <li><kbd>Ctrl+W</kbd> deletes the last word; <kbd>Ctrl+U</kbd> clears the line.</li>
         <li><strong>Status flashes</strong> — transient messages (e.g. "copied 12 lines", "cd: no such directory") appear briefly on the input card's bottom border.</li>
       </ul>
+
+      <h2 id="multi-agent">Multi-Agent (<code>/crew</code>)</h2>
+      <p><code>/crew</code> opens a pane where independent headless CLI coding agents — <strong>claude</strong>, <strong>codex</strong>, and <strong>opencode</strong> — message each other to work a task you give them, in any direction.</p>
+      <p>On open, the broker probes which agent CLIs are installed and registers only those (missing ones are skipped, and it says so). Type a task and press <kbd>Enter</kbd>; prefix <code>@&lt;agent&gt;</code> to choose who starts.</p>
+
+      <h3>The relay protocol</h3>
+      <p>Each agent receives a clean, normalized message — never another agent's raw CLI output — and can route in three ways:</p>
+      <ul>
+        <li>begin a reply with <code>TO &lt;agent&gt;: &lt;message&gt;</code> to <strong>hand off</strong> to a peer;</li>
+        <li>reply <code>DONE</code> (or <code>DONE: &lt;answer&gt;</code>) to <strong>end the thread</strong> — the explicit no-reply signal;</li>
+        <li>anything else is a plain reply that <strong>bounces back</strong> to the sender.</li>
+      </ul>
+      <p>This proves out as <strong>A→B</strong> (claude hands to codex), <strong>B→A</strong> (codex replies back), and a <strong>3-way relay</strong> (claude → codex → opencode, with the answer relayed back to claude). A live run:</p>
+      <div class="code-block"><code>claude → codex   TO codex: reply with exactly the word PONG
+codex  → claude  PONG
+claude → codex   [done]</code></div>
+
+      <h3>Guardrails</h3>
+      <ul>
+        <li><strong>Loop guard</strong> — every message carries a hop counter; past the limit (default 6) the broker drops the thread and logs that it stopped, so a relay can never loop forever.</li>
+        <li><strong>Per-call timeout</strong> — a hung agent is killed and logged (default 180s); the broker moves on instead of blocking.</li>
+        <li><strong>Isolation</strong> — agents run in a broker subprocess over Crew's JSON plugin protocol, so slow calls stay off the render thread; an adapter normalizes each agent's stdout before it is shown or relayed.</li>
+        <li><strong>Observability</strong> — every hop is logged in the pane as <code>from → to</code> with the reply.</li>
+      </ul>
+
+      <h3>Adding an agent</h3>
+      <p>Discovery and routing are agent-agnostic. To add a fourth agent, write one adapter constructor in <code>crates/crew-plugin/src/broker/agents.rs</code> and register it in <code>known_adapters</code> — the routing engine is untouched.</p>
 
       <h2 id="clipboard">Clipboard</h2>
       <ul>
