@@ -99,3 +99,7 @@ pub(crate) fn build_scene(
 
     (quads, buffers, borders)
 }
+
+#[cfg(test)]
+#[path = "scene_tests.rs"]
+mod tests;

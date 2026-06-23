@@ -1,0 +1,99 @@
+use super::*;
+use crate::cellgrid::CellView;
+use crate::celltext::FontParams;
+use glyphon::FontSystem;
+
+fn cell(col: u16, row: u16, c: char, bg: (u8, u8, u8)) -> CellView {
+    CellView {
+        col,
+        row,
+        c,
+        fg: (200, 200, 200),
+        bg,
+        bold: false,
+        italic: false,
+    }
+}
+
+fn params() -> FontParams {
+    FontParams {
+        font_size: 14.0,
+        line_height: 17.5,
+        family: None,
+    }
+}
+
+fn pane(cells: Vec<CellView>, bordered: bool, overlay: bool) -> PaneScene {
+    PaneScene {
+        cells,
+        x: 0.0,
+        y: 0.0,
+        w: 80.0,
+        h: 40.0,
+        focused: false,
+        bordered,
+        overlay,
+    }
+}
+
+#[test]
+fn bg_quads_only_for_non_default_cells() {
+    let mut fs = FontSystem::new();
+    let panes = vec![pane(
+        vec![cell(0, 0, 'a', (0, 0, 0)), cell(1, 0, 'b', (10, 20, 30))],
+        false,
+        false,
+    )];
+    let (quads, buffers, borders) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), false);
+    assert_eq!(quads.len(), 1, "only the non-default-bg cell gets a quad");
+    assert_eq!(buffers.len(), 1);
+    assert!(borders.is_empty());
+    assert_eq!(quads[0].x, 8.0); // positioned at col 1
+    assert_eq!(quads[0].color[3], 1.0); // opaque
+}
+
+#[test]
+fn bordered_pane_emits_a_border() {
+    let mut fs = FontSystem::new();
+    let (_q, _b, borders) = build_scene(
+        &[pane(vec![], true, false)],
+        8.0,
+        16.0,
+        &mut fs,
+        &params(),
+        false,
+    );
+    assert_eq!(borders.len(), 1);
+}
+
+#[test]
+fn want_overlay_partitions_panes() {
+    let mut fs = FontSystem::new();
+    let panes = vec![
+        pane(vec![cell(0, 0, 'x', (1, 2, 3))], true, false),
+        pane(vec![cell(0, 0, 'y', (4, 5, 6))], false, true),
+    ];
+    // Base pass: only the non-overlay pane (bordered → one border).
+    let (q, b, bd) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), false);
+    assert_eq!((q.len(), b.len(), bd.len()), (1, 1, 1));
+    // Overlay pass: only the overlay pane (bordered:false → no border).
+    let (q2, b2, bd2) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), true);
+    assert_eq!((q2.len(), b2.len(), bd2.len()), (1, 1, 0));
+}
+
+#[test]
+fn focused_border_is_brighter_than_unfocused() {
+    let mut fs = FontSystem::new();
+    let mut p = pane(vec![], true, false);
+    p.focused = true;
+    let (_q, _b, focused) = build_scene(&[p], 8.0, 16.0, &mut fs, &params(), false);
+    let (_q2, _b2, normal) = build_scene(
+        &[pane(vec![], true, false)],
+        8.0,
+        16.0,
+        &mut fs,
+        &params(),
+        false,
+    );
+    assert!(focused[0].color[0] > normal[0].color[0]);
+}
