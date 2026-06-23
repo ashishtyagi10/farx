@@ -69,7 +69,7 @@
 <span class="t-file"> listening on 127.0.0.1:8080          </span><span class="t-sep">|</span><span class="t-dir"> On branch main ↑2                   </span>
 <span class="t-file"> GET /  200  4ms                      </span><span class="t-sep">|</span><span class="t-file"> nothing to commit, working clean    </span>
 <span class="t-prompt">crew ~/code/crew »</span> <span class="t-cursor">_</span>
-<span class="t-fnbar"> /shell  /settings  /find  /name  /pwd  /update  /keys  /exit    Cmd+T new pane </span></pre>
+<span class="t-fnbar"> /crew  /shell  /far  /run  /find  /copy  /settings  /keys  /exit    Cmd+T new pane </span></pre>
     </div>
   </div>
 </section>
@@ -81,6 +81,11 @@
     <p class="section-sub">A from-scratch terminal, drawn cell-by-cell, in a single binary.</p>
 
     <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">&#8644;</div>
+        <h3>Multi-Agent Relay</h3>
+        <p><code>/crew</code> opens a pane where claude, codex, and opencode message each other to work a task &mdash; agents discovered at runtime, with loop guards, per-call timeouts, and every hop logged.</p>
+      </div>
       <div class="feature-card">
         <div class="feature-icon">&#9638;</div>
         <h3>Auto-Tiling Panes</h3>
@@ -231,12 +236,13 @@ cd crew &amp;&amp; cargo run --release -p crew-app</code>
         </div>
         <pre class="terminal-body"><span class="t-prompt">crew ~/code/crew »</span> /<span class="t-cursor">_</span>
 
-<span class="t-sel">  /shell      open a new shell pane in the current directory  </span>
-<span class="t-file">  /settings   font family, font size, sidebar</span>
+<span class="t-sel">  /crew       agents (claude/codex/opencode) talk to each other  </span>
+<span class="t-file">  /shell      open a new shell pane in the current directory</span>
+<span class="t-file">  /far        dual-pane file browser</span>
+<span class="t-file">  /run /edit /open   run a command, edit a file, open a URL</span>
 <span class="t-file">  /find       scroll back to the latest matching line</span>
-<span class="t-file">  /name       title the focused pane</span>
-<span class="t-file">  /pwd        copy the working directory</span>
-<span class="t-file">  /clear /update /keys /exit</span>
+<span class="t-file">  /copy /dump /only /closeall /reload /font</span>
+<span class="t-file">  /settings /clear /pwd /update /keys /about /exit</span>
 
 <span class="t-ai">  Tab/→ accepts the fish-style autosuggest from history.</span></pre>
       </div>
