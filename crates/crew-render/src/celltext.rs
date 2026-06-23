@@ -148,26 +148,5 @@ pub(crate) fn cell_metrics(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cell_metrics_larger_font_gives_larger_dimensions() {
-        let mut fs = FontSystem::new();
-        let small = cell_metrics(&mut fs, 12.0, &None);
-        let large = cell_metrics(&mut fs, 24.0, &None);
-        assert!(
-            large.0 > small.0,
-            "cell_w(24) {:.2} should be > cell_w(12) {:.2}",
-            large.0,
-            small.0
-        );
-        assert!(
-            large.1 > small.1,
-            "cell_h(24) {:.2} should be > cell_h(12) {:.2}",
-            large.1,
-            small.1
-        );
-        assert_eq!(large.1, 24.0 * 1.25, "cell_h(24) must equal 24.0 * 1.25");
-    }
-}
+#[path = "celltext_tests.rs"]
+mod tests;
