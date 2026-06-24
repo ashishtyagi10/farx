@@ -208,6 +208,14 @@ turns a body into a clean reply, the `Registry` maps name → adapter (populated
 agent:** write one constructor in `agents.rs` and push it into `known_adapters` —
 nothing in the engine changes.
 
+**Tuning (environment).** Keep cost and reliability in check without rebuilding:
+`CREW_CLAUDE_MODEL` / `CREW_CODEX_MODEL` / `CREW_OPENCODE_MODEL` point an agent at
+a specific (e.g. cheaper) model; `CREW_BROKER_MAX_HOPS` (default 6) caps relay
+depth; `CREW_BROKER_TOKEN_BUDGET` (default 0 = unlimited) caps a thread's
+approximate token spend; `CREW_BROKER_TIMEOUT_MS` (default 180000) bounds each
+agent call. The pane also prints a cost summary (`done — N exchange(s), ~X
+tokens`) at the end of every task.
+
 ## Sidebar
 
 A docked left panel (toggle with **Cmd+G**) with stacked, line-divided sections:
