@@ -1,71 +1,88 @@
 use super::*;
 
 #[test]
-fn relay_with_inline_message() {
-    let r = parse_routing("TO codex: please review this");
+fn next_directive_relays_with_body_above_it() {
+    let r = parse_routing("Here is my review.\nLooks solid.\n@next codex");
     assert_eq!(
         r,
         Routing::Relay {
             to: "codex".into(),
-            body: "please review this".into()
+            body: "Here is my review.\nLooks solid.".into()
         }
     );
 }
 
 #[test]
-fn relay_is_case_insensitive_and_keeps_peer_case() {
-    let r = parse_routing("to Codex: hi");
+fn next_is_case_insensitive_and_keeps_peer_case() {
+    let r = parse_routing("ok\n@NEXT Codex");
     assert_eq!(
         r,
         Routing::Relay {
             to: "Codex".into(),
-            body: "hi".into()
+            body: "ok".into()
         }
     );
 }
 
 #[test]
-fn relay_takes_following_lines_as_body() {
-    let r = parse_routing("TO opencode:\nline one\nline two");
+fn next_tolerates_colon_and_trailing_words() {
+    let r = parse_routing("do it\n@next: opencode please");
     assert_eq!(
         r,
         Routing::Relay {
             to: "opencode".into(),
-            body: "line one\nline two".into()
+            body: "do it".into()
         }
     );
 }
 
 #[test]
-fn done_bare_and_with_answer() {
-    assert_eq!(parse_routing("DONE"), Routing::Done(String::new()));
+fn done_ends_with_body_above() {
     assert_eq!(
-        parse_routing("done: all set"),
-        Routing::Done("all set".into())
+        parse_routing("the answer is 42\n@done"),
+        Routing::Done("the answer is 42".into())
+    );
+    assert_eq!(parse_routing("@done"), Routing::Done(String::new()));
+}
+
+#[test]
+fn trailing_blank_lines_are_ignored() {
+    assert_eq!(
+        parse_routing("answer\n@done\n\n  \n"),
+        Routing::Done("answer".into())
     );
 }
 
 #[test]
-fn plain_reply_passes_through() {
+fn missing_directive_ends_thread_without_misrouting() {
+    // No control line: don't guess a recipient — finish with the whole reply.
     assert_eq!(
-        parse_routing("  the answer is 42 "),
-        Routing::Reply("the answer is 42".into())
+        parse_routing("just some prose with no directive"),
+        Routing::Done("just some prose with no directive".into())
     );
 }
 
 #[test]
-fn frame_mentions_self_peers_and_body() {
-    let env = Envelope::new("user", "claude", "t", "build a thing");
-    let p = frame(&env, &["codex".into(), "opencode".into()]);
+fn frame_includes_task_transcript_peers_and_protocol() {
+    let env = Envelope::new("codex", "claude", "t", "please review");
+    let p = frame(
+        &env,
+        &["codex".into(), "opencode".into()],
+        "build a parser",
+        "user → claude: start\nclaude → codex: drafted",
+    );
     assert!(p.contains("\"claude\""));
     assert!(p.contains("codex, opencode"));
-    assert!(p.contains("build a thing"));
-    assert!(p.contains("TO <peer>"));
-    assert!(p.contains("DONE"));
+    assert!(p.contains("build a parser")); // the task
+    assert!(p.contains("claude → codex: drafted")); // the transcript
+    assert!(p.contains("please review")); // the current message
+    assert!(p.contains("@next") && p.contains("@done"));
 }
 
 #[test]
-fn frame_handles_no_peers() {
+fn frame_handles_no_peers_and_empty_transcript() {
     let env = Envelope::new("user", "claude", "t", "hi");
-    assert!(frame(&env, &[]).contains("(none)"));
+    let p = frame(&env, &[], "task", "");
+    assert!(p.contains("(none)"));
+    assert!(p.contains("you are first"));
 }

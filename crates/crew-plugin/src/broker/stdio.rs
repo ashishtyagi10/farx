@@ -72,8 +72,8 @@ pub(crate) fn roster(reg: &Registry) -> String {
     }
     format!(
         "Detected {} agent(s): {}. Type a task and press Enter; prefix @<agent> \
-         to choose who starts. Agents hand off with \"TO <agent>:\" and finish \
-         with \"DONE\".",
+         to choose who starts. Agents see the task + transcript and hand off with \
+         a final `@next <agent>` line, or finish with `@done`.",
         reg.len(),
         reg.names().join(", "),
     )
@@ -94,7 +94,7 @@ fn relay(input: &str, out: &mut impl Write) -> anyhow::Result<()> {
         out,
         &msg(
             "crew",
-            format!("starting with {start} — relaying until an agent says DONE"),
+            format!("starting with {start} — relaying until an agent says @done"),
         ),
     )?;
     let broker = Broker::new(reg, max_hops(), call_timeout());

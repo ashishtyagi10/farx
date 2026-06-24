@@ -67,10 +67,10 @@ fn reply_hop_is_labelled_from_to() {
         to: "codex".into(),
         hop: 0,
         kind: HopKind::Reply,
-        text: "TO codex: hi".into(),
+        text: "here is my analysis".into(),
     };
     let ev = hop_to_msg(&hop);
-    assert_eq!(text(&ev), ("claude → codex", "TO codex: hi"));
+    assert_eq!(text(&ev), ("claude → codex", "here is my analysis"));
 }
 
 #[test]

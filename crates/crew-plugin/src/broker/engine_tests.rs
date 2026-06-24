@@ -78,11 +78,11 @@ fn errors(hops: &[Hop]) -> Vec<&Hop> {
 
 #[test]
 fn demo_a_to_b() {
-    // claude hands the task to codex, which finishes.
+    // claude hands the task to codex via @next, which finishes with @done.
     let hops = drive(
         vec![
-            Fake::scripted("claude", &["TO codex: check this"]),
-            Fake::scripted("codex", &["DONE: looks good"]),
+            Fake::scripted("claude", &["check this\n@next codex"]),
+            Fake::scripted("codex", &["looks good\n@done"]),
         ],
         6,
     );
@@ -93,10 +93,11 @@ fn demo_a_to_b() {
             ("codex".into(), "claude".into(), HopKind::Done),
         ]
     );
-    assert!(hops
-        .iter()
-        .any(|h| h.kind == HopKind::Done && h.text == "looks good"));
-    // Each call is announced first (so the UI shows activity during the wait).
+    // Control line stripped (relayed body is just the answer); done text kept.
+    let txt = |k| hops.iter().find(|h| h.kind == k).map(|h| h.text.clone());
+    assert_eq!(txt(HopKind::Reply).as_deref(), Some("check this"));
+    assert_eq!(txt(HopKind::Done).as_deref(), Some("looks good"));
+    // Each call is announced first (UI shows activity during the wait).
     let dialed: Vec<&str> = hops
         .iter()
         .filter(|h| h.kind == HopKind::Dialing)
@@ -107,15 +108,14 @@ fn demo_a_to_b() {
 
 #[test]
 fn demo_b_to_a_round_trip() {
-    // claude -> codex, codex replies back to claude (B->A), claude finishes.
+    // claude -> codex, codex relays back to claude (B->A), claude finishes.
     let hops = drive(
         vec![
-            Fake::scripted("claude", &["TO codex: question", "DONE"]),
-            Fake::scripted("codex", &["the answer"]),
+            Fake::scripted("claude", &["question\n@next codex", "@done"]),
+            Fake::scripted("codex", &["the answer\n@next claude"]),
         ],
         6,
     );
-    // Flat relay: codex's plain reply bounces back to claude (B->A).
     assert_eq!(
         legs(&hops),
         vec![
@@ -128,15 +128,15 @@ fn demo_b_to_a_round_trip() {
 
 #[test]
 fn demo_three_way_relay_answer_returns_to_a() {
-    // A->B->C; C's answer relays back B->A. The codex->claude leg is the return.
+    // A->B->C; C relays its answer back B->A, who finishes.
     let hops = drive(
         vec![
-            Fake::scripted("claude", &["TO codex: relay please", "DONE: shipped"]),
+            Fake::scripted("claude", &["relay\n@next codex", "shipped\n@done"]),
             Fake::scripted(
                 "codex",
-                &["TO opencode: consult", "TO claude: opencode says 42"],
+                &["consult\n@next opencode", "C says 42\n@next claude"],
             ),
-            Fake::scripted("opencode", &["here is C's answer"]),
+            Fake::scripted("opencode", &["here is C answer\n@next codex"]),
         ],
         6,
     );
@@ -157,21 +157,27 @@ fn loop_guard_terminates_a_cycle() {
     // Two agents that relay forever; the hop limit must stop the thread.
     let hops = drive(
         vec![
-            Fake::scripted("claude", &["TO codex: loop"]),
-            Fake::scripted("codex", &["TO claude: loop"]),
+            Fake::scripted("claude", &["loop\n@next codex"]),
+            Fake::scripted("codex", &["loop\n@next claude"]),
         ],
         2,
     );
     let last = hops.last().unwrap();
     assert_eq!(last.kind, HopKind::Terminated);
     assert!(last.text.contains("hop limit"));
-    // hops 0,1,2 logged, then the guard fires on hop 3 (Dialing notes aside).
-    assert_eq!(legs(&hops).len(), 4);
+    assert_eq!(legs(&hops).len(), 4); // 3 relays logged, then the guard fires.
+}
+
+#[test]
+fn missing_directive_ends_the_thread() {
+    let hops = drive(vec![Fake::scripted("claude", &["answer no directive"])], 6);
+    assert_eq!(legs(&hops).len(), 1);
+    assert_eq!(legs(&hops)[0].2, HopKind::Done);
 }
 
 #[test]
 fn unknown_agent_errors() {
-    let hops = drive(vec![Fake::scripted("codex", &["DONE"])], 6); // no "claude"
+    let hops = drive(vec![Fake::scripted("codex", &["@done"])], 6); // no "claude"
     let errs = errors(&hops);
     assert_eq!(errs.len(), 1);
     assert!(errs[0].text.contains("unknown agent"));

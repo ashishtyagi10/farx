@@ -60,8 +60,8 @@ fn no_agents_does_not_route() {
 #[test]
 fn at_selector_starts_with_chosen_agent() {
     let dir = unique_dir("sel");
-    write_fake(&dir, "claude", &["DONE: claude-start"], false);
-    write_fake(&dir, "codex", &["DONE: codex-start"], false);
+    write_fake(&dir, "claude", &["claude-start\\n@done"], false);
+    write_fake(&dir, "codex", &["codex-start\\n@done"], false);
     let send = r#"{"type":"send","channel":"crew","text":"@codex hello there"}"#;
     let ev = run_broker(&dir, &[], &[send]);
     // codex (not the default first agent, claude) handled the task.
