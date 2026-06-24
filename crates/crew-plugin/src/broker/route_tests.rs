@@ -116,6 +116,22 @@ fn clip_truncates_long_text_with_ellipsis() {
 }
 
 #[test]
+fn has_directive_detects_presence() {
+    assert!(has_directive("answer\n@next codex"));
+    assert!(has_directive("done\n**@done**"));
+    assert!(!has_directive("just prose, no control line"));
+    assert!(!has_directive(""));
+}
+
+#[test]
+fn repair_prompt_shows_reply_and_asks_for_directive() {
+    let p = repair_prompt(&["codex".into()], "my earlier reply");
+    assert!(p.contains("my earlier reply"));
+    assert!(p.contains("@next") && p.contains("@done"));
+    assert!(p.contains("codex"));
+}
+
+#[test]
 fn frame_orders_stable_prefix_before_variable_parts() {
     let env = Envelope::new("user", "claude", "t", "the message");
     let p = frame(&env, &["codex".into()], "the task", "user → claude: hi");
