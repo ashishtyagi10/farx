@@ -23,16 +23,31 @@ pub fn role_for(name: &str) -> &'static str {
     }
 }
 
+/// Append a model-selection flag when `model` is set, so a cost-conscious user
+/// can point an agent at a cheaper model (e.g. `CREW_CLAUDE_MODEL=...`) with no
+/// code change. Pure (caller passes the env value) so it's testable.
+fn with_model(mut args: Vec<String>, flag: &str, model: Option<String>) -> Vec<String> {
+    if let Some(m) = model.filter(|m| !m.is_empty()) {
+        args.push(flag.into());
+        args.push(m);
+    }
+    args
+}
+
 fn claude() -> CliAdapter {
     CliAdapter {
         name: "claude".into(),
         program: "claude".into(),
-        args: vec![
-            "-p".into(),
-            "{}".into(),
-            "--output-format".into(),
-            "text".into(),
-        ],
+        args: with_model(
+            vec![
+                "-p".into(),
+                "{}".into(),
+                "--output-format".into(),
+                "text".into(),
+            ],
+            "--model",
+            std::env::var("CREW_CLAUDE_MODEL").ok(),
+        ),
         normalize: Normalize::Raw,
     }
 }
@@ -43,7 +58,11 @@ fn codex() -> CliAdapter {
         program: "codex".into(),
         // `--skip-git-repo-check` so it runs outside a repo; prompt as an arg
         // (not stdin) so the session banner stays on stderr.
-        args: vec!["exec".into(), "--skip-git-repo-check".into(), "{}".into()],
+        args: with_model(
+            vec!["exec".into(), "--skip-git-repo-check".into(), "{}".into()],
+            "-m",
+            std::env::var("CREW_CODEX_MODEL").ok(),
+        ),
         normalize: Normalize::Raw,
     }
 }
@@ -52,7 +71,11 @@ fn opencode() -> CliAdapter {
     CliAdapter {
         name: "opencode".into(),
         program: "opencode".into(),
-        args: vec!["run".into(), "--format".into(), "json".into(), "{}".into()],
+        args: with_model(
+            vec!["run".into(), "--format".into(), "json".into(), "{}".into()],
+            "-m",
+            std::env::var("CREW_OPENCODE_MODEL").ok(),
+        ),
         normalize: Normalize::OpencodeJson,
     }
 }
@@ -85,5 +108,19 @@ mod tests {
         assert!(!role_for("codex").is_empty());
         assert!(!role_for("claude").is_empty());
         assert_eq!(role_for("nope"), "");
+    }
+
+    #[test]
+    fn with_model_appends_only_when_set() {
+        let base = vec!["-p".to_string(), "{}".to_string()];
+        assert_eq!(
+            with_model(base.clone(), "--model", Some("haiku".into())),
+            vec!["-p", "{}", "--model", "haiku"]
+        );
+        assert_eq!(with_model(base.clone(), "--model", None), base);
+        assert_eq!(
+            with_model(base.clone(), "--model", Some(String::new())),
+            base
+        );
     }
 }
