@@ -51,6 +51,42 @@ pub fn parse_routing(reply: &str) -> Routing {
     Routing::Done(reply.trim().to_string())
 }
 
+/// Whether `reply` ends with a recognizable control directive (same tolerant
+/// matching as [`parse_routing`]). Used to decide whether a repair is needed.
+pub fn has_directive(reply: &str) -> bool {
+    let mut lines: Vec<&str> = reply.lines().collect();
+    while lines.last().is_some_and(|l| l.trim().is_empty()) {
+        lines.pop();
+    }
+    match lines.last() {
+        Some(l) => {
+            let s = l
+                .trim()
+                .trim_matches(|c: char| matches!(c, '*' | '`' | '_' | ' ' | '.'))
+                .to_ascii_lowercase();
+            s.starts_with("@next") || s.starts_with("@done")
+        }
+        None => false,
+    }
+}
+
+/// A focused re-prompt for an agent that forgot its control line: show its own
+/// reply back and ask only for the missing `@next`/`@done` final line.
+pub fn repair_prompt(peers: &[String], prev: &str) -> String {
+    let peer_list = if peers.is_empty() {
+        "(none)".to_string()
+    } else {
+        peers.join(", ")
+    };
+    format!(
+        "Your previous reply was missing the required final control line:\n\n\
+         {prev}\n\n\
+         Reply again with your answer, then make the FINAL line exactly one of:\n\
+         - `@next <agent>` to hand off to a peer (only from: {peer_list})\n\
+         - `@done` if the task is complete.",
+    )
+}
+
 /// Build the prompt for the agent named by `env.to`. The invariant content
 /// (identity, task, the `@next`/`@done` protocol) comes first so repeated calls
 /// to the same agent in a thread share a cacheable prefix; the variable parts

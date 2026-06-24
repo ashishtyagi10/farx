@@ -30,6 +30,61 @@ impl Adapter for Echo {
     }
 }
 
+/// An agent that returns scripted replies in order (repeating the last).
+struct Seq {
+    name: String,
+    replies: Vec<String>,
+    i: Mutex<usize>,
+}
+
+fn seq(name: &str, replies: &[&str]) -> Box<dyn Adapter> {
+    Box::new(Seq {
+        name: name.into(),
+        replies: replies.iter().map(|s| s.to_string()).collect(),
+        i: Mutex::new(0),
+    })
+}
+
+impl Adapter for Seq {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn probe(&self) -> bool {
+        true
+    }
+    fn call(&self, _b: &str, _t: Duration) -> Result<String, String> {
+        let mut i = self.i.lock().unwrap();
+        let r = self
+            .replies
+            .get(*i)
+            .or_else(|| self.replies.last())
+            .cloned()
+            .unwrap_or_default();
+        *i += 1;
+        Ok(r)
+    }
+}
+
+#[test]
+fn missing_directive_is_repaired_once() {
+    // First reply forgets the control line; the broker re-asks claude once, and
+    // the repaired reply routes onward to codex.
+    let reg = Registry::new(vec![
+        seq(
+            "claude",
+            &["an answer with no directive", "fixed\n@next codex"],
+        ),
+        agent("codex", "done\n@done"),
+    ]);
+    let b = Broker::new(reg, 6, Duration::from_secs(1));
+    let mut hops = Vec::new();
+    let stats = b.run("user", "claude", "task", "t", &mut |h| hops.push(h));
+    assert_eq!(stats.exchanges, 3); // claude + its repair + codex
+    assert!(hops
+        .iter()
+        .any(|h| h.from == "codex" && h.kind == HopKind::Done));
+}
+
 #[test]
 fn run_reports_exchanges_and_tokens() {
     let reg = Registry::new(vec![

@@ -5,7 +5,7 @@
 use std::time::Duration;
 
 use super::hop::{Hop, HopKind, RunStats};
-use super::route::{clip, frame};
+use super::route::{clip, frame, has_directive, repair_prompt};
 use super::{parse_routing, Envelope, Registry, Routing};
 
 /// Routes messages between agents in a [`Registry`], with a per-call timeout, a
@@ -46,6 +46,7 @@ impl Broker {
         let mut transcript: Vec<String> = Vec::new();
         let mut stats = RunStats::default();
         let mut last_body: Option<String> = None;
+        let mut repaired = false; // at most one protocol-repair re-ask per thread
         let mut env = Envelope::new(from, to, thread_id, body);
         loop {
             if env.hop > self.max_hops {
@@ -80,6 +81,22 @@ impl Broker {
             };
             stats.exchanges += 1;
             stats.approx_tokens += (prompt.len() + reply.len()) / 4;
+            // If the agent forgot its control line and a hand-off is possible,
+            // re-ask it once to add one (bounded to a single repair per thread).
+            let reply = if !repaired && !peers.is_empty() && !has_directive(&reply) {
+                repaired = true;
+                let nudge = repair_prompt(&peers, &reply);
+                match agent.call(&nudge, self.timeout) {
+                    Ok(r) if !r.trim().is_empty() => {
+                        stats.exchanges += 1;
+                        stats.approx_tokens += (nudge.len() + r.len()) / 4;
+                        r
+                    }
+                    _ => reply,
+                }
+            } else {
+                reply
+            };
             if self.token_budget > 0 && stats.approx_tokens > self.token_budget {
                 sink(self.note(
                     &env,
