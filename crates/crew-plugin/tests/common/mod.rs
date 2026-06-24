@@ -32,10 +32,13 @@ pub fn write_fake(dir: &Path, name: &str, replies: &[&str], json: bool) {
         .enumerate()
         .map(|(i, r)| format!("{i}) R='{r}' ;;\n"))
         .collect();
+    // `%b` interprets `\n` in a reply as a real newline (so directives land on
+    // their own line). For JSON, the literal `\n` stays a valid JSON string
+    // escape that serde decodes back to a newline.
     let emit = if json {
         r#"printf '{"type":"text","text":"%s"}\n' "$R""#
     } else {
-        r#"printf '%s\n' "$R""#
+        r#"printf '%b\n' "$R""#
     };
     let script = format!(
         "#!/bin/sh\nCNT='{cnt}'\nn=0\n[ -f \"$CNT\" ] && read n < \"$CNT\"\n\

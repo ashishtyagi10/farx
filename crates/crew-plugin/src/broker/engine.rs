@@ -52,8 +52,10 @@ impl Broker {
     }
 
     /// Drive a relay that begins with a message `body` sent from `from` to `to`.
-    /// Each hop is reported through `sink` as it happens. Returns when the thread
-    /// ends (DONE, a reply to the originator, the hop limit, or an error).
+    /// Every agent sees the original task plus a transcript of the conversation
+    /// so far, and ends its reply with `@next <agent>` or `@done`. Each hop is
+    /// reported through `sink`; the thread ends on `@done`, the hop limit, or an
+    /// error. `from`'s first message is taken as the task.
     pub fn run(
         &self,
         from: &str,
@@ -62,6 +64,8 @@ impl Broker {
         thread_id: &str,
         sink: &mut dyn FnMut(Hop),
     ) {
+        let task = body.to_string();
+        let mut transcript: Vec<String> = Vec::new();
         let mut env = Envelope::new(from, to, thread_id, body);
         loop {
             if env.hop > self.max_hops {
@@ -80,7 +84,8 @@ impl Broker {
                 ));
                 return;
             };
-            let prompt = frame(&env, &self.registry.peers_of(&env.to));
+            let peers = self.registry.peers_of(&env.to);
+            let prompt = frame(&env, &peers, &task, &tail(&transcript));
             sink(self.note(&env, HopKind::Dialing, String::new()));
             let reply = match agent.call(&prompt, self.timeout) {
                 Ok(r) if !r.trim().is_empty() => r,
@@ -100,8 +105,9 @@ impl Broker {
                         to: next.clone(),
                         hop: env.hop,
                         kind: HopKind::Reply,
-                        text: reply,
+                        text: body.clone(),
                     });
+                    transcript.push(format!("{} → {next}: {body}", env.to));
                     if self.registry.get(&next).is_none() {
                         sink(self.note(&env, HopKind::Error, format!("unknown peer \"{next}\"")));
                         return;
@@ -111,13 +117,6 @@ impl Broker {
                 Routing::Done(answer) => {
                     sink(self.back(&env, HopKind::Done, answer));
                     return;
-                }
-                Routing::Reply(text) => {
-                    sink(self.back(&env, HopKind::Reply, text.clone()));
-                    if env.from.eq_ignore_ascii_case("user") {
-                        return; // answered the originator; nothing more to relay
-                    }
-                    env = env.advance(env.to.clone(), env.from.clone(), text);
                 }
             }
         }
@@ -144,6 +143,13 @@ impl Broker {
             text,
         }
     }
+}
+
+/// The last few transcript entries joined — a compact conversation summary that
+/// gives the next agent context without an unbounded prompt.
+fn tail(transcript: &[String]) -> String {
+    const MAX: usize = 8;
+    transcript[transcript.len().saturating_sub(MAX)..].join("\n")
 }
 
 impl Envelope {
