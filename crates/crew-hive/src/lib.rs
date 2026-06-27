@@ -6,4 +6,5 @@ pub mod agent;
 pub mod board;
 pub mod bus;
 pub mod graph;
+pub mod sched;
 pub mod telemetry;
