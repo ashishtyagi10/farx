@@ -56,4 +56,37 @@ impl Blackboard {
     pub async fn result_count(&self) -> usize {
         self.inner.read().await.results.len()
     }
+
+    pub async fn put_artifact(&self, key: impl Into<String>, value: impl Into<String>) {
+        self.inner
+            .write()
+            .await
+            .artifacts
+            .insert(key.into(), value.into());
+    }
+
+    pub async fn get_artifact(&self, key: &str) -> Option<String> {
+        self.inner.read().await.artifacts.get(key).cloned()
+    }
+
+    pub async fn snapshot(&self) -> BlackboardSnapshot {
+        let g = self.inner.read().await;
+        let mut results: Vec<TaskResult> = g.results.values().cloned().collect();
+        results.sort_by_key(|r| r.task);
+        let mut artifacts: Vec<(String, String)> = g
+            .artifacts
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        artifacts.sort_by(|a, b| a.0.cmp(&b.0));
+        BlackboardSnapshot { results, artifacts }
+    }
+}
+
+/// A serializable point-in-time snapshot of the blackboard, for use across
+/// the remote/sidecar bridge and swarm view.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct BlackboardSnapshot {
+    pub results: Vec<TaskResult>,
+    pub artifacts: Vec<(String, String)>,
 }
