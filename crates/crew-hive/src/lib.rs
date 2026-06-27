@@ -29,6 +29,7 @@ pub mod sched;
 pub mod telemetry;
 pub mod view;
 pub mod wire;
+pub mod worker;
 
 // Graph
 pub use graph::{AgentKind, GraphError, ModelTier, TaskGraph, TaskId, TaskSpec, TaskState};
@@ -67,3 +68,6 @@ pub use govern::{budget_governor, Budget};
 
 // Wire
 pub use wire::{DepResult, RemoteReply, RemoteTask, Transport, TransportError};
+
+// Worker
+pub use worker::{serve_stdio, LoopbackTransport};
