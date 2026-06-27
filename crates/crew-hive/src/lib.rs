@@ -25,6 +25,7 @@ pub mod govern;
 pub mod graph;
 pub mod planner;
 pub mod provider;
+pub mod remoteagent;
 pub mod sched;
 pub mod telemetry;
 pub mod view;
@@ -71,3 +72,6 @@ pub use wire::{DepResult, RemoteReply, RemoteTask, Transport, TransportError};
 
 // Worker
 pub use worker::{serve_stdio, LoopbackTransport};
+
+// RemoteAgent
+pub use remoteagent::RemoteAgent;
