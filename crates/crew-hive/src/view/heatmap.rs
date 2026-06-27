@@ -29,7 +29,7 @@ pub fn heatmap(fleet: &Fleet, cols: usize) -> Heatmap {
     let cols = cols.max(1);
     let agents: Vec<_> = fleet.agents().collect();
     let n = agents.len();
-    let rows = if n == 0 { 0 } else { (n + cols - 1) / cols };
+    let rows = if n == 0 { 0 } else { n.div_ceil(cols) };
     let cells = agents
         .iter()
         .enumerate()
