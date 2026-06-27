@@ -153,3 +153,23 @@ fn compose_minimized_indices_sorted_stable() {
     let ids: Vec<usize> = out.minimized.iter().map(|(id, _)| *id).collect();
     assert_eq!(ids, vec![0, 1]);
 }
+
+#[test]
+fn strip_row_clamps_negative_width() {
+    // With many minimized panes and a large gap, tile_w < 2*gap would produce
+    // negative widths without the clamp. Verify rects are always non-negative.
+    let mut g = GridLayout::new();
+    for idx in 0..200 {
+        g.add(idx);
+    }
+    // 194 minimized panes in a 200px-wide content rect with gap=8 → tiles < 2px
+    let c = content();
+    let out = compose_grid(c, &g, 16.0, 8.0);
+    for (_, r) in &out.minimized {
+        assert!(
+            r.w >= 0.0,
+            "minimized rect width must be non-negative, got {}",
+            r.w
+        );
+    }
+}

@@ -2,9 +2,11 @@ use crew_term::{GridSize, RenderCell};
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, NamedKey};
 
+#[cfg(test)]
 use crate::layout::Rect;
 
 /// Return the index of the first rect that contains physical pixel `(x, y)`.
+#[cfg(test)]
 pub fn pane_at(rects: &[Rect], x: f32, y: f32) -> Option<usize> {
     rects
         .iter()

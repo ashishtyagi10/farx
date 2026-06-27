@@ -34,14 +34,21 @@ impl CrewApp {
         }
     }
 
-    /// Grid pane rects packed into the content area (right of the sidebar).
-    pub(crate) fn grid_rects(&self) -> Vec<Rect> {
+    /// Returns the actual on-screen rect for every rendered pane (full-size grid
+    /// tiles + minimized strip thumbnails), as `(pane_index, rect)`. This is the
+    /// single source of truth for hit-testing and URL rect lookups. Returns empty
+    /// when frame geometry is not yet ready.
+    pub(crate) fn pane_hit_rects(&self) -> Vec<(usize, Rect)> {
         let Some((_cw, ch, sw, sh, scale)) = self.frame_geometry() else {
             return Vec::new();
         };
         let ih = chrome::input_h(ch);
-        let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
-        pane_rects_at(self.panes.len(), c.x, c.y, c.w, c.h, GAP)
+        let content =
+            chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
+        let placed = compose_grid(content, &self.grid, ch, GAP);
+        let mut rects = placed.full;
+        rects.extend(placed.minimized);
+        rects
     }
 
     /// Build all PaneScenes for one frame: grid panes in the content area, plus
@@ -60,11 +67,16 @@ impl CrewApp {
             }
         }
         // A pane highlights only when the input bar is NOT focused (one active surface).
+        let content =
+            chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
+        let placed = compose_grid(content, &self.grid, ch, GAP);
         let mut scenes = if self.zoomed && !self.panes.is_empty() {
             // Zoom: render only the focused pane, expanded to the full content area.
             let i = self.focused.min(self.panes.len() - 1);
-            let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
-            if let Some(r) = pane_rects_at(1, c.x, c.y, c.w, c.h, GAP).into_iter().next() {
+            if let Some(r) = pane_rects_at(1, content.x, content.y, content.w, content.h, GAP)
+                .into_iter()
+                .next()
+            {
                 relayout(&mut self.panes[i..=i], &[r], cw, ch);
             }
             let f = (!self.input.focused).then_some(0);
@@ -77,9 +89,6 @@ impl CrewApp {
                 ch,
             )
         } else {
-            let content =
-                chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
-            let placed = compose_grid(content, &self.grid, ch, GAP);
             for &(idx, rect) in &placed.full {
                 relayout_one(&mut self.panes[idx], rect, cw, ch);
             }
@@ -94,12 +103,17 @@ impl CrewApp {
                 ch,
             )
         };
+        if !self.zoomed {
+            crate::minstrip::push_min_strip(&mut scenes, &self.panes, &placed.minimized, cw, ch);
+        }
 
         if self.panes.is_empty() {
             // Use the SAME rect a single grid pane would occupy (gap-inset) so the
             // welcome area matches a Cmd+T terminal exactly.
-            let c = chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
-            if let Some(r) = pane_rects_at(1, c.x, c.y, c.w, c.h, GAP).first().copied() {
+            if let Some(r) = pane_rects_at(1, content.x, content.y, content.w, content.h, GAP)
+                .first()
+                .copied()
+            {
                 let tick = self.tick;
                 crate::panecard::push_card(&mut scenes, r, cw, ch, "crew", |cols, rows| {
                     welcome::welcome_cells_animated(cols, rows, tick)
@@ -126,8 +140,6 @@ impl CrewApp {
             });
         }
 
-        let content =
-            chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
         let ib = chrome::inputbar_rect(content, sh, ih, GAP);
         let ic = (ib.w / cw).floor() as u16;
         let ir = (ib.h / ch).floor() as u16;

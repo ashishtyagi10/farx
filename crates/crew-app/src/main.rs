@@ -37,6 +37,7 @@ mod layout;
 mod linkhl;
 mod load;
 mod matrix;
+mod minstrip;
 mod net;
 mod openurl;
 mod pane;

@@ -64,7 +64,7 @@ fn strip_row(ids: &[usize], x: f32, y: f32, w: f32, h: f32, gap: f32) -> Vec<(us
                 Rect {
                     x: x + i as f32 * tile_w + gap,
                     y: y + gap,
-                    w: tile_w - 2.0 * gap,
+                    w: (tile_w - 2.0 * gap).max(0.0),
                     h: h - 2.0 * gap,
                 },
             )
