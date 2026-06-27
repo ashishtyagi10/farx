@@ -2,8 +2,13 @@
 use crate::graph::TaskState;
 use serde::{Deserialize, Serialize};
 
+pub mod constellation;
+pub mod heatmap;
 #[cfg(test)]
 mod tests;
+
+pub use constellation::{constellation, Constellation, Edge, Node};
+pub use heatmap::{heatmap, Cell, FleetView, Heatmap};
 
 /// An RGB colour triple.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,5 +42,17 @@ pub fn mode_for_count(n: usize) -> ViewMode {
         ViewMode::Heatmap
     } else {
         ViewMode::Constellation
+    }
+}
+
+/// Choose constellation or heatmap layout based on fleet size.
+pub fn fleet_view(
+    graph: &crate::graph::TaskGraph,
+    fleet: &crate::telemetry::Fleet,
+    heatmap_cols: usize,
+) -> FleetView {
+    match mode_for_count(fleet.len()) {
+        ViewMode::Constellation => FleetView::Constellation(constellation(graph, fleet)),
+        ViewMode::Heatmap => FleetView::Heatmap(heatmap(fleet, heatmap_cols)),
     }
 }
