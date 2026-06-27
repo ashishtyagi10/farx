@@ -25,6 +25,7 @@ pub mod planner;
 pub mod provider;
 pub mod sched;
 pub mod telemetry;
+pub mod view;
 
 // Graph
 pub use graph::{AgentKind, GraphError, ModelTier, TaskGraph, TaskId, TaskSpec, TaskState};
