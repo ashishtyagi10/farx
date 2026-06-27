@@ -4,3 +4,4 @@
 
 pub mod bus;
 pub mod graph;
+pub mod telemetry;
