@@ -255,7 +255,7 @@ Turn a `GridLayout` + content rect into concrete pixel rects: full tiles gridded
 - Produces:
   - `pub const MINIMIZED_STRIP_ROWS: f32 = 4.0;`
   - `pub struct GridRects { pub full: Vec<(usize, Rect)>, pub minimized: Vec<(usize, Rect)> }`
-  - `pub fn compose_grid(content: Rect, layout: &GridLayout, cell_h: f32, gap: f32) -> GridRects` — when `layout.minimized()` is non-empty, reserves a bottom strip `MINIMIZED_STRIP_ROWS * cell_h + 2*gap` tall (clamped to `content.h`); grids `layout.full()` into the region above it (or all of `content` when nothing is minimized) via `pane_rects_at`; lays the minimized indices evenly across one row of the strip. Empty layout → both vecs empty.
+  - `pub fn compose_grid(content: Rect, layout: &GridLayout, cell_h: f32, gap: f32) -> GridRects` — when `layout.minimized()` is non-empty, reserves a bottom strip `MINIMIZED_STRIP_ROWS * cell_h + 2*gap` tall (clamped to `content.h`); grids `layout.full()` into the region above it (or all of `content` when nothing is minimized) via `pane_rects_at`; lays the minimized indices evenly across one row of the strip. **Both the `full` and `minimized` vecs are sorted by pane index** so tiles keep stable positions (focusing a pane never moves a tile — the LRU only decides full-vs-minimized *membership*, not display order). Empty layout → both vecs empty.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -308,14 +308,29 @@ fn compose_reserves_strip_when_minimized_present() {
 }
 
 #[test]
-fn compose_full_indices_match_layout_order() {
+fn compose_full_indices_sorted_stable() {
+    // LRU order is 2,1,0 (most-recent first), but display order is stable by
+    // pane index so focusing never moves a tile.
     let mut g = GridLayout::new();
     g.add(0);
     g.add(1);
     g.add(2);
     let out = compose_grid(content(), &g, 16.0, 8.0);
     let ids: Vec<usize> = out.full.iter().map(|(id, _)| *id).collect();
-    assert_eq!(ids, vec![2, 1, 0]);
+    assert_eq!(ids, vec![0, 1, 2]);
+}
+
+#[test]
+fn compose_minimized_indices_sorted_stable() {
+    // Even though touch() reorders the LRU, the minimized strip stays in
+    // stable index order so thumbnails don't jump.
+    let mut g = GridLayout::new();
+    for idx in 0..8 {
+        g.add(idx); // LRU front->back: 7..0; full = 7,6,5,4,3,2 ; min = 1,0
+    }
+    let out = compose_grid(content(), &g, 16.0, 8.0);
+    let ids: Vec<usize> = out.minimized.iter().map(|(id, _)| *id).collect();
+    assert_eq!(ids, vec![0, 1]);
 }
 ```
 
@@ -339,22 +354,28 @@ pub const MINIMIZED_STRIP_ROWS: f32 = 4.0;
 /// Concrete placement of every tile for one frame.
 #[derive(Debug, Clone, Default)]
 pub struct GridRects {
-    /// Full-size tiles: `(pane_index, rect)` in most-recently-active order.
+    /// Full-size tiles: `(pane_index, rect)`, sorted by pane index (stable
+    /// positions — the LRU decides membership, not display order).
     pub full: Vec<(usize, Rect)>,
-    /// Minimized thumbnails: `(pane_index, rect)` left-to-right.
+    /// Minimized thumbnails: `(pane_index, rect)`, sorted by pane index,
+    /// left-to-right.
     pub minimized: Vec<(usize, Rect)>,
 }
 
 /// Place a `GridLayout` into `content`: grid the full tiles in the main region
 /// and — when there are minimized tiles — reserve a bottom strip and lay them
-/// out evenly across one row.
+/// out evenly across one row. Both sets render in stable pane-index order, so
+/// focusing a pane changes which tiles are full but never reorders them.
 pub fn compose_grid(content: Rect, layout: &GridLayout, cell_h: f32, gap: f32) -> GridRects {
-    let full_ids = layout.full();
-    let min_ids = layout.minimized();
+    let mut full_ids = layout.full().to_vec();
+    let mut min_ids = layout.minimized().to_vec();
     if full_ids.is_empty() && min_ids.is_empty() {
         return GridRects::default();
     }
     debug_assert!(full_ids.len() <= MAX_FULL_TILES);
+    // Stable display order regardless of LRU recency.
+    full_ids.sort_unstable();
+    min_ids.sort_unstable();
 
     let strip_h = if min_ids.is_empty() {
         0.0
@@ -364,15 +385,13 @@ pub fn compose_grid(content: Rect, layout: &GridLayout, cell_h: f32, gap: f32) -
     let grid_h = (content.h - strip_h).max(0.0);
 
     let full_rects = pane_rects_at(full_ids.len(), content.x, content.y, content.w, grid_h, gap);
-    let full = full_ids.iter().copied().zip(full_rects).collect();
+    let full = full_ids.into_iter().zip(full_rects).collect();
 
     let minimized = if min_ids.is_empty() {
         Vec::new()
     } else {
         let strip_y = content.y + grid_h;
-        // One row of evenly-split thumbnails (height = 1 row): pass a row count
-        // of 1 by laying them out as a single-row strip.
-        strip_row(min_ids, content.x, strip_y, content.w, strip_h, gap)
+        strip_row(&min_ids, content.x, strip_y, content.w, strip_h, gap)
     };
 
     GridRects { full, minimized }
@@ -592,7 +611,7 @@ git commit -m "feat(crew): maintain grid LRU (reconcile per frame, fixup on clos
 
 ### Task 4: Render the full set via `compose_grid`
 
-Switch the non-zoom render path from "grid every pane" to "grid the full (MRU) set." Over-cap panes drop out of the main grid but remain reachable (sidebar, `Cmd+number`, `[`/`]`); focusing one promotes it back into the full set next frame. The minimized strip is added in Task 5.
+Switch the non-zoom render path from "grid every pane" to "grid the full set" (capped at `MAX_FULL_TILES`, rendered in stable pane-index order). Over-cap panes drop out of the main grid but remain reachable (sidebar, `Cmd+number`, `[`/`]`); focusing one promotes it back into the full set next frame. The minimized strip is added in Task 5.
 
 **Files:**
 - Modify: `crates/crew-app/src/paneview.rs` (add an index-driven scene builder; keep `build_scenes` working)

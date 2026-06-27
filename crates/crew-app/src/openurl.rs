@@ -119,7 +119,11 @@ impl CrewApp {
     pub(crate) fn cursor_cell(&self) -> Option<(String, usize)> {
         let i = self.pane_at_cursor()?;
         let (cw, ch, _sw, _sh, _scale) = self.frame_geometry()?;
-        let rect = self.grid_rects().get(i).copied()?;
+        let rect = self
+            .pane_hit_rects()
+            .into_iter()
+            .find(|&(idx, _)| idx == i)
+            .map(|(_, r)| r)?;
         let col = ((self.cursor.0 - rect.x) / cw).floor() as i32;
         // Content sits one row below the pane's title bar.
         let row = ((self.cursor.1 - rect.y) / ch).floor() as i32 - 1;

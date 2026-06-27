@@ -1,7 +1,6 @@
 //! Cursor hit-testing: which docked surface or pane sits under the pointer.
 use crate::app::{CrewApp, GAP};
 use crate::chrome;
-use crate::session::pane_at;
 
 impl CrewApp {
     /// Focus the surface under the cursor: the input bar, or a grid pane.
@@ -48,7 +47,8 @@ impl CrewApp {
     }
 
     /// Which grid pane (if any) sits under the cursor — only inside the content
-    /// area, so clicks on the sidebar or input bar do not steal focus.
+    /// area, so clicks on the sidebar or input bar do not steal focus. Covers
+    /// both full-size tiles and minimized strip thumbnails.
     pub(crate) fn pane_at_cursor(&self) -> Option<usize> {
         let (_cw, ch, sw, sh, scale) = self.frame_geometry()?;
         let ih = chrome::input_h(ch);
@@ -56,6 +56,9 @@ impl CrewApp {
         if !chrome::point_in(c, self.cursor.0, self.cursor.1) {
             return None;
         }
-        pane_at(&self.grid_rects(), self.cursor.0, self.cursor.1)
+        self.pane_hit_rects()
+            .into_iter()
+            .find(|&(_, r)| chrome::point_in(r, self.cursor.0, self.cursor.1))
+            .map(|(idx, _)| idx)
     }
 }

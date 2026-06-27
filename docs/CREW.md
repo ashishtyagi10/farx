@@ -40,6 +40,13 @@ status glyphs:
 The focused pane has a near-white border and a bright block cursor; unfocused
 panes are grey with a dim cursor.
 
+**Capacity & visibility.** Crew displays up to **6 panes as full tiles** in the
+auto-tiling grid. Additional panes are demoted to a **minimized thumbnail strip**
+along the bottom of the content area, each showing the pane's title and an
+activity dot, ordered least-recently-active first. The focused pane is protected
+from demotion. To restore a minimized pane to the full grid, click its thumbnail,
+click its entry in the sidebar's PANES list, or use **Cmd+1 … 9** to jump to it.
+
 ## Keyboard shortcuts
 
 Press **`/keys`** in the input bar for this list in-app.
