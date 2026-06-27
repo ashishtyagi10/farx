@@ -39,7 +39,10 @@ pub fn build_scenes(
 }
 
 /// Render the panes named by `placed` (`(pane_index, rect)`), numbering tiles
-/// `1..` in placement order. `focused` is the *pane index* of the focused pane.
+/// by pane index so badges match `Cmd+N` and the sidebar. `focused` is the
+/// *pane index* of the focused pane.
+/// Callers must have applied `relayout_one` to each placed full pane first
+/// (build_frame does this) — this reads `pane.rect`.
 pub fn full_scenes(
     panes: &[Pane],
     placed: &[(usize, crate::layout::Rect)],
@@ -49,15 +52,14 @@ pub fn full_scenes(
     cw: f32,
     ch: f32,
 ) -> Vec<PaneScene> {
-    let multi = placed.len() > 1;
     let mut scenes = Vec::with_capacity(placed.len() * 2);
-    for (slot, &(idx, _rect)) in placed.iter().enumerate() {
+    for &(idx, _rect) in placed {
         let p = &panes[idx];
         let foc = focused == Some(idx);
         push_pane_scenes(
             &mut scenes,
             p,
-            multi.then_some(slot + 1),
+            (panes.len() > 1).then_some(idx + 1),
             foc,
             broadcast,
             find,

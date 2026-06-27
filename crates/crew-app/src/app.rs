@@ -102,7 +102,8 @@ impl CrewApp {
             }
         }
         // Drop any stale indices at/after the end (defensive; close_pane already
-        // fixes the common case via on_close).
+        // fixes the common case via on_close). Terminates because each
+        // `on_close(n)` removes/shifts the max stale index down toward `n`.
         while self.grid.len() > n {
             self.grid.on_close(n);
         }
