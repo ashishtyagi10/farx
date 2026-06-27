@@ -58,6 +58,11 @@ index, the program-set title (often the cwd), and right-aligned status glyphs
 (`⇡N` scrollback, `●` new output, `!` bell, `»` broadcast input). The focused
 pane has a near-white border and a bright block cursor.
 
+Crew displays up to **6 panes as full tiles**. Additional panes are demoted to a
+minimized thumbnail strip along the bottom of the content area, ordered
+least-recently-active first. Click a thumbnail, use the sidebar, or press
+**Cmd+1 … 9** to focus a pane and restore it to the full grid.
+
 ## Keyboard shortcuts
 
 Press **`/keys`** in the input bar for the full list in-app.
