@@ -1,10 +1,12 @@
 //! LLM provider abstraction: a `Provider` turns a prompt into a `Completion`.
 //! Object-safe (boxed future, no async-trait) so the mock and the real
 //! Anthropic client share one interface.
+mod anthropic;
 mod mock;
 #[cfg(test)]
 mod tests;
 
+pub use anthropic::AnthropicProvider;
 pub use mock::MockProvider;
 
 use std::future::Future;
