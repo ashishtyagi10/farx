@@ -53,6 +53,7 @@
         <a href="#shortcuts">Keyboard Shortcuts</a>
         <a href="#input-bar">Input Bar</a>
         <a href="#multi-agent">Multi-Agent</a>
+        <a href="#swarm">Swarm</a>
         <a href="#clipboard">Clipboard</a>
         <a href="#scrollback">Scrollback</a>
         <a href="#sidebar-panel">Sidebar</a>
@@ -232,6 +233,20 @@ claude → codex   [done]</code></div>
       <h3>Adding an agent</h3>
       <p>Discovery and routing are agent-agnostic. To add a fourth agent, write one adapter constructor in <code>crates/crew-plugin/src/broker/agents.rs</code> and register it in <code>known_adapters</code> — the routing engine is untouched.</p>
 
+      <h2 id="swarm">Swarm Orchestration (<code>crew-hive</code>)</h2>
+      <p>The <code>/crew</code> relay is a few CLI agents talking turn-by-turn. <strong><code>crew-hive</code></strong> is the next tier: a headless orchestration <em>engine</em> for running <em>many</em> agents toward a single goal &mdash; the substrate behind Crew's "command a fleet of agents" direction. It is a standalone workspace crate (no GPU, no terminal), driven by <code>crew-app</code>.</p>
+      <p>A goal is decomposed into a task-graph, executed over a bounded pool of agents, and the results merge upward while live telemetry streams out for the swarm view:</p>
+      <ul>
+        <li><strong>Planner</strong> &mdash; turns a goal into a dependency DAG (<code>StubPlanner</code>, or <code>LlmPlanner</code> that asks an LLM for the graph as JSON).</li>
+        <li><strong>Scheduler</strong> &mdash; a <code>tokio</code> DAG executor with a bounded worker pool (concurrency cap), dependency fan-in/fan-out, failure cascade-cancel, panic-as-failure resilience, and cooperative cancellation.</li>
+        <li><strong>Agents</strong> &mdash; a uniform <code>Agent</code> trait: <code>StubAgent</code> (tests), <code>ApiAgent</code> (a native LLM call &mdash; just a future, no PTY, so thousands can run), and <code>RemoteAgent</code> (dispatched over a wire to an out-of-process worker or an external engine such as LangGraph).</li>
+        <li><strong>Blackboard</strong> &mdash; agents read their dependencies' results and write their own, merging work upward.</li>
+        <li><strong>Bring-your-own-LLM</strong> &mdash; a <code>Provider</code> abstraction (mock + an Anthropic client) with per-agent <code>ModelTier</code> cost tiering (haiku / sonnet / opus).</li>
+        <li><strong>Two modes, one engine</strong> &mdash; single-goal decomposition <em>and</em> flat parallel-job batches (<code>batch_graph</code>); a <code>budget_governor</code> enforces a hard cost ceiling.</li>
+        <li><strong>Swarm view</strong> &mdash; a constellation / heatmap layout over live fleet telemetry (color = state; auto-switches to a heatmap past ~150 agents).</li>
+      </ul>
+      <p>The engine is complete and tested headlessly (decompose &rarr; schedule &rarr; run a fan-out of agents &rarr; merge). The in-terminal swarm <strong>pane</strong> (a <code>/swarm &lt;goal&gt;</code> command rendering the constellation live, with drill-down) is wired and headless-tested on the <code>feat/crew-app-swarm</code> branch; the on-screen GPU rendering is the remaining step, and the live LLM path needs <code>ANTHROPIC_API_KEY</code>. See <a href="ARCHITECTURE.md">ARCHITECTURE.md</a> for the engine diagram.</p>
+
       <h2 id="clipboard">Clipboard</h2>
       <ul>
         <li><kbd>Cmd+C</kbd> copies the focused terminal's visible screen to the system clipboard.</li>
@@ -292,19 +307,25 @@ claude → codex   [done]</code></div>
 └────────────────────────┬─────────────────────────────────────┘
                          ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  crew-plugin  — chat / agent plugins                         │
+│  crew-plugin  — chat / agent plugins (the /crew relay)       │
+└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  crew-hive  — swarm orchestration engine                     │
+│  planner · tokio scheduler · agent pool · blackboard ·       │
+│  telemetry · constellation/heatmap view · remote/sidecar     │
 └──────────────────────────────────────────────────────────────┘</pre>
       </div>
 
       <h2 id="crate-structure">Crate Structure</h2>
-      <p>Crew is a Cargo workspace with four crates:</p>
+      <p>Crew is a Cargo workspace with five crates:</p>
       <table class="docs-table">
         <thead><tr><th>Crate</th><th>Purpose</th></tr></thead>
         <tbody>
           <tr><td><code>crew-app</code></td><td>Window, panes, input, in-pane UI</td></tr>
           <tr><td><code>crew-render</code></td><td>GPU rendering (<code>wgpu</code> + <code>glyphon</code>)</td></tr>
           <tr><td><code>crew-term</code></td><td>PTY + terminal grid (<code>alacritty_terminal</code> + <code>portable-pty</code>)</td></tr>
-          <tr><td><code>crew-plugin</code></td><td>Chat / agent plugins</td></tr>
+          <tr><td><code>crew-plugin</code></td><td>Chat / agent plugins (the <code>/crew</code> relay broker)</td></tr>
+          <tr><td><code>crew-hive</code></td><td>Swarm orchestration engine (planner, scheduler, agent pool, blackboard, telemetry, remote/sidecar)</td></tr>
         </tbody>
       </table>
 

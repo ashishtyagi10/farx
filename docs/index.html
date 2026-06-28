@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Crew — A Native GPU Terminal in Rust</title>
-  <meta name="description" content="A from-scratch, native GPU terminal written in Rust. Everything renders as tiles — panes auto-tile into a near-square grid, drawn cell-by-cell on the GPU. Built on macOS, Linux, and Windows." />
+  <meta name="description" content="A from-scratch, native GPU terminal written in Rust with a built-in swarm orchestration engine. Everything renders as tiles — panes auto-tile into a near-square grid, drawn cell-by-cell on the GPU. Built on macOS, Linux, and Windows." />
   <meta property="og:title" content="Crew — A Native GPU Terminal in Rust" />
   <meta property="og:description" content="A GPU terminal where everything renders as tiles, no overlays. Auto-tiling panes, a docked input bar, a live sidebar. Built in Rust." />
   <meta property="og:type" content="website" />
@@ -45,8 +45,10 @@
     <p class="hero-sub">
       Panes auto-tile into a near-square grid, drawn cell-by-cell on the GPU with
       <strong>winit</strong>, <strong>wgpu</strong> &amp; <strong>glyphon</strong> &mdash;
-      no overlays, just tiles. A single binary that runs on
-      <strong>macOS</strong>, <strong>Linux</strong>, and <strong>Windows</strong>.
+      no overlays, just tiles. With a built-in <strong>swarm orchestration
+      engine</strong> that runs a fleet of agents toward a goal. A single binary
+      that runs on <strong>macOS</strong>, <strong>Linux</strong>, and
+      <strong>Windows</strong>.
     </p>
     <div class="hero-actions">
       <a href="#install" class="btn btn-primary">Install Now</a>
@@ -275,7 +277,7 @@ cd crew &amp;&amp; cargo run --release -p crew-app</code>
 <!-- ==================== ARCHITECTURE ==================== -->
 <section id="architecture" class="section">
   <div class="container">
-    <h2 class="section-title">Four crates. <span class="gradient-text">One workspace.</span></h2>
+    <h2 class="section-title">Five crates. <span class="gradient-text">One workspace.</span></h2>
     <p class="section-sub">Every <code>.rs</code> file stays ≤200 lines; clippy runs warning-free.</p>
 
     <div class="themes-grid">
@@ -312,7 +314,16 @@ cd crew &amp;&amp; cargo run --release -p crew-app</code>
           <span style="color: var(--header);">chat plugins</span><br/>
           <span style="color: var(--fg);">agent plugins</span><br/>
           <span style="color: var(--fg);">Cmd+J chat pane</span><br/>
-          <span style="color: var(--fg);">extensible</span>
+          <span style="color: var(--fg);">/crew relay</span>
+        </div>
+      </div>
+      <div class="theme-card" style="--bg: #0a0a0a; --fg: #f778ba; --accent: #f778ba; --header: #f778ba;">
+        <div class="theme-label">crew-hive</div>
+        <div class="theme-preview">
+          <span style="color: var(--header);">swarm engine</span><br/>
+          <span style="color: var(--fg);">planner · scheduler</span><br/>
+          <span style="color: var(--fg);">agent pool · blackboard</span><br/>
+          <span style="color: var(--fg);">constellation view</span>
         </div>
       </div>
     </div>

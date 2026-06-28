@@ -13,7 +13,11 @@ successor to this repo's original terminal file-manager project; the crates unde
 - **In-pane UI** — `ratatui` widgets are laid out into a `Buffer` and converted to
   GPU cells (the settings form, command palette, and help overlay use this).
 - **Crates** — `crew-app` (window, panes, input), `crew-render` (GPU), `crew-term`
-  (PTY + grid), `crew-plugin` (chat/agent plugins).
+  (PTY + grid), `crew-plugin` (chat/agent plugins + the `/crew` relay broker),
+  `crew-hive` (the swarm orchestration engine — see
+  [Swarm orchestration](#swarm-orchestration-crew-hive) below).
+- **Diagram** — see [ARCHITECTURE.md](ARCHITECTURE.md) for the full app + engine
+  diagram.
 
 Hard rules: every `.rs` file stays ≤200 lines; `cargo clippy --workspace
 --all-targets` is warning-free.
@@ -224,6 +228,80 @@ depth; `CREW_BROKER_TOKEN_BUDGET` (default 0 = unlimited) caps a thread's
 approximate token spend; `CREW_BROKER_TIMEOUT_MS` (default 180000) bounds each
 agent call. The pane also prints a cost summary (`done — N exchange(s), ~X
 tokens`) at the end of every task.
+
+## Swarm orchestration (`crew-hive`)
+
+The `/crew` relay is a few CLI agents talking turn-by-turn. **`crew-hive`** is the
+next tier: a headless orchestration **engine** for running *many* agents toward a
+single goal — the substrate behind Crew's "command a fleet of agents" direction.
+It is a standalone workspace crate (no GPU, no terminal), driven by `crew-app`.
+
+**The loop.** A goal is decomposed into a task-graph, executed over a bounded
+pool of agents, and the results merge upward while live telemetry streams out for
+the swarm view:
+
+```
+goal ─► Planner ─► TaskGraph (DAG) ─► Scheduler ─► Agent pool ─► Blackboard
+                                          │             │            │
+                                          └── EventBus ◄┴────────────┘
+                                                  └─► Fleet telemetry ─► swarm view
+```
+
+**Components** (one module each):
+
+- **Planner** (`planner`) — turns a goal into a dependency DAG. `StubPlanner`
+  is deterministic (a fan-out + merge, for tests); `LlmPlanner` asks an LLM to
+  return the graph as JSON and parses it.
+- **Task graph** (`graph`) — `TaskGraph`/`TaskSpec` with validation (no cycles,
+  deps exist) and `ready()` readiness; each task carries an `AgentKind` and a
+  `ModelTier`.
+- **Scheduler** (`sched`) — a `tokio` DAG executor: spawns ready tasks onto a
+  `JoinSet` gated by a `Semaphore` (the concurrency cap), waits for fan-in,
+  records results, and emits state transitions. A failed task **cascade-cancels**
+  its dependents; a panicking agent becomes a failed task (the run survives);
+  `with_cancel` gives cooperative, graceful shutdown (stop new dispatch, cancel
+  unstarted, drain in-flight).
+- **Agents** (`agent`, `apiagent`, `remoteagent`) — a uniform `Agent` trait
+  (object-safe, no `async-trait`). `StubAgent` for tests; **`ApiAgent`** is a
+  *native* LLM agent — just a future calling a provider, no PTY/subprocess, so a
+  fleet scales to thousands; **`RemoteAgent`** dispatches a task over a
+  `Transport` to an out-of-process worker.
+- **Blackboard** (`board`) — a concurrent `Arc<RwLock>` store: agents `gather`
+  their dependencies' `TaskResult`s and write their own, plus free-form
+  artifacts. A serializable snapshot crosses the remote boundary.
+- **Providers** (`provider`) — bring-your-own-LLM. A `Provider` trait with a
+  `MockProvider` (tests) and an `AnthropicProvider` (HTTP `POST /v1/messages` via
+  `reqwest`). `ModelTier` maps cost tiers to models —
+  Cheap→`claude-haiku-4-5`, Standard→`claude-sonnet-4-6`, Capable→`claude-opus-4-8`.
+
+**Two modes, one engine.** Single-goal decomposition (the planner builds a DAG)
+*and* embarrassingly-parallel batches — `batch_graph(jobs)` builds a flat
+dependency-free graph the same scheduler runs.
+
+**Cost governance** (`govern`). `budget_governor` watches the event bus,
+accumulates cost via a `Fleet`, and trips the scheduler's cancel flag once a
+`Budget`'s micro-USD ceiling is crossed — a hard spend cap across the run.
+
+**Swarm view** (`view`, `telemetry`). The `EventBus` (`bus`) is a non-blocking
+broadcast of `HiveEvent`s (state, tokens, cost, output); a `Fleet` aggregates them
+per-agent. `fleet_view` lays the fleet out as a **constellation** (nodes placed by
+dependency depth, edges = deps, color = state) or a dense **heatmap** (auto-engaged
+past ~150 agents), and `render_cells` turns either into a glyph grid the GPU pane
+draws.
+
+**Remote spill & sidecar bridge** (`wire`, `worker`, `remoteagent`). A
+newline-delimited JSON protocol (`RemoteTask`/`RemoteReply`) over a `Transport`
+trait lets the scheduler dispatch tasks out-of-process. `LoopbackTransport` runs a
+handler in-process (and powers the tests); `serve_stdio` is the worker side — the
+exact line an external engine (e.g. LangGraph) implements to act as a sidecar.
+
+**Status.** The engine is complete and tested headlessly (planner → scheduler →
+agents → blackboard, with mock providers/agents). The in-terminal swarm **pane**
+(a `/swarm <goal>` command that spawns the engine on a worker thread and renders
+the live constellation, with node drill-down) is wired and headless-tested on the
+`feat/crew-app-swarm` branch; the on-screen GPU rendering and live-agent run are
+the remaining steps (the latter needs `ANTHROPIC_API_KEY`). Design rationale and
+roadmap: [`docs/superpowers/specs/2026-06-27-crew-agent-swarm-design.md`](superpowers/specs/2026-06-27-crew-agent-swarm-design.md).
 
 ## Sidebar
 

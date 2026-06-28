@@ -5,6 +5,13 @@ where everything renders as tiles (no overlays). Panes auto-tile into a
 near-square grid, drawn cell-by-cell on the GPU with `winit` + `wgpu` +
 `glyphon`. See [docs/CREW.md](docs/CREW.md) for the full guide.
 
+It also ships a built-in **swarm orchestration engine** (`crew-hive`): give it a
+goal and it decomposes the work into a task graph and runs a pool of agents
+toward it — single-goal decomposition or parallel-job batches, bring-your-own-LLM
+per agent, with a live constellation/heatmap view. See
+[Swarm orchestration](#swarm-orchestration-crew-hive) and
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 Built on **macOS**, **Linux**, and **Windows**.
 
 ## Install
@@ -44,6 +51,24 @@ cd crew
 cargo build --release -p crew-app
 # Binary is at target/release/crew
 ```
+
+## Updating
+
+How you update depends on how you installed:
+
+- **Quick install (prebuilt binary):** re-run the install one-liner — it always
+  fetches the latest release and overwrites the binary in `~/.local/bin`
+  (idempotent, no sudo):
+  ```sh
+  curl -sSfL https://raw.githubusercontent.com/ashishtyagi10/crew/main/install.sh | sh
+  ```
+- **cargo:** `cargo install --git https://github.com/ashishtyagi10/crew crew-app --force`
+- **Source checkout:** `git pull && cargo build --release -p crew-app`. The in-app
+  **`/update`** command runs the `git pull` for a source checkout; rebuild and
+  restart afterward.
+
+Restart Crew after updating. The prebuilt path only sees a version once its
+release assets are published.
 
 ## Run
 
@@ -123,6 +148,38 @@ constructor in `crates/crew-plugin/src/broker/agents.rs` and register it in
 `known_adapters` — the routing engine is untouched. See
 [docs/CREW.md](docs/CREW.md) for the protocol and architecture.
 
+## Swarm orchestration (`crew-hive`)
+
+Beyond the `/crew` relay (a few CLI agents talking turn-by-turn), Crew includes a
+full orchestration **engine**, the `crew-hive` crate — the substrate for running
+*many* agents toward one goal:
+
+- **Planner** — decomposes a goal into a task-graph (a dependency DAG). Ships a
+  deterministic `StubPlanner` and an `LlmPlanner` that asks an LLM for the graph.
+- **Scheduler** — a `tokio` DAG executor with a bounded worker pool (concurrency
+  cap), dependency fan-in/fan-out, failure cascade-cancel, panic-as-failure
+  resilience, and cooperative cancellation.
+- **Agents** — a uniform `Agent` trait with three workers: `StubAgent` (tests),
+  `ApiAgent` (a native LLM call — just a future, no PTY, so thousands can run),
+  and `RemoteAgent` (dispatched over a wire to an out-of-process worker or an
+  external engine such as LangGraph).
+- **Blackboard** — agents read their dependencies' results and write their own,
+  merging work upward (replacing fragile file/sentinel passing).
+- **Bring-your-own-LLM** — a `Provider` abstraction (mock + an Anthropic client),
+  with per-agent `ModelTier` cost tiering (haiku / sonnet / opus).
+- **Two modes, one engine** — single-goal decomposition *and* flat parallel-job
+  batches (`batch_graph`); a `budget_governor` enforces a hard cost ceiling.
+- **Swarm view** — a constellation/heatmap layout over live fleet telemetry
+  (color = state, mode auto-switches to a heatmap past ~150 agents).
+
+The engine is complete and tested headlessly (decompose → schedule → run a
+fan-out of agents → merge). The in-terminal swarm **pane** (a `/swarm <goal>`
+command rendering the constellation live, with drill-down) is wired and headless-
+tested on the `feat/crew-app-swarm` branch; the on-screen GPU rendering is the
+remaining step. The live LLM path needs `ANTHROPIC_API_KEY`. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[docs/superpowers/specs/2026-06-27-crew-agent-swarm-design.md](docs/superpowers/specs/2026-06-27-crew-agent-swarm-design.md).
+
 ## Settings
 
 `/settings` opens a form for font family, font size, and the sidebar. Settings
@@ -130,14 +187,18 @@ persist to `$XDG_CONFIG/crew/config.toml` and apply live on Save.
 
 ## Architecture
 
-Crew is a Cargo workspace with four crates:
+Crew is a Cargo workspace with five crates:
 
 | Crate | Purpose |
 |-------|---------|
 | `crew-app` | Window, panes, input, in-pane UI |
 | `crew-render` | GPU rendering (`wgpu` + `glyphon`) |
 | `crew-term` | PTY + terminal grid (`alacritty_terminal` + `portable-pty`) |
-| `crew-plugin` | Chat / agent plugins |
+| `crew-plugin` | Chat / agent plugins (the `/crew` relay broker) |
+| `crew-hive` | Swarm orchestration engine (planner, scheduler, agents, blackboard, telemetry) |
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full diagram (app +
+engine internals).
 
 Hard rules: every `.rs` file stays ≤200 lines; `cargo clippy --workspace
 --all-targets` is warning-free.

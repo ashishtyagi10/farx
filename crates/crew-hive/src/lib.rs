@@ -1,14 +1,34 @@
 //! # crew-hive
 //!
-//! The orchestration substrate for running many agents toward a shared goal.
+//! The orchestration substrate ("the Hive") for running many agents toward a
+//! shared goal: decompose a goal into a task-graph, execute it over a bounded
+//! pool of agents, merge results, and stream live telemetry for a swarm view.
+//! Headless and UI-independent — `crew-app` drives it; nothing here touches the
+//! GPU or a terminal.
 //!
 //! ## Modules
-//! - [`graph`] — typed task-graph: [`TaskGraph`], [`TaskSpec`], [`TaskId`], dependency edges
-//! - [`bus`] — non-blocking broadcast event bus: [`EventBus`], [`HiveEvent`]
-//! - [`board`] — shared blackboard for task results and artifacts: [`Blackboard`]
+//! Core:
+//! - [`graph`] — typed task-graph (DAG): [`TaskGraph`], [`TaskSpec`], [`TaskId`], [`AgentKind`], [`ModelTier`]
+//! - [`bus`] — non-blocking broadcast event bus: [`EventBus`], [`HiveEvent`], [`AgentId`]
+//! - [`board`] — shared blackboard for task results + artifacts: [`Blackboard`], [`TaskResult`]
 //! - [`telemetry`] — live fleet telemetry aggregation: [`Fleet`], [`FleetTotals`]
-//! - [`agent`] — agent trait + context + stub implementations: [`Agent`], [`AgentFactory`]
-//! - [`sched`] — tokio-based DAG executor with bounded concurrency: [`Scheduler`]
+//! - [`agent`] — agent trait + context + stub: [`Agent`], [`AgentFactory`], [`StubAgent`]
+//! - [`sched`] — tokio DAG executor (bounded concurrency, cascade-cancel, cooperative cancellation): [`Scheduler`]
+//!
+//! Brain & workers (bring-your-own-LLM):
+//! - [`provider`] — LLM provider abstraction: [`Provider`], [`MockProvider`], [`AnthropicProvider`]
+//! - [`planner`] — goal → task-graph: [`Planner`], [`StubPlanner`], [`LlmPlanner`]
+//! - [`apiagent`] — native LLM agent (futures, no PTY): [`ApiAgent`]
+//!
+//! Scale & control:
+//! - [`batch`] — flat parallel-job graph: [`batch_graph`], [`Job`]
+//! - [`govern`] — cost ceiling: [`Budget`], [`budget_governor`]
+//! - [`view`] — swarm-view layout: constellation/heatmap + `fleet_view` + `render_cells`
+//!
+//! Remote / sidecar (out-of-process & external engines):
+//! - [`wire`] — JSON wire protocol + [`Transport`]: [`RemoteTask`], [`RemoteReply`]
+//! - [`worker`] — [`LoopbackTransport`] + [`serve_stdio`] worker codec
+//! - [`remoteagent`] — agent dispatched over a [`Transport`]: [`RemoteAgent`]
 //!
 //! ## Quick start
 //! ```rust,no_run
