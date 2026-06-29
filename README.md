@@ -63,9 +63,10 @@ How you update depends on how you installed:
   curl -sSfL https://raw.githubusercontent.com/ashishtyagi10/crew/main/install.sh | sh
   ```
 - **cargo:** `cargo install --git https://github.com/ashishtyagi10/crew crew-app --force`
-- **Source checkout:** `git pull && cargo build --release -p crew-app`. The in-app
-  **`/update`** command runs the `git pull` for a source checkout; rebuild and
-  restart afterward.
+- **Source checkout:** `git pull && cargo build --release -p crew-app`.
+- **In-app:** the **`/update`** command downloads the latest release binary for
+  your platform over the running one, showing a progress bar in a pane (no shell,
+  no checkout needed). Restart Crew afterward to run the new version.
 
 Restart Crew after updating. The prebuilt path only sees a version once its
 release assets are published.
@@ -105,10 +106,11 @@ Press **`/keys`** in the input bar for the full list in-app.
 | Zoom focused pane | **Cmd+Z** (or double-click) |
 | Broadcast input to all panes | **Cmd+S** |
 | Font bigger / smaller / reset | **Cmd+=** / **Cmd+-** / **Cmd+0** |
-| Copy visible screen / paste | **Cmd+C** / **Cmd+V** |
+| Copy visible screen / paste | **Cmd+C** / **Cmd+V** (Cmd+V pastes a clipboard image as a temp PNG path) |
+| Insert a newline in a terminal | **Shift+Enter** (sends a line feed, not submit) |
 | Close pane / maximize window | **Cmd+W** / **Cmd+M** |
 | Clear focused pane scrollback | **Cmd+K** (or `/clear`) |
-| Scroll focused pane | **Shift+PageUp** / **Shift+PageDown**, or mouse wheel |
+| Scroll any pane | **Shift+PageUp** / **Shift+PageDown** (Shift+Home/End for top/bottom), or mouse wheel |
 | Quit | **Cmd+Q** (press twice to confirm when panes are open) |
 
 ## Input bar

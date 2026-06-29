@@ -69,17 +69,20 @@ Press **`/keys`** in the input bar for this list in-app.
 | Broadcast input to all panes | **Cmd+S** |
 | Font bigger / smaller / reset | **Cmd+=** / **Cmd+-** / **Cmd+0** |
 | Copy visible screen / paste | **Cmd+C** / **Cmd+V** |
+| Insert a newline in a terminal | **Shift+Enter** (line feed, not submit) |
 | Close pane / maximize window | **Cmd+W** / **Cmd+M** |
 | Clear focused pane scrollback | **Cmd+K** (or `/clear`) |
-| Scroll focused pane | **Shift+PageUp** / **Shift+PageDown**, or mouse wheel |
+| Scroll any pane | **Shift+PageUp** / **Shift+PageDown** (Shift+Home/End jump to top/bottom), or mouse wheel |
 | Quit | **Cmd+Q** (press twice to confirm when panes are open) |
 
 Click a pane to focus it (click the input bar to focus that); double-click a
 pane to toggle zoom.
 
 Inside a terminal pane, all other keys (arrows, Home/End, PageUp/Down, Ctrl+C,
-Shift+Tab, …) pass through to the program. Shells launch as your `$SHELL` login
-shell, so your full config and plugins load.
+Shift+Tab, …) pass through to the program. **Shift+Enter** sends a line feed
+(0x0a) instead of a carriage-return, so agent CLIs and editors insert a newline
+rather than submitting. Shells launch as your `$SHELL` login shell, so your full
+config and plugins load.
 
 ## The input bar
 
@@ -159,13 +162,18 @@ The docked command bar supports:
 
 - **Cmd+C** copies the focused terminal's visible screen to the system clipboard.
 - **Cmd+V** pastes into the focused surface (terminal, input bar, or chat). For
-  terminals it uses bracketed paste when the program enabled it.
+  terminals it uses bracketed paste when the program enabled it. When the
+  clipboard holds an **image** (and no text), it's written to a temp PNG and the
+  file path is pasted instead — so agent CLIs can read the image by path.
 - Programs can copy to the system clipboard via **OSC 52**.
 
 ## Scrollback
 
-Mouse wheel or **Shift+PageUp/PageDown** scroll a pane's history; an amber `⇡`
-in the title bar marks that you're viewing scrollback. **`/find <text>`** scrolls
+Mouse wheel or **Shift+PageUp/PageDown** scroll a pane's history (Shift+Home/End
+jump to top/bottom); an amber `⇡` in the title bar marks that you're viewing
+scrollback. Scrolling works in **every** pane — terminals and chat scroll their
+history, the Far file browser moves its cursor, and the settings form moves
+between fields. **`/find <text>`** scrolls
 back to the most recent line containing the text (smart case: case-insensitive
 unless the term has an uppercase letter), **highlights every match** in the
 viewport with an amber wash, and reports the in-view match count on the status
