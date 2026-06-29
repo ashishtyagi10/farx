@@ -1,11 +1,11 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crew_render::CellView;
 
 use crate::clock;
 use crate::gauges::render_stats;
-use crate::git::{self, GitInfo};
+use crate::git::{self, GitWatch};
 use crate::host;
 use crate::load;
 use crate::navlog;
@@ -19,19 +19,14 @@ const SYS_BLOCK: u16 = 6;
 const LOAD_BLOCK: u16 = 3;
 /// Rows a section with a rule + 2 content rows + one-row gap occupies (HOST, NET, GIT).
 const CARD_BLOCK: u16 = 4;
-/// Minimum seconds between git queries while the directory is unchanged.
-const GIT_POLL_SECS: u64 = 3;
 
 /// The docked sidebar: a live clock card stacked above the system-stats card.
 pub struct StatsPane {
     sampler: SysSampler,
     /// Last wall-clock second shown, so the clock repaints once per second.
     last_sec: u64,
-    /// Cached git status for the working directory (None = not a repo).
-    git: Option<GitInfo>,
-    /// Directory the cached git status is for, and when it was last queried.
-    git_cwd: PathBuf,
-    git_sec: u64,
+    /// Git status for the working directory, queried off the main thread.
+    git: GitWatch,
     cpu_hist: crate::spark::History, // recent CPU %, drawn as a moving sparkline
 }
 
@@ -40,9 +35,7 @@ impl StatsPane {
         Self {
             sampler: SysSampler::new(),
             last_sec: 0,
-            git: None,
-            git_cwd: PathBuf::new(),
-            git_sec: 0,
+            git: GitWatch::default(),
             cpu_hist: crate::spark::History::new(64),
         }
     }
@@ -62,25 +55,9 @@ impl StatsPane {
             .unwrap_or(0);
         let clock_changed = now != self.last_sec;
         self.last_sec = now;
-        let git_changed = self.refresh_git(cwd, now);
+        // Off-the-main-thread git status: never blocks the event loop.
+        let git_changed = self.git.poll(cwd, now);
         stats_changed || clock_changed || git_changed
-    }
-
-    /// Re-query git when the directory changed or the poll interval elapsed.
-    /// Returns true when the cached status actually changed.
-    fn refresh_git(&mut self, cwd: &Path, now: u64) -> bool {
-        let moved = self.git_cwd != cwd;
-        if !moved && now.saturating_sub(self.git_sec) < GIT_POLL_SECS {
-            return false;
-        }
-        self.git_cwd = cwd.to_path_buf();
-        self.git_sec = now;
-        let fresh = git::query(cwd);
-        if fresh != self.git {
-            self.git = fresh;
-            return true;
-        }
-        false
     }
 
     /// The cell-row where the PANES section header sits — used to hit-test
@@ -89,7 +66,11 @@ impl StatsPane {
     /// entries, so the caller passes `app.log.len()`).
     pub fn panes_top(&self, log_len: usize) -> u16 {
         let stats = clock::CLOCK_H + SYS_BLOCK + LOAD_BLOCK + CARD_BLOCK + CARD_BLOCK;
-        let git = if self.git.is_some() { CARD_BLOCK } else { 0 };
+        let git = if self.git.info().is_some() {
+            CARD_BLOCK
+        } else {
+            0
+        };
         stats + git + navlog::log_block(log_len)
     }
 
@@ -138,7 +119,7 @@ impl StatsPane {
 
         let git_off = net_off + CARD_BLOCK;
         let mut next = git_off;
-        if let Some(info) = &self.git {
+        if let Some(info) = self.git.info() {
             if rows > git_off + 3 {
                 for mut c in git::git_cells(info, cols) {
                     c.row += git_off;
@@ -186,12 +167,12 @@ mod tests {
         let mut s = StatsPane::new();
         // clock(4) + system(6) + load(3) + host(4) + net(4) = 21
         assert_eq!(s.panes_top(0), 21);
-        s.git = Some(GitInfo {
+        s.git.set_info(Some(git::GitInfo {
             branch: "main".into(),
             changed: 0,
             ahead: 0,
             behind: 0,
-        });
+        }));
         assert_eq!(s.panes_top(0), 25); // + git(4)
                                         // a non-empty log adds its block: rule + min(n, LOG_LINES) + gap.
         assert_eq!(s.panes_top(2), 25 + 4); // 2 entries -> 2 + 2

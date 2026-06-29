@@ -1,14 +1,18 @@
 //! Sidebar git section: a `GIT` divider above the current branch and a clean/
 //! dirty marker for Crew's working directory. Queried with the `git` CLI (so it
 //! honours the user's full git config) and cached/throttled by `StatsPane`.
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use crew_render::CellView;
 
 use crate::boxdraw::section_header;
 
 use crate::palette::accent;
+
+/// Minimum seconds between git queries while the working directory is unchanged.
+const GIT_POLL_SECS: u64 = 3;
 const LABEL: (u8, u8, u8) = (200, 200, 200);
 const DIM: (u8, u8, u8) = (150, 150, 160);
 const BORDER: (u8, u8, u8) = (110, 110, 120);
@@ -29,6 +33,85 @@ pub struct GitInfo {
 pub fn query(dir: &Path) -> Option<GitInfo> {
     let out = run(dir, &["status", "--porcelain", "--branch"])?;
     parse_status(&out)
+}
+
+/// Throttled, off-the-main-thread git status for the sidebar. `query` shells out
+/// to `git status`, which can take seconds in a large or network-mounted repo;
+/// running it inline on the winit event loop froze rendering and input in every
+/// pane. `GitWatch` instead spawns each query on a background thread and hands
+/// the result back through a channel, so `poll` never blocks the UI.
+#[derive(Default)]
+pub struct GitWatch {
+    /// Directory the cached status is for.
+    cwd: PathBuf,
+    /// Unix second the in-flight/last query was launched (0 = none yet, forces a
+    /// query on the next poll).
+    sec: u64,
+    /// Last known status (None = not a repo, or not yet queried).
+    info: Option<GitInfo>,
+    /// Result channel for a query currently running on a background thread.
+    rx: Option<Receiver<(PathBuf, Option<GitInfo>)>>,
+}
+
+impl GitWatch {
+    /// The most recent status, if any.
+    pub fn info(&self) -> Option<&GitInfo> {
+        self.info.as_ref()
+    }
+
+    /// Seed the cached status directly (layout tests that don't run a query).
+    #[cfg(test)]
+    pub(crate) fn set_info(&mut self, info: Option<GitInfo>) {
+        self.info = info;
+    }
+
+    /// Non-blocking. Harvests a finished background query, then launches a fresh
+    /// one when the directory changed or the poll interval elapsed and none is
+    /// already running. Returns true when the cached status actually changed.
+    pub fn poll(&mut self, cwd: &Path, now: u64) -> bool {
+        self.poll_with(cwd, now, query)
+    }
+
+    /// `poll` with an injectable query function, for tests.
+    fn poll_with<F>(&mut self, cwd: &Path, now: u64, q: F) -> bool
+    where
+        F: Fn(&Path) -> Option<GitInfo> + Send + 'static,
+    {
+        let mut changed = false;
+        // 1. Harvest a finished query (non-blocking). Ignore a stale result for a
+        //    directory we've since moved away from.
+        if let Some(rx) = &self.rx {
+            match rx.try_recv() {
+                Ok((dir, info)) => {
+                    self.rx = None;
+                    if dir == self.cwd && info != self.info {
+                        self.info = info;
+                        changed = true;
+                    }
+                }
+                Err(TryRecvError::Empty) => {} // still running
+                Err(TryRecvError::Disconnected) => self.rx = None,
+            }
+        }
+        // 2. A directory change forces a fresh query for the new directory.
+        if self.cwd != cwd {
+            self.cwd = cwd.to_path_buf();
+            self.sec = 0;
+        }
+        // 3. Launch a query when due and none is already in flight.
+        let due = self.sec == 0 || now.saturating_sub(self.sec) >= GIT_POLL_SECS;
+        if due && self.rx.is_none() {
+            self.sec = now.max(1); // keep 0 reserved as the "force" sentinel
+            let (tx, rx) = mpsc::channel();
+            let dir = self.cwd.clone();
+            std::thread::spawn(move || {
+                let info = q(&dir);
+                let _ = tx.send((dir, info));
+            });
+            self.rx = Some(rx);
+        }
+        changed
+    }
 }
 
 /// Parse `git status --porcelain --branch` output: the `## …` header gives the
@@ -127,6 +210,51 @@ fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8)) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, Instant};
+
+    /// A git query that takes 300ms — stands in for a slow/large repo.
+    fn slow_query(_dir: &Path) -> Option<GitInfo> {
+        std::thread::sleep(Duration::from_millis(300));
+        Some(GitInfo {
+            branch: "slow".into(),
+            changed: 0,
+            ahead: 0,
+            behind: 0,
+        })
+    }
+
+    #[test]
+    fn poll_does_not_block_on_a_slow_query() {
+        let mut w = GitWatch::default();
+        let dir = std::env::temp_dir();
+
+        // The first poll only *launches* the background query; it must return
+        // promptly even though the query itself takes 300ms.
+        let start = Instant::now();
+        let changed = w.poll_with(&dir, 1, slow_query);
+        assert!(
+            start.elapsed() < Duration::from_millis(100),
+            "poll blocked on the slow query for {:?}",
+            start.elapsed()
+        );
+        assert!(
+            !changed,
+            "no result should be available on the launching poll"
+        );
+        assert!(w.info().is_none());
+
+        // A later poll, after the background query finishes, picks up the result.
+        let mut got = false;
+        for t in 0..100 {
+            std::thread::sleep(Duration::from_millis(20));
+            if w.poll_with(&dir, 1 + t as u64, slow_query) {
+                got = true;
+                break;
+            }
+        }
+        assert!(got, "background git result was never harvested");
+        assert_eq!(w.info().map(|g| g.branch.as_str()), Some("slow"));
+    }
 
     #[test]
     fn query_non_repo_is_none() {
