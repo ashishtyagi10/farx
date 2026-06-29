@@ -5,15 +5,18 @@
 //!   off the UI thread (via [`plan_goal`]), shows a "planning…" banner, then runs
 //!   the resulting graph and visualises it.
 //!
-//! Both execute with always-succeeding stub agents — no API keys, no network —
-//! so the whole goal → plan → schedule → bridge → view pipeline runs live and
-//! deterministically. Planning currently uses the deterministic [`StubPlanner`];
-//! swapping in `LlmPlanner` (real goal decomposition) is the next step once the
-//! app grows provider/API-key config.
+//! `/goal` adapts to its environment: when `ANTHROPIC_API_KEY` is set it plans
+//! with [`LlmPlanner`] and executes with real [`ApiFactory`] agents; otherwise
+//! it falls back to a deterministic [`StubPlanner`] + always-succeeding stub
+//! agents so the whole goal → plan → schedule → bridge → view pipeline still
+//! runs live, offline, and deterministically. `/swarm` always uses the stub path.
 use std::sync::Arc;
 
 use crew_hive::agent::StubFactory;
-use crew_hive::{AgentKind, Fleet, ModelTier, StubPlanner, TaskGraph, TaskId, TaskSpec};
+use crew_hive::{
+    AgentFactory, AgentKind, AnthropicProvider, ApiFactory, Fleet, LlmPlanner, ModelTier, Planner,
+    StubPlanner, TaskGraph, TaskId, TaskSpec,
+};
 use crew_render::CellView;
 
 use crate::swarm::bridge::SwarmHandle;
@@ -22,11 +25,41 @@ use crate::swarm::view::swarm_cells;
 
 /// How many parallel leaves the stub planner decomposes a goal into.
 const GOAL_FANOUT: usize = 3;
+/// Model tier the LLM planner uses to decompose a goal (better structure).
+const PLAN_TIER: ModelTier = ModelTier::Standard;
+/// Model tier the worker agents use to execute tasks (cost-conscious).
+const WORK_TIER: ModelTier = ModelTier::Cheap;
+/// Per-task output token cap for worker agents.
+const WORK_MAX_TOKENS: u32 = 2048;
+
+/// Which planning + execution backend a goal pane uses.
+#[derive(Debug, PartialEq, Eq)]
+enum Backend {
+    /// Real LLM planner + API worker agents (an API key is present).
+    Llm,
+    /// Deterministic stub planner + stub agents (offline fallback).
+    Stub,
+}
+
+/// Pick the backend from whether an API key is available. Pure + testable; the
+/// side-effecting `from_env` lookup happens once in [`SwarmPane::for_goal`].
+fn backend_for(has_api_key: bool) -> Backend {
+    if has_api_key {
+        Backend::Llm
+    } else {
+        Backend::Stub
+    }
+}
 
 /// The lifecycle of a swarm pane.
 enum SwarmState {
-    /// Awaiting the planner thread; `goal` is echoed in the banner.
-    Planning { goal: String, plan: PlanHandle },
+    /// Awaiting the planner thread; `goal` is echoed in the banner. `factory`
+    /// is the executor chosen at goal time, used once the graph arrives.
+    Planning {
+        goal: String,
+        plan: PlanHandle,
+        factory: Arc<dyn AgentFactory>,
+    },
     /// Executing a graph; `handle` drives the engine, `fleet` accumulates events.
     Running { handle: SwarmHandle, fleet: Fleet },
     /// Planning failed; `msg` is shown in the banner.
@@ -42,20 +75,54 @@ impl SwarmPane {
     /// Launch the self-contained demo swarm immediately (no planning step).
     pub fn demo() -> Self {
         Self {
-            state: running(demo_graph()),
+            state: running(demo_graph(), Arc::new(StubFactory)),
         }
     }
 
-    /// Plan `goal` into a task graph off-thread, then run it. The pane shows a
-    /// planning banner until the graph is ready.
+    /// Plan `goal` into a task graph off-thread, then run it. Uses the real LLM
+    /// planner + API agents when `ANTHROPIC_API_KEY` is set, else the offline
+    /// stub backend. The pane shows a planning banner until the graph is ready.
     pub fn for_goal(goal: String) -> Self {
-        let planner = Arc::new(StubPlanner {
-            fanout: GOAL_FANOUT,
-        });
+        let provider = AnthropicProvider::from_env().ok();
+        match backend_for(provider.is_some()) {
+            Backend::Llm => {
+                // `is_some()` was just checked, so the unwrap cannot fail.
+                let provider = provider.expect("Llm backend implies a provider");
+                let planner = Arc::new(LlmPlanner {
+                    provider: provider.clone(),
+                    tier: PLAN_TIER,
+                });
+                let factory = Arc::new(ApiFactory::new(
+                    Arc::new(provider),
+                    WORK_TIER,
+                    WORK_MAX_TOKENS,
+                ));
+                Self::goal_with(goal, planner, factory)
+            }
+            Backend::Stub => Self::goal_stub(goal),
+        }
+    }
+
+    /// The offline path: stub planner + stub agents. Used as the no-key fallback
+    /// and directly by tests for determinism.
+    fn goal_stub(goal: String) -> Self {
+        Self::goal_with(
+            goal,
+            Arc::new(StubPlanner {
+                fanout: GOAL_FANOUT,
+            }),
+            Arc::new(StubFactory),
+        )
+    }
+
+    /// Start planning `goal` with `planner`, holding `factory` to execute the
+    /// resulting graph.
+    fn goal_with(goal: String, planner: Arc<dyn Planner>, factory: Arc<dyn AgentFactory>) -> Self {
         Self {
             state: SwarmState::Planning {
                 plan: plan_goal(goal.clone(), planner),
                 goal,
+                factory,
             },
         }
     }
@@ -64,9 +131,9 @@ impl SwarmPane {
     /// arrived, or engine events were applied) and the pane should redraw.
     pub fn poll(&mut self) -> bool {
         match &mut self.state {
-            SwarmState::Planning { plan, .. } => match plan.try_take() {
+            SwarmState::Planning { plan, factory, .. } => match plan.try_take() {
                 Some(Ok(graph)) => {
-                    self.state = running(graph);
+                    self.state = running(graph, Arc::clone(factory));
                     true
                 }
                 Some(Err(e)) => {
@@ -104,9 +171,8 @@ impl Drop for SwarmPane {
     }
 }
 
-/// Build a `Running` state: spawn the engine for `graph` with stub agents.
-fn running(graph: TaskGraph) -> SwarmState {
-    let factory = Arc::new(StubFactory);
+/// Build a `Running` state: spawn the engine for `graph` with `factory`.
+fn running(graph: TaskGraph, factory: Arc<dyn AgentFactory>) -> SwarmState {
     SwarmState::Running {
         handle: SwarmHandle::spawn(graph, factory, 4),
         fleet: Fleet::new(),

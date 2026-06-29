@@ -8,6 +8,10 @@ use super::{Completion, CompletionRequest, Provider, ProviderError};
 const ENDPOINT: &str = "https://api.anthropic.com/v1/messages";
 const VERSION: &str = "2023-06-01";
 
+/// Cloning is cheap: `reqwest::Client` is an `Arc` internally (shares one
+/// connection pool) and the key is a short `String`. Sharing one provider
+/// between the planner and the worker factory relies on this.
+#[derive(Clone)]
 pub struct AnthropicProvider {
     client: reqwest::Client,
     api_key: String,

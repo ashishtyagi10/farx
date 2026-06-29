@@ -1,7 +1,7 @@
 //! Headless tests for the live swarm pane. The planner and engine run on
 //! std::threads with stub implementations — no GPU, no winit, no network — so
 //! these are fully deterministic.
-use super::{demo_graph, SwarmPane, SwarmState, GOAL_FANOUT};
+use super::{backend_for, demo_graph, Backend, SwarmPane, SwarmState, GOAL_FANOUT};
 use std::time::{Duration, Instant};
 
 /// Drive `pane.poll()` until `done` predicate holds or the deadline passes.
@@ -47,8 +47,25 @@ fn demo_swarm_runs_to_completion() {
 }
 
 #[test]
+fn backend_selection_follows_api_key() {
+    // The pure decision the goal pane makes after looking up the env once.
+    assert_eq!(
+        backend_for(true),
+        Backend::Llm,
+        "key present → real LLM backend"
+    );
+    assert_eq!(
+        backend_for(false),
+        Backend::Stub,
+        "no key → offline stub backend"
+    );
+}
+
+#[test]
 fn goal_pane_plans_then_runs() {
-    let mut pane = SwarmPane::for_goal("build a thing".into());
+    // Use the stub path explicitly so this is deterministic regardless of
+    // whether the dev environment happens to have an API key set.
+    let mut pane = SwarmPane::goal_stub("build a thing".into());
     // Starts in Planning, showing the goal in its banner.
     assert!(matches!(pane.state, SwarmState::Planning { .. }));
     let banner: String = pane.cells(60, 12).iter().map(|c| c.c).collect();
