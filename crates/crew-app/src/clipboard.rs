@@ -134,6 +134,18 @@ impl CrewApp {
         }
     }
 
+    /// Copy Crew's working directory to the system clipboard (`/pwd`).
+    pub(crate) fn copy_cwd(&mut self) {
+        let dir = self.cwd.display().to_string();
+        match arboard::Clipboard::new() {
+            Ok(mut cb) => {
+                let _ = cb.set_text(dir.clone());
+                self.set_status(format!("copied cwd: {dir}"));
+            }
+            Err(_) => self.set_status("clipboard unavailable"),
+        }
+    }
+
     /// Take a pending OSC 52 clipboard-store request from any terminal pane.
     pub(crate) fn take_pane_clipboard(&self) -> Option<String> {
         self.panes.iter().find_map(|p| match &p.content {

@@ -95,6 +95,47 @@ fn batch_slash_command_spawns_swarm_pane_from_a_file() {
 }
 
 #[test]
+fn closeall_closes_every_pane_and_refocuses_input() {
+    let mut app = CrewApp::default();
+    // /far twice → two panes.
+    assert!(!app.submit_input("/far".to_string()));
+    assert!(!app.submit_input("/far".to_string()));
+    assert_eq!(app.panes.len(), 2);
+    assert!(!app.submit_input("/closeall".to_string()));
+    assert!(app.panes.is_empty(), "all panes closed");
+    assert!(app.input.focused, "focus returns to the input bar");
+}
+
+#[test]
+fn about_flashes_the_version() {
+    let mut app = CrewApp::default();
+    assert!(!app.submit_input("/about".to_string()));
+    let msg = app
+        .status
+        .as_ref()
+        .map(|(m, _)| m.clone())
+        .unwrap_or_default();
+    assert!(
+        msg.contains("crew v"),
+        "about shows the version, got {msg:?}"
+    );
+    assert!(msg.contains(env!("CARGO_PKG_VERSION")));
+}
+
+#[test]
+fn clearall_with_no_terminals_reports_nothing() {
+    let mut app = CrewApp::default();
+    assert!(!app.submit_input("/far".to_string())); // a non-terminal pane
+    assert!(!app.submit_input("/clearall".to_string()));
+    let msg = app
+        .status
+        .as_ref()
+        .map(|(m, _)| m.clone())
+        .unwrap_or_default();
+    assert_eq!(msg, "nothing to clear");
+}
+
+#[test]
 fn zoom_chord_toggles() {
     let mut app = CrewApp::default();
     assert!(!app.zoomed);

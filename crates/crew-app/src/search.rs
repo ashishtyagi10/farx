@@ -76,6 +76,23 @@ impl CrewApp {
         });
     }
 
+    /// Clear every terminal pane's scrollback, snapping each to its live bottom.
+    pub(crate) fn clear_all_scrollback(&mut self) {
+        let mut n = 0;
+        for pane in &mut self.panes {
+            if let PaneContent::Terminal(t) = &mut pane.content {
+                t.pty.feed(b"\x1b[3J");
+                t.pty.scroll_to_bottom();
+                n += 1;
+            }
+        }
+        if n > 0 {
+            self.set_status(format!("cleared {n} panes"));
+        } else {
+            self.set_status("nothing to clear");
+        }
+    }
+
     /// Scroll the focused terminal back to the most recent line containing
     /// `term` (stops at the current view, or the top of the scrollback). Always
     /// repaints, and flashes a status when there's no match.

@@ -20,6 +20,22 @@ impl CrewApp {
         self.set_status("closed other panes");
         self.redraw();
     }
+
+    /// Close every pane, returning to the welcome screen and input bar. A no-op
+    /// (with a hint) when there are no panes.
+    pub(crate) fn close_all_panes(&mut self) {
+        if self.panes.is_empty() {
+            self.set_status("no panes to close");
+            return;
+        }
+        let n = self.panes.len();
+        // Reuse close_pane so the grid LRU and empty-state modes stay consistent.
+        while !self.panes.is_empty() {
+            self.close_pane(self.panes.len() - 1);
+        }
+        self.set_status(format!("closed {n} panes"));
+        self.redraw();
+    }
 }
 
 #[cfg(test)]

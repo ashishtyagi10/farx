@@ -36,8 +36,12 @@ impl CrewApp {
                 );
             }
             "clear" => self.clear_focused_scrollback(),
+            "clearall" => self.clear_all_scrollback(),
             "clearlog" => self.clear_log(),
             "only" => self.close_other_panes(),
+            "closeall" => self.close_all_panes(),
+            "pwd" => self.copy_cwd(),
+            "about" => self.set_status(concat!("crew v", env!("CARGO_PKG_VERSION"))),
             "copy" => self.copy_scrollback(),
             "dump" => self.dump_focused_pane(""),
             "run" => self.run_in_pane(""),   // show usage hint

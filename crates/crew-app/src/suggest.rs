@@ -56,12 +56,28 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         desc: "Clear the focused pane's scrollback",
     },
     Cmd {
+        name: "/clearall",
+        desc: "Clear every pane's scrollback",
+    },
+    Cmd {
         name: "/clearlog",
         desc: "Clear the live activity log in the sidebar",
     },
     Cmd {
         name: "/only",
         desc: "Close all panes except the focused one",
+    },
+    Cmd {
+        name: "/closeall",
+        desc: "Close every pane",
+    },
+    Cmd {
+        name: "/pwd",
+        desc: "Copy the working directory to the clipboard",
+    },
+    Cmd {
+        name: "/about",
+        desc: "Show the Crew version",
     },
     Cmd {
         name: "/copy",
