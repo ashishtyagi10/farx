@@ -1,7 +1,9 @@
-//! In-place self-update: download the latest GitHub release for this platform
-//! and replace the running `crew` binary, printing a progress bar. Invoked as a
-//! subprocess (`crew --self-update`) by the `/update` command so its progress
-//! renders in a normal terminal pane — no shell, no GUI re-init.
+//! In-place self-update for the **CLI** path (`crew --self-update`): download the
+//! latest GitHub release for this platform and replace the running `crew` binary,
+//! printing a progress bar to stdout. The in-app `/update` command instead runs a
+//! background worker (see `update`/`updatefetch`) that shows progress in the
+//! left-nav UPDATE card and auto-restarts; this standalone path stays as a
+//! headless fallback you can run from any shell.
 use anyhow::Result;
 use self_update::backends::github::Update;
 

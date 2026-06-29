@@ -101,7 +101,7 @@ pub(crate) const COMMANDS: &[Cmd] = &[
     },
     Cmd {
         name: "/update",
-        desc: "Update Crew to the latest release",
+        desc: "Update Crew to the latest release (left-nav progress, auto-restart)",
     },
     Cmd {
         name: "/broadcast",

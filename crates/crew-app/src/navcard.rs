@@ -6,6 +6,7 @@ use crew_render::PaneScene;
 
 use crate::app::{CrewApp, GAP};
 use crate::chrome;
+use crate::layout::Rect;
 
 impl CrewApp {
     /// Push the docked sidebar card onto `scenes`. A no-op when the nav is hidden.
@@ -20,7 +21,22 @@ impl CrewApp {
         if !self.config.show_nav {
             return;
         }
-        let sb = chrome::sidebar_rect(sh, self.nav_px(scale), GAP);
+        let mut sb = chrome::sidebar_rect(sh, self.nav_px(scale), GAP);
+        // While a `/update` runs, dock a distinct UPDATE card on top of the stats
+        // card (a 4-row fieldset: 2 border + 2 content rows), shrinking the stats
+        // card below it. It vanishes again once the update finishes.
+        if let Some(u) = &self.update {
+            let h = (4.0 * ch).min(sb.h);
+            let top = Rect { h, ..sb };
+            crate::panecard::push_card(scenes, top, cw, ch, "UPDATE", |cols, rows| {
+                crate::updatecard::update_cells(u, cols, rows)
+            });
+            sb = Rect {
+                y: sb.y + h + GAP,
+                h: (sb.h - h - GAP).max(0.0),
+                ..sb
+            };
+        }
         let pane_rows: Vec<crate::panelist::PaneRow> = self
             .panes
             .iter()

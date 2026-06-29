@@ -22,19 +22,9 @@ impl CrewApp {
             "opencode" => self.run_in_pane("opencode"),
             "settings" => self.spawn_settings_pane(),
             "shell" => self.spawn_new_pane(),
-            "update" => {
-                // Re-exec this binary as `crew --self-update` in a terminal pane:
-                // it downloads the latest release over itself and shows a progress
-                // bar — no shell, no git checkout required.
-                let exe = std::env::current_exe()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .unwrap_or_else(|_| "crew".to_string());
-                self.spawn_labeled_terminal(
-                    &exe,
-                    &["--self-update".to_string()],
-                    "update".to_string(),
-                );
-            }
+            // Self-update in the background: progress shows in the left-nav UPDATE
+            // card and Crew auto-restarts into the new build — no separate shell.
+            "update" => self.start_update(),
             "clear" => self.clear_focused_scrollback(),
             "clearall" => self.clear_all_scrollback(),
             "clearlog" => self.clear_log(),

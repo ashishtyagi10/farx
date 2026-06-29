@@ -51,6 +51,17 @@ impl CrewApp {
         if self.sidebar.refresh(&self.cwd) {
             any_changed = true;
         }
+        // Drive the background self-update: animate its card, and re-exec into the
+        // freshly installed binary once it's ready.
+        if self.update.is_some() {
+            let tick = self.poll_update(Instant::now());
+            if tick.restart {
+                crate::update::restart_into_new_binary();
+                event_loop.exit();
+                return;
+            }
+            any_changed |= tick.redraw;
+        }
         // Clear a status message once it has aged out, repainting the border.
         if self.expire_status() {
             any_changed = true;

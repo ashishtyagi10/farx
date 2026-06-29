@@ -66,6 +66,9 @@ pub struct CrewApp {
     pub(crate) log: Vec<String>,
     /// When quit was last pressed with panes open, for the confirm-to-quit window.
     pub(crate) quit_armed: Option<Instant>,
+    /// In-progress background self-update (`/update`): drives the left-nav UPDATE
+    /// card and the auto-restart. `None` when no update is running.
+    pub(crate) update: Option<crate::update::UpdateState>,
 }
 
 impl CrewApp {

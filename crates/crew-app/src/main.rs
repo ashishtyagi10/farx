@@ -1,3 +1,4 @@
+mod altscroll;
 mod anim;
 mod app;
 mod boxdraw;
@@ -73,6 +74,9 @@ mod swarmpane;
 mod termwrite;
 mod toggles;
 mod tui;
+mod update;
+mod updatecard;
+mod updatefetch;
 mod welcome;
 mod windowtitle;
 

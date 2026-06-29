@@ -65,11 +65,12 @@ How you update depends on how you installed:
 - **cargo:** `cargo install --git https://github.com/ashishtyagi10/crew crew-app --force`
 - **Source checkout:** `git pull && cargo build --release -p crew-app`.
 - **In-app:** the **`/update`** command downloads the latest release binary for
-  your platform over the running one, showing a progress bar in a pane (no shell,
-  no checkout needed). Restart Crew afterward to run the new version.
+  your platform over the running one. Progress streams into a dedicated **UPDATE
+  card in the left nav** (checking → downloading → installed) — no separate shell
+  or checkout — and Crew **auto-restarts** into the new build when it's done. A
+  standalone `crew --self-update` CLI path remains as a headless fallback.
 
-Restart Crew after updating. The prebuilt path only sees a version once its
-release assets are published.
+The prebuilt path only sees a version once its release assets are published.
 
 ## Run
 
@@ -110,7 +111,7 @@ Press **`/keys`** in the input bar for the full list in-app.
 | Insert a newline in a terminal | **Shift+Enter** (sends a line feed, not submit) |
 | Close pane / maximize window | **Cmd+W** / **Cmd+M** |
 | Clear focused pane scrollback | **Cmd+K** (or `/clear`) |
-| Scroll any pane | **Shift+PageUp** / **Shift+PageDown** (Shift+Home/End for top/bottom), or mouse wheel |
+| Scroll any pane | **Shift+PageUp** / **Shift+PageDown** (Shift+Home/End for top/bottom), or mouse wheel — in a full-screen app (vim/less/agent TUI) the wheel is forwarded to the program |
 | Quit | **Cmd+Q** (press twice to confirm when panes are open) |
 
 ## Input bar

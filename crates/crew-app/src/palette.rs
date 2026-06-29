@@ -73,6 +73,9 @@ mod tests {
 
     #[test]
     fn static_initialiser_matches_default() {
+        // Serialise with the tests that mutate the accent global, so we read it
+        // at rest rather than mid-`set_accent`.
+        let _g = crate::palette::test_guard();
         // The const-expr initialiser must equal pack(DEFAULT_ACCENT).
         assert_eq!(ACCENT.load(Ordering::Relaxed), pack(DEFAULT_ACCENT));
     }
