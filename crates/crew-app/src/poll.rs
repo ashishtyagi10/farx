@@ -23,6 +23,11 @@ impl CrewApp {
         // panes are polled for their side effects — `any()` would short-circuit
         // and starve later panes when an earlier one has output.
         let mut any_changed = false;
+        // Set when any pane still has buffered PTY output past this tick's read
+        // budget. We then keep the loop hot (ControlFlow::Poll) so a flood drains
+        // quickly across ticks instead of trickling one budget per 16 ms — while
+        // each tick stays bounded, so input and rendering never stall.
+        let mut more_pending = false;
         let mut collected_actions = Vec::new();
         let focused = self.focused;
         for (i, p) in self.panes.iter_mut().enumerate() {
@@ -30,6 +35,7 @@ impl CrewApp {
             let changed = match &mut p.content {
                 PaneContent::Terminal(t) => {
                     let n = t.pty.try_read() > 0;
+                    more_pending |= t.pty.has_pending();
                     rang = t.pty.take_bell();
                     n
                 }
@@ -120,9 +126,16 @@ impl CrewApp {
         self.sync_window_title();
         self.save_window_size_if_settled();
 
-        event_loop.set_control_flow(ControlFlow::WaitUntil(
-            Instant::now() + Duration::from_millis(POLL_MS),
-        ));
+        if more_pending {
+            // A pane is mid-flood with bytes still queued: poll again immediately
+            // (winit still dispatches window events between ticks, so input stays
+            // responsive) so the backlog catches up without a per-tick delay.
+            event_loop.set_control_flow(ControlFlow::Poll);
+        } else {
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                Instant::now() + Duration::from_millis(POLL_MS),
+            ));
+        }
     }
 
     /// Persist the window size once resizing has settled (~400ms idle), so a

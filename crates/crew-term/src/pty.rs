@@ -1,14 +1,32 @@
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::path::Path;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{sync_channel, Receiver};
 
 use crate::model::{GridSize, RenderCell, TermCore, TermModel};
+
+/// Upper bound on chunks buffered from the reader thread. At 8 KiB per chunk
+/// this caps buffered PTY output at ~8 MiB and applies backpressure to a runaway
+/// program: once the OS pipe buffer and this queue fill, the child's `write`
+/// blocks, throttling it to our drain rate instead of piling up unbounded
+/// memory and unbounded parse work.
+const CHANNEL_CAP: usize = 1024;
+
+/// Maximum bytes drained from the PTY into the parser per `try_read` — i.e. per
+/// poll tick. Without this cap a program that floods output (`yes`, `cat` of a
+/// huge file, a noisy build) makes a single `try_read` parse the entire backlog
+/// synchronously on the main thread, freezing rendering and input in EVERY pane
+/// until it finishes. Capping per tick keeps the UI responsive; any remainder is
+/// consumed on following ticks (see `has_pending`).
+const READ_BUDGET: usize = 256 * 1024;
 
 pub struct PtyTerm {
     core: TermCore,
     master: Box<dyn portable_pty::MasterPty + Send>,
     rx: Receiver<Vec<u8>>,
     exited: bool,
+    /// Set by `try_read` when it stopped at `READ_BUDGET` with bytes still
+    /// queued, so the caller can keep the poll loop hot until the backlog drains.
+    pending: bool,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
 }
 
@@ -50,9 +68,12 @@ impl PtyTerm {
         // Drop the slave end so EOF propagates when the child exits.
         drop(pair.slave);
 
-        // Spawn a reader thread: portable-pty reads are blocking.
+        // Spawn a reader thread: portable-pty reads are blocking. The channel is
+        // bounded so a flooding child can't pile up unbounded output in memory —
+        // a full queue blocks the reader (and in turn the child) until the main
+        // thread drains it.
         let mut reader = pair.master.try_clone_reader()?;
-        let (tx, rx) = channel::<Vec<u8>>();
+        let (tx, rx) = sync_channel::<Vec<u8>>(CHANNEL_CAP);
         std::thread::spawn(move || {
             let mut buf = [0u8; 8192];
             loop {
@@ -72,6 +93,7 @@ impl PtyTerm {
             master: pair.master,
             rx,
             exited: false,
+            pending: false,
             _child: child,
         })
     }
@@ -87,12 +109,24 @@ impl PtyTerm {
         self.master.take_writer().expect("pty writer already taken")
     }
 
-    /// Drains all pending bytes from the reader thread into the terminal model.
-    /// Returns the total number of bytes consumed.
+    /// Drains pending bytes from the reader thread into the terminal model,
+    /// returning the number of bytes consumed this tick. At most `READ_BUDGET`
+    /// bytes are drained per call so one flooding pane can't stall the event
+    /// loop; when bytes remain queued past the budget, `has_pending` returns true
+    /// and the rest is consumed on the next tick.
     pub fn try_read(&mut self) -> usize {
         use std::sync::mpsc::TryRecvError;
         let mut total = 0;
+        self.pending = false;
         loop {
+            // Stop once this tick's budget is spent. The reader thread can refill
+            // the channel as fast as we drain it (a flooding child), so without
+            // this cap the loop never sees `Empty` and parses forever, hanging
+            // the event loop. Leftover bytes are flagged via `pending`.
+            if total >= READ_BUDGET {
+                self.pending = true;
+                break;
+            }
             match self.rx.try_recv() {
                 Ok(chunk) => {
                     total += chunk.len();
@@ -107,6 +141,13 @@ impl PtyTerm {
             }
         }
         total
+    }
+
+    /// True when the last `try_read` left bytes queued (it hit `READ_BUDGET`).
+    /// The poll loop uses this to keep draining promptly rather than waiting a
+    /// full tick, so flooded output catches up without ever blocking the UI.
+    pub fn has_pending(&self) -> bool {
+        self.pending
     }
 }
 
@@ -222,5 +263,34 @@ mod pty_tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         assert!(found, "expected CREWOK to appear on the terminal grid");
+    }
+
+    #[test]
+    fn try_read_caps_bytes_per_tick_under_flood() {
+        // A program that floods stdout: a single tick must not drain the whole
+        // backlog, or it would block the event loop (and every other pane).
+        let mut term = PtyTerm::spawn(GridSize { cols: 80, rows: 24 }, "sh").unwrap();
+        let mut w = term.writer();
+        w.write_all(b"yes crew-flood-line\n").unwrap();
+        w.flush().unwrap();
+        // Let the reader thread buffer well past one tick's budget.
+        std::thread::sleep(Duration::from_millis(250));
+
+        // The budget is checked between chunks, so the final 8 KiB reader chunk
+        // can overshoot slightly — the point is the drain is *bounded* to roughly
+        // the budget instead of consuming the whole flood (which would hang).
+        let n = term.try_read();
+        assert!(
+            n <= READ_BUDGET + 8192,
+            "one tick drained {n} bytes, far over the {READ_BUDGET}-byte budget"
+        );
+        assert!(
+            term.has_pending(),
+            "expected a backlog to remain after a budget-capped read"
+        );
+
+        // Stop `yes` so the child doesn't keep spinning after the test.
+        let _ = w.write_all(&[0x03]); // Ctrl-C to the foreground process group
+        let _ = w.flush();
     }
 }
