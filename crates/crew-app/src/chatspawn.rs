@@ -45,6 +45,7 @@ impl CrewApp {
                     rect: PLACEHOLDER_RECT,
                     label: None,
                     name,
+                    dir: None,
                     activity: false,
                     bell: false,
                 });

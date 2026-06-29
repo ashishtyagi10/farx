@@ -58,7 +58,8 @@ impl CrewApp {
             .as_ref()
             .map(Self::current_grid)
             .unwrap_or(FALLBACK_SIZE);
-        match PtyTerm::spawn_in(grid, command, args, self.spawn_cwd()) {
+        let cwd = self.spawn_cwd().map(std::path::Path::to_path_buf);
+        match PtyTerm::spawn_in(grid, command, args, cwd.as_deref()) {
             Ok(pty) => {
                 let input = pty.writer();
                 // rect/grid are placeholders; build_frame's relayout sizes the pane
@@ -69,6 +70,7 @@ impl CrewApp {
                     rect: PLACEHOLDER_RECT,
                     label: Some(label),
                     name: None,
+                    dir: cwd,
                     activity: false,
                     bell: false,
                 };
@@ -118,6 +120,7 @@ impl CrewApp {
             rect: PLACEHOLDER_RECT,
             label: None,
             name: None,
+            dir: None,
             activity: false,
             bell: false,
         });
@@ -142,6 +145,7 @@ impl CrewApp {
             rect: PLACEHOLDER_RECT,
             label: None,
             name: None,
+            dir: None,
             activity: false,
             bell: false,
         });
@@ -209,6 +213,7 @@ impl CrewApp {
             rect: PLACEHOLDER_RECT,
             label: None,
             name: None,
+            dir: None,
             activity: false,
             bell: false,
         });

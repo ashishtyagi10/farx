@@ -25,6 +25,7 @@ fn tests_far_pane(name: &str) -> crate::pane::Pane {
         },
         label: Some(name.into()),
         name: None,
+        dir: None,
         activity: false,
         bell: false,
     }

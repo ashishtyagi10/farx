@@ -58,6 +58,7 @@ mod tests {
             },
             label: None,
             name: Some(name.to_string()),
+            dir: None,
             activity: false,
             bell: false,
         }

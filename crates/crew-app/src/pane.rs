@@ -36,6 +36,9 @@ pub struct Pane {
     pub label: Option<String>,
     /// User-set pane name (via `/name`), shown in the title bar when present.
     pub name: Option<String>,
+    /// The directory this pane was opened in, if any — its folder name is shown
+    /// as the title (below a `/name` override). Static: not the live cwd.
+    pub dir: Option<std::path::PathBuf>,
     /// Unseen output since this pane was last focused (drives the activity dot).
     pub activity: bool,
     /// The program rang the bell since this pane was last focused.
@@ -44,13 +47,17 @@ pub struct Pane {
 
 impl Pane {
     /// Short label for the pane's title bar: the user-set name if any, else the
-    /// program-set title, else the pane kind.
+    /// folder the pane was opened in, else the program-set title, else the kind.
     pub fn title_text(&self) -> String {
         if let Some(name) = &self.name {
             return name.clone();
         }
         match &self.content {
             PaneContent::Terminal(t) => {
+                // The open directory's folder name always wins over an OSC title.
+                if let Some(dir) = self.dir.as_deref().and_then(dir_label) {
+                    return dir;
+                }
                 let ti = t.pty.title();
                 if ti.is_empty() {
                     "shell".into()
@@ -76,6 +83,19 @@ impl Pane {
             PaneContent::Swarm(s) => s.cells(self.grid.cols, self.grid.rows),
         }
     }
+}
+
+/// The folder name to display for a pane opened in `dir`: the last path
+/// component (e.g. `~/code/crew` → `crew`), falling back to the whole path for
+/// roots like `/`. `None` for an empty path.
+fn dir_label(dir: &Path) -> Option<String> {
+    if dir.as_os_str().is_empty() {
+        return None;
+    }
+    Some(match dir.file_name() {
+        Some(name) => name.to_string_lossy().into_owned(),
+        None => dir.to_string_lossy().into_owned(),
+    })
 }
 
 /// Spawn a terminal pane running a **login** shell (so the user's full shell
@@ -106,6 +126,7 @@ pub fn spawn_pane(
         },
         label: None,
         name: None,
+        dir: cwd.map(Path::to_path_buf),
         activity: false,
         bell: false,
     })
@@ -140,6 +161,29 @@ mod tests {
     use crate::settingspane::SettingsPane;
 
     #[test]
+    fn dir_label_is_the_folder_name() {
+        assert_eq!(
+            dir_label(Path::new("/Users/atyagi/code/crew")),
+            Some("crew".to_string())
+        );
+        assert_eq!(dir_label(Path::new("/")), Some("/".to_string()));
+        assert_eq!(dir_label(Path::new("")), None);
+    }
+
+    #[test]
+    fn terminal_title_is_the_open_directory_folder() {
+        let base = std::env::temp_dir().join("crew_pane_title_dir");
+        std::fs::create_dir_all(&base).unwrap();
+        let grid = GridSize { cols: 40, rows: 10 };
+        let mut pane = spawn_pane("sh", "sh", grid, Some(&base)).unwrap();
+        // The open directory's folder name is the title…
+        assert_eq!(pane.title_text(), "crew_pane_title_dir");
+        // …but an explicit /name still wins.
+        pane.name = Some("build".into());
+        assert_eq!(pane.title_text(), "build");
+    }
+
+    #[test]
     fn title_text_prefers_user_name() {
         let mut p = Pane {
             content: PaneContent::Settings(SettingsPane::new(CrewConfig::default(), vec![])),
@@ -152,6 +196,7 @@ mod tests {
             },
             label: None,
             name: None,
+            dir: None,
             activity: false,
             bell: false,
         };
