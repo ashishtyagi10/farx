@@ -20,6 +20,8 @@ fn empty_focused_shows_placeholder() {
 
 #[test]
 fn cells_focused_shows_accent_prompt_and_text() {
+    // Pin the accent global for the read-then-assert window.
+    let _g = crate::palette::test_guard();
     let bar = InputBar {
         text: "ls".into(),
         focused: true,
@@ -117,6 +119,8 @@ fn broadcast_prompt_is_magenta() {
 
 #[test]
 fn cells_show_cwd_legend_on_top_border() {
+    // Pin the accent global for the read-then-assert window.
+    let _g = crate::palette::test_guard();
     let bar = InputBar {
         text: String::new(),
         focused: true,

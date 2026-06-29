@@ -30,6 +30,13 @@ pub fn accent() -> (u8, u8, u8) {
     unpack(ACCENT.load(Ordering::Relaxed))
 }
 
+/// The active accent as a ratatui [`Color`](ratatui::style::Color), for the
+/// overlay widgets (help / command menu / settings / far) drawn with ratatui.
+pub fn accent_color() -> ratatui::style::Color {
+    let (r, g, b) = accent();
+    ratatui::style::Color::Rgb(r, g, b)
+}
+
 /// Parse a `#rrggbb` / `rrggbb` hex string into an RGB triple. Returns `None`
 /// for anything that isn't exactly six hex digits (optionally `#`-prefixed).
 pub fn parse_hex(s: &str) -> Option<(u8, u8, u8)> {
@@ -41,6 +48,16 @@ pub fn parse_hex(s: &str) -> Option<(u8, u8, u8)> {
     let g = u8::from_str_radix(&h[2..4], 16).ok()?;
     let b = u8::from_str_radix(&h[4..6], 16).ok()?;
     Some((r, g, b))
+}
+
+/// Serialises tests that read or mutate the accent global. Any test that calls
+/// [`set_accent`] — or asserts against [`accent`]/[`accent_color`] — should hold
+/// this guard so the process-wide value isn't changed mid-assertion by a
+/// concurrently-running test.
+#[cfg(test)]
+pub(crate) fn test_guard() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 #[cfg(test)]
@@ -77,9 +94,11 @@ mod tests {
 
     #[test]
     fn set_then_accent_round_trips() {
-        // NB: this mutates the process-global; keep it last and self-contained.
+        // Serialise with any other test that reads the accent global.
+        let _g = crate::palette::test_guard();
         set_accent((10, 20, 30));
         assert_eq!(accent(), (10, 20, 30));
+        assert_eq!(accent_color(), ratatui::style::Color::Rgb(10, 20, 30));
         set_accent(DEFAULT_ACCENT); // restore so other tests see the default
         assert_eq!(accent(), DEFAULT_ACCENT);
     }

@@ -12,7 +12,7 @@ use ratatui::widgets::{
 
 use super::{FarPane, Panel, Side};
 
-const ACCENT: Color = Color::Rgb(0, 255, 160);
+use crate::palette::accent_color;
 const TEXT: Color = Color::Rgb(200, 200, 200);
 const DIM: Color = Color::Rgb(120, 130, 140);
 const DIR: Color = Color::Rgb(120, 200, 255);
@@ -49,7 +49,7 @@ pub(crate) fn render(p: &FarPane, cols: u16, rows: u16) -> Vec<CellView> {
 
 /// Render one directory panel: a rounded box (path as legend) with the listing.
 fn panel(buf: &mut Buffer, area: Rect, panel: &Panel, active: bool) {
-    let edge = if active { ACCENT } else { DIM };
+    let edge = if active { accent_color() } else { DIM };
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(edge))
@@ -78,7 +78,7 @@ fn panel(buf: &mut Buffer, area: Rect, panel: &Panel, active: bool) {
         })
         .collect();
     let hl = if active {
-        Style::new().fg(BLACK).bg(ACCENT)
+        Style::new().fg(BLACK).bg(accent_color())
     } else {
         Style::new().fg(BLACK).bg(DIM)
     };
@@ -111,7 +111,7 @@ fn function_bar(buf: &mut Buffer, area: Rect) {
     for (k, label) in FKEYS {
         spans.push(Span::styled(
             format!("F{k}"),
-            Style::new().fg(ACCENT).bg(BAR_BG),
+            Style::new().fg(accent_color()).bg(BAR_BG),
         ));
         spans.push(Span::styled(
             format!("{label} "),

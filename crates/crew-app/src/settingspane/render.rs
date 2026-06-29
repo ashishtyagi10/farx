@@ -12,7 +12,7 @@ use ratatui::widgets::{
 
 use super::{Field, SettingsPane};
 
-const ACCENT: Color = Color::Rgb(0, 255, 160);
+use crate::palette::accent_color;
 const TEXT: Color = Color::Rgb(200, 200, 200);
 const DIM: Color = Color::Rgb(120, 130, 140);
 const BG: Color = Color::Rgb(0, 0, 0);
@@ -118,8 +118,8 @@ fn two_boxes(col: Rect) -> [Rect; 2] {
 
 /// A rounded input box (field name as the legend) with the value inside.
 fn input_box(buf: &mut Buffer, area: Rect, legend: &str, value: &str, focused: bool, cursor: bool) {
-    let edge = if focused { ACCENT } else { DIM };
-    let fg = if focused { ACCENT } else { TEXT };
+    let edge = if focused { accent_color() } else { DIM };
+    let fg = if focused { accent_color() } else { TEXT };
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(edge))
@@ -144,7 +144,7 @@ fn buttons(buf: &mut Buffer, area: Rect, f: Field) {
 }
 
 fn button_span(text: &str, focused: bool) -> Span<'static> {
-    let mut style = Style::new().fg(if focused { ACCENT } else { DIM });
+    let mut style = Style::new().fg(if focused { accent_color() } else { DIM });
     if focused {
         style = style.add_modifier(Modifier::BOLD);
     }
@@ -164,11 +164,11 @@ fn dropdown(buf: &mut Buffer, p: &SettingsPane, anchor: Rect) {
     let items: Vec<ListItem> = names.into_iter().map(ListItem::new).collect();
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(ACCENT))
-        .title(Span::styled(" fonts ", Style::new().fg(ACCENT)));
+        .border_style(Style::new().fg(accent_color()))
+        .title(Span::styled(" fonts ", Style::new().fg(accent_color())));
     let list = List::new(items)
         .block(block)
-        .highlight_style(Style::new().fg(BG).bg(ACCENT))
+        .highlight_style(Style::new().fg(BG).bg(accent_color()))
         .highlight_symbol("› ");
     let mut state = ListState::default();
     state.select(Some(p.family_sel));

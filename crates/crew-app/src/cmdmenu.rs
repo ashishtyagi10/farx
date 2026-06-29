@@ -12,7 +12,7 @@ use ratatui::widgets::{List, ListItem, ListState, StatefulWidget};
 use crate::boxdraw::titled_card;
 use crate::suggest::Cmd;
 
-const ACCENT: Color = Color::Rgb(0, 255, 160);
+use crate::palette::accent_color;
 const DIM: Color = Color::Rgb(120, 130, 140);
 /// Dim fieldset frame, matching every other panel's unfocused border/legend.
 const BORDER: (u8, u8, u8) = (110, 110, 120);
@@ -63,7 +63,7 @@ fn menu_cells(matches: &[&Cmd], sel: usize, cols: u16, rows: u16) -> Vec<CellVie
         .iter()
         .map(|c| {
             ListItem::new(Line::from(vec![
-                Span::styled(c.name, Style::new().fg(ACCENT)),
+                Span::styled(c.name, Style::new().fg(accent_color())),
                 Span::raw("  "),
                 Span::styled(c.desc, Style::new().fg(DIM)),
             ]))

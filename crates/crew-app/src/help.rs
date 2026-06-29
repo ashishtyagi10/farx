@@ -7,7 +7,7 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, List, ListItem, Widget};
 
-const ACCENT: Color = Color::Rgb(0, 255, 160);
+use crate::palette::accent_color;
 const TEXT: Color = Color::Rgb(220, 220, 220);
 const DIM: Color = Color::Rgb(150, 150, 160);
 const PANEL: Color = Color::Rgb(18, 18, 30);
@@ -50,7 +50,7 @@ pub fn help_cells(cols: u16, rows: u16) -> Vec<CellView> {
     let mut buf = Buffer::empty(Rect::new(0, 0, cols, rows));
     let item = |left: &str, right: &str| {
         ListItem::new(Line::from(vec![
-            Span::styled(format!("{left:<26}"), Style::new().fg(ACCENT)),
+            Span::styled(format!("{left:<26}"), Style::new().fg(accent_color())),
             Span::styled(right.to_string(), Style::new().fg(TEXT)),
         ]))
     };
@@ -61,11 +61,11 @@ pub fn help_cells(cols: u16, rows: u16) -> Vec<CellView> {
     }
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(ACCENT))
+        .border_style(Style::new().fg(accent_color()))
         .style(Style::new().bg(PANEL))
         .title(Span::styled(
             format!(" keys & commands · crew v{} ", env!("CARGO_PKG_VERSION")),
-            Style::new().fg(ACCENT),
+            Style::new().fg(accent_color()),
         ));
     let inner = block.inner(buf.area);
     block.render(buf.area, &mut buf);
