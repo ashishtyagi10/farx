@@ -77,6 +77,17 @@ impl FarPane {
         keys::reduce(self, key)
     }
 
+    /// Scroll the active panel by moving its cursor; `render` follows it.
+    /// Positive `lines` moves toward the top of the listing.
+    pub fn scroll(&mut self, lines: i32) {
+        let p = self.active_panel_mut();
+        let len = p.entries.len() as i64;
+        if len == 0 {
+            return;
+        }
+        p.sel = (p.sel as i64 - lines as i64).clamp(0, len - 1) as usize;
+    }
+
     pub(crate) fn active_panel_mut(&mut self) -> &mut Panel {
         match self.active {
             Side::Left => &mut self.left,

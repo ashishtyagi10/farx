@@ -7,7 +7,8 @@ fn scroll_pane(pane: &mut Pane, lines: i32) {
     match &mut pane.content {
         PaneContent::Terminal(t) => t.pty.scroll(lines),
         PaneContent::Chat(c) => c.scroll(lines, pane.grid.cols, pane.grid.rows),
-        PaneContent::Settings(_) | PaneContent::Far(_) => {}
+        PaneContent::Settings(s) => s.scroll(lines),
+        PaneContent::Far(f) => f.scroll(lines),
     }
 }
 

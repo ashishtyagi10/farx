@@ -53,3 +53,12 @@ fn move_sel_clamps_to_bounds() {
     move_sel(&mut p, 99);
     assert_eq!(p.left.sel, p.left.entries.len() - 1);
 }
+
+#[test]
+fn scroll_moves_active_cursor_clamped() {
+    let (_b, mut p) = fixture("scroll");
+    p.scroll(-99); // wheel down → toward bottom
+    assert_eq!(p.left.sel, p.left.entries.len() - 1);
+    p.scroll(99); // wheel up → toward top
+    assert_eq!(p.left.sel, 0);
+}
