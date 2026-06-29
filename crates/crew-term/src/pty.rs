@@ -131,6 +131,12 @@ impl PtyTerm {
         self.core.bracketed_paste()
     }
 
+    /// The DEC private modes that decide how a scroll wheel is routed (alternate
+    /// screen, mouse reporting, app-cursor keys).
+    pub fn input_modes(&self) -> crate::modes::InputModes {
+        self.core.input_modes()
+    }
+
     /// Begin a mouse selection at viewport cell (col, row); `block` = rectangular.
     pub fn sel_start(&mut self, col: u16, row: u16, block: bool) {
         self.core.sel_start(col, row, block);

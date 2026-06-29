@@ -179,7 +179,12 @@ Mouse wheel or **Shift+PageUp/PageDown** scroll a pane's history (Shift+Home/End
 jump to top/bottom); an amber `⇡` in the title bar marks that you're viewing
 scrollback. Scrolling works in **every** pane — terminals and chat scroll their
 history, the Far file browser moves its cursor, and the settings form moves
-between fields. **`/find <text>`** scrolls
+between fields. In a **full-screen program** (the alternate screen — vim, less,
+an agent TUI like `claude`) there's no terminal scrollback to move, so the wheel
+is **forwarded to the program** instead: as mouse-wheel events when it enabled
+mouse reporting, or arrow keys under xterm "alternate scroll" — so scrolling its
+own view just works. Typing into a pane clears any leftover mouse-selection
+highlight, so a stale selection never lingers over fresh output. **`/find <text>`** scrolls
 back to the most recent line containing the text (smart case: case-insensitive
 unless the term has an uppercase letter), **highlights every match** in the
 viewport with an amber wash, and reports the in-view match count on the status
