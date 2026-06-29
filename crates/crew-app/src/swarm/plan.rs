@@ -8,14 +8,12 @@ use crew_hive::{Planner, TaskGraph};
 
 /// Handle to an in-flight plan. `try_take` returns `None` until the planner
 /// thread finishes, then `Some(Ok(graph))` or `Some(Err(message))` once.
-#[allow(dead_code)]
 pub struct PlanHandle {
     rx: Receiver<Result<TaskGraph, String>>,
 }
 
 impl PlanHandle {
     /// Non-blocking check for the planned graph.
-    #[allow(dead_code)]
     pub fn try_take(&self) -> Option<Result<TaskGraph, String>> {
         self.rx.try_recv().ok()
     }
@@ -23,7 +21,6 @@ impl PlanHandle {
 
 /// Spawn a worker thread that plans `goal` into a `TaskGraph` and sends the
 /// result back. The thread owns a current-thread tokio runtime.
-#[allow(dead_code)]
 pub fn plan_goal(goal: String, planner: Arc<dyn Planner>) -> PlanHandle {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {

@@ -1,51 +1,96 @@
-//! A live swarm pane: runs a `crew_hive` task graph on a background worker via
-//! [`SwarmHandle`], drains its events into a [`Fleet`] each frame, and renders
-//! the fleet as a constellation + HUD with [`swarm_cells`]. Spawned by `/swarm`,
-//! which launches a self-contained demo graph driven by always-succeeding stub
-//! agents (no API keys, no network) — a live, end-to-end demonstration of the
-//! scheduler → bridge → view pipeline.
+//! A live swarm pane. Two entry points:
+//!
+//! - `/swarm` → [`SwarmPane::demo`] runs a fixed fan-out/merge graph immediately.
+//! - `/goal <text>` → [`SwarmPane::for_goal`] first plans the goal into a graph
+//!   off the UI thread (via [`plan_goal`]), shows a "planning…" banner, then runs
+//!   the resulting graph and visualises it.
+//!
+//! Both execute with always-succeeding stub agents — no API keys, no network —
+//! so the whole goal → plan → schedule → bridge → view pipeline runs live and
+//! deterministically. Planning currently uses the deterministic [`StubPlanner`];
+//! swapping in `LlmPlanner` (real goal decomposition) is the next step once the
+//! app grows provider/API-key config.
 use std::sync::Arc;
 
 use crew_hive::agent::StubFactory;
-use crew_hive::{AgentKind, Fleet, ModelTier, TaskGraph, TaskId, TaskSpec};
+use crew_hive::{AgentKind, Fleet, ModelTier, StubPlanner, TaskGraph, TaskId, TaskSpec};
 use crew_render::CellView;
 
 use crate::swarm::bridge::SwarmHandle;
+use crate::swarm::plan::{plan_goal, PlanHandle};
 use crate::swarm::view::swarm_cells;
 
-/// A pane that visualises a running swarm. Owns the off-thread engine handle and
-/// the accumulated fleet telemetry; both are cheap to drain each frame.
+/// How many parallel leaves the stub planner decomposes a goal into.
+const GOAL_FANOUT: usize = 3;
+
+/// The lifecycle of a swarm pane.
+enum SwarmState {
+    /// Awaiting the planner thread; `goal` is echoed in the banner.
+    Planning { goal: String, plan: PlanHandle },
+    /// Executing a graph; `handle` drives the engine, `fleet` accumulates events.
+    Running { handle: SwarmHandle, fleet: Fleet },
+    /// Planning failed; `msg` is shown in the banner.
+    Failed { msg: String },
+}
+
+/// A pane that plans and/or visualises a running swarm. Cheap to drain each frame.
 pub struct SwarmPane {
-    handle: SwarmHandle,
-    fleet: Fleet,
+    state: SwarmState,
 }
 
 impl SwarmPane {
-    /// Launch a self-contained demo swarm: a fan-out/merge graph executed by
-    /// always-succeeding stub agents. Requires no API keys or network.
+    /// Launch the self-contained demo swarm immediately (no planning step).
     pub fn demo() -> Self {
-        Self::with_graph(demo_graph())
-    }
-
-    /// Run `graph` on a background worker with stub agents at concurrency 4.
-    fn with_graph(graph: TaskGraph) -> Self {
-        let factory = Arc::new(StubFactory);
-        let handle = SwarmHandle::spawn(graph, factory, 4);
         Self {
-            handle,
-            fleet: Fleet::new(),
+            state: running(demo_graph()),
         }
     }
 
-    /// Drain any pending engine events into the fleet. Returns `true` when at
-    /// least one event was applied (the view changed and the pane should redraw).
-    pub fn poll(&mut self) -> bool {
-        self.handle.drain(&mut self.fleet) > 0
+    /// Plan `goal` into a task graph off-thread, then run it. The pane shows a
+    /// planning banner until the graph is ready.
+    pub fn for_goal(goal: String) -> Self {
+        let planner = Arc::new(StubPlanner {
+            fanout: GOAL_FANOUT,
+        });
+        Self {
+            state: SwarmState::Planning {
+                plan: plan_goal(goal.clone(), planner),
+                goal,
+            },
+        }
     }
 
-    /// Render the current fleet to cell views for a `cols × rows` grid.
+    /// Advance the pane one frame. Returns `true` when something changed (a plan
+    /// arrived, or engine events were applied) and the pane should redraw.
+    pub fn poll(&mut self) -> bool {
+        match &mut self.state {
+            SwarmState::Planning { plan, .. } => match plan.try_take() {
+                Some(Ok(graph)) => {
+                    self.state = running(graph);
+                    true
+                }
+                Some(Err(e)) => {
+                    self.state = SwarmState::Failed { msg: e };
+                    true
+                }
+                None => false,
+            },
+            SwarmState::Running { handle, fleet } => handle.drain(fleet) > 0,
+            SwarmState::Failed { .. } => false,
+        }
+    }
+
+    /// Render the pane for a `cols × rows` grid: a banner while planning/failed,
+    /// the live constellation + HUD while running.
     pub fn cells(&self, cols: u16, rows: u16) -> Vec<CellView> {
-        swarm_cells(self.handle.graph(), &self.fleet, cols, rows)
+        if cols == 0 || rows == 0 {
+            return vec![];
+        }
+        match &self.state {
+            SwarmState::Planning { goal, .. } => banner(&format!("planning: {goal}…"), cols),
+            SwarmState::Failed { msg } => banner(&format!("plan failed: {msg}"), cols),
+            SwarmState::Running { handle, fleet } => swarm_cells(handle.graph(), fleet, cols, rows),
+        }
     }
 }
 
@@ -53,8 +98,36 @@ impl Drop for SwarmPane {
     /// Stop the background scheduler when the pane closes, so a dismissed swarm
     /// doesn't keep spawning tasks on its worker thread.
     fn drop(&mut self) {
-        self.handle.cancel();
+        if let SwarmState::Running { handle, .. } = &self.state {
+            handle.cancel();
+        }
     }
+}
+
+/// Build a `Running` state: spawn the engine for `graph` with stub agents.
+fn running(graph: TaskGraph) -> SwarmState {
+    let factory = Arc::new(StubFactory);
+    SwarmState::Running {
+        handle: SwarmHandle::spawn(graph, factory, 4),
+        fleet: Fleet::new(),
+    }
+}
+
+/// Lay `text` across row 0 as a single line of cell views (truncated to `cols`).
+fn banner(text: &str, cols: u16) -> Vec<CellView> {
+    text.chars()
+        .take(cols as usize)
+        .enumerate()
+        .map(|(i, c)| CellView {
+            col: i as u16,
+            row: 0,
+            c,
+            fg: (200, 200, 210),
+            bg: (0, 0, 0),
+            bold: false,
+            italic: false,
+        })
+        .collect()
 }
 
 /// A small fan-out/merge demo graph: one root, three parallel workers, one merge

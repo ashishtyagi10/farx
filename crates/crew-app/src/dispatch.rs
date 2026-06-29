@@ -11,6 +11,7 @@ impl CrewApp {
             "keys" => self.help_open = true,
             "far" => self.spawn_far_pane(),
             "swarm" => self.spawn_swarm_pane(),
+            "goal" => self.spawn_goal_pane(""), // show usage hint
             "crew" => self.spawn_crew_pane(),
             // Native AI coding-agent CLIs, each in its own terminal pane (the
             // pane re-execs the shell on exit, so a missing tool just shows its
@@ -62,6 +63,8 @@ impl CrewApp {
                     self.dump_focused_pane(f);
                 } else if let Some(n) = other.strip_prefix("font ") {
                     self.set_font_cmd(n);
+                } else if let Some(g) = other.strip_prefix("goal ") {
+                    self.spawn_goal_pane(g.trim());
                 }
             }
         }

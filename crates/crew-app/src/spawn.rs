@@ -149,13 +149,29 @@ impl CrewApp {
     /// Spawn a live swarm pane running the self-contained demo graph, and focus
     /// it. The engine runs on a background worker; the pane drains it each frame.
     pub(crate) fn spawn_swarm_pane(&mut self) {
+        self.push_swarm_pane(crate::swarmpane::SwarmPane::demo());
+    }
+
+    /// Plan `goal` into a task graph off-thread and run it in a swarm pane. An
+    /// empty goal just shows a usage hint (no pane).
+    pub(crate) fn spawn_goal_pane(&mut self, goal: &str) {
+        let goal = goal.trim();
+        if goal.is_empty() {
+            self.set_status("usage: /goal <text>");
+            return;
+        }
+        self.push_swarm_pane(crate::swarmpane::SwarmPane::for_goal(goal.to_string()));
+    }
+
+    /// Push a swarm pane into the grid and focus it.
+    fn push_swarm_pane(&mut self, swarm: crate::swarmpane::SwarmPane) {
         let grid = self
             .renderer
             .as_ref()
             .map(Self::current_grid)
             .unwrap_or(FALLBACK_SIZE);
         self.panes.push(Pane {
-            content: PaneContent::Swarm(crate::swarmpane::SwarmPane::demo()),
+            content: PaneContent::Swarm(swarm),
             grid,
             rect: PLACEHOLDER_RECT,
             label: None,

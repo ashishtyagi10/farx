@@ -65,6 +65,19 @@ fn swarm_slash_command_spawns_swarm_pane() {
 }
 
 #[test]
+fn goal_slash_command_spawns_swarm_pane() {
+    use crate::pane::PaneContent;
+    let mut app = CrewApp::default();
+    // `/goal <text>` plans then runs a swarm; bare `/goal` is just a usage hint.
+    assert!(!app.submit_input("/goal".to_string()));
+    assert!(app.panes.is_empty(), "bare /goal opens no pane");
+    assert!(!app.submit_input("/goal ship the feature".to_string()));
+    assert_eq!(app.panes.len(), 1);
+    assert!(matches!(app.panes[0].content, PaneContent::Swarm(_)));
+    assert_eq!(app.panes[0].title_text(), "swarm");
+}
+
+#[test]
 fn zoom_chord_toggles() {
     let mut app = CrewApp::default();
     assert!(!app.zoomed);
