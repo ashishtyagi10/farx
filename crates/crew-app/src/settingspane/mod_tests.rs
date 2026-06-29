@@ -85,3 +85,39 @@ fn build_config_returns_edited_draft() {
     commit_field(&mut p);
     assert_eq!(build_config(&p).font_size, 20.0);
 }
+
+#[test]
+fn commit_accent_valid_normalizes_and_sets_draft() {
+    let mut p = pane();
+    p.focus = 4; // Accent
+    assert_eq!(p.focused_field(), Field::Accent);
+    p.accent_buf = "#AABBCC".into();
+    commit_field(&mut p);
+    // Stored canonical lowercase; the buffer mirrors it.
+    assert_eq!(p.draft.accent.as_deref(), Some("#aabbcc"));
+    assert_eq!(p.accent_buf, "#aabbcc");
+    assert_eq!(p.draft.accent_rgb(), (0xaa, 0xbb, 0xcc));
+}
+
+#[test]
+fn commit_accent_invalid_keeps_previous() {
+    let mut p = pane();
+    p.focus = 4;
+    p.draft.accent = Some("#001122".into());
+    p.accent_buf = "nope".into();
+    commit_field(&mut p);
+    // Bad input is rejected; the prior value survives and the buffer is restored.
+    assert_eq!(p.draft.accent.as_deref(), Some("#001122"));
+    assert_eq!(p.accent_buf, "#001122");
+}
+
+#[test]
+fn commit_accent_empty_clears_to_builtin() {
+    let mut p = pane();
+    p.focus = 4;
+    p.draft.accent = Some("#001122".into());
+    p.accent_buf = "   ".into();
+    commit_field(&mut p);
+    assert_eq!(p.draft.accent, None);
+    assert!(p.accent_buf.is_empty());
+}

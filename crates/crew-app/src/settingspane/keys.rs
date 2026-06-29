@@ -25,6 +25,7 @@ pub(crate) fn reduce(p: &mut SettingsPane, key: &KeyEvent, shift: bool) -> Optio
         Field::FontSize => number_key(p, key, true),
         Field::NavWidth => number_key(p, key, false),
         Field::ShowNav => toggle_key(p, key),
+        Field::Accent => accent_key(p, key),
         Field::Save => button_key(p, key, true),
         Field::Cancel => button_key(p, key, false),
     }
@@ -73,6 +74,29 @@ fn number_key(p: &mut SettingsPane, key: &KeyEvent, is_size: bool) -> Option<Set
             if let Some(c) = s.chars().next() {
                 if c.is_ascii_digit() {
                     buf_mut(p, is_size).push(c);
+                }
+            }
+        }
+        _ => {}
+    }
+    None
+}
+
+/// Edit the accent hex field: accept `#` and hex digits, Backspace, Enter to
+/// commit and advance. Capped at 7 chars (`#rrggbb`).
+fn accent_key(p: &mut SettingsPane, key: &KeyEvent) -> Option<SettingsAction> {
+    match &key.logical_key {
+        Key::Named(NamedKey::Enter) => {
+            commit_field(p);
+            move_focus(p, false);
+        }
+        Key::Named(NamedKey::Backspace) => {
+            p.accent_buf.pop();
+        }
+        Key::Character(s) => {
+            if let Some(c) = s.chars().next() {
+                if (c == '#' || c.is_ascii_hexdigit()) && p.accent_buf.len() < 7 {
+                    p.accent_buf.push(c);
                 }
             }
         }
@@ -146,6 +170,22 @@ pub(crate) fn commit_field(p: &mut SettingsPane) {
             p.nav_buf = format!("{}", p.draft.nav_width as i32);
         }
         Field::FontFamily => commit_family(p),
+        Field::Accent => {
+            let raw = p.accent_buf.trim();
+            if raw.is_empty() {
+                // Cleared → fall back to the built-in accent.
+                p.draft.accent = None;
+                p.accent_buf.clear();
+            } else if let Some((r, g, b)) = crate::palette::parse_hex(raw) {
+                // Store the canonical `#rrggbb` form.
+                let hex = format!("#{r:02x}{g:02x}{b:02x}");
+                p.draft.accent = Some(hex.clone());
+                p.accent_buf = hex;
+            } else {
+                // Invalid hex → keep the previous value, restore the buffer.
+                p.accent_buf = p.draft.accent.clone().unwrap_or_default();
+            }
+        }
         _ => {}
     }
 }
@@ -163,6 +203,7 @@ pub(crate) fn move_focus(p: &mut SettingsPane, back: bool) {
     p.family_sel = 0;
     p.size_buf = format!("{}", p.draft.font_size as i32);
     p.nav_buf = format!("{}", p.draft.nav_width as i32);
+    p.accent_buf = p.draft.accent.clone().unwrap_or_default();
     p.family_query = p
         .draft
         .font_family

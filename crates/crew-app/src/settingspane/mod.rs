@@ -18,15 +18,17 @@ pub(crate) enum Field {
     FontSize,
     NavWidth,
     ShowNav,
+    Accent,
     Save,
     Cancel,
 }
 
-pub(crate) const FIELDS: [Field; 6] = [
+pub(crate) const FIELDS: [Field; 7] = [
     Field::FontFamily,
     Field::FontSize,
     Field::NavWidth,
     Field::ShowNav,
+    Field::Accent,
     Field::Save,
     Field::Cancel,
 ];
@@ -48,6 +50,8 @@ pub struct SettingsPane {
     pub(crate) family_sel: usize,
     pub(crate) size_buf: String,
     pub(crate) nav_buf: String,
+    /// Editable accent hex (e.g. `#00ffa0`); empty means "use the built-in".
+    pub(crate) accent_buf: String,
 }
 
 impl SettingsPane {
@@ -58,6 +62,7 @@ impl SettingsPane {
             .unwrap_or_else(|| DEFAULT_FAMILY_LABEL.to_string());
         let size_buf = format!("{}", cfg.font_size as i32);
         let nav_buf = format!("{}", cfg.nav_width as i32);
+        let accent_buf = cfg.accent.clone().unwrap_or_default();
         Self {
             draft: cfg,
             families,
@@ -67,6 +72,7 @@ impl SettingsPane {
             family_sel: 0,
             size_buf,
             nav_buf,
+            accent_buf,
         }
     }
 

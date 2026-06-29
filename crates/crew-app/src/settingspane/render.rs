@@ -53,6 +53,14 @@ pub(crate) fn render(p: &SettingsPane, cols: u16, rows: u16) -> Vec<CellView> {
         true,
     );
     input_box(&mut buf, fr[3], "Show nav", nav, f == Field::ShowNav, false);
+    input_box(
+        &mut buf,
+        fr[4],
+        "Accent (#hex)",
+        &p.accent_buf,
+        f == Field::Accent,
+        true,
+    );
     buttons(&mut buf, btn, f);
 
     if p.family_open {
@@ -64,10 +72,10 @@ pub(crate) fn render(p: &SettingsPane, cols: u16, rows: u16) -> Vec<CellView> {
 /// Width at/above which the form uses two columns.
 const WIDE: u16 = 76;
 
-/// Lay out the four field boxes and the buttons row, responsively: two columns
-/// on a wide pane (family/size left, nav/show-nav right), one column otherwise.
-/// Returns the field rects in `Field` order plus the buttons rect.
-fn field_layout(area: Rect) -> ([Rect; 4], Rect) {
+/// Lay out the five field boxes and the buttons row, responsively: two columns
+/// on a wide pane (family/size/accent left, nav/show-nav right), one column
+/// otherwise. Returns the field rects in `Field` order plus the buttons rect.
+fn field_layout(area: Rect) -> ([Rect; 5], Rect) {
     let main = Layout::vertical([
         Constraint::Length(1), // top padding
         Constraint::Min(0),    // fields
@@ -85,11 +93,14 @@ fn field_layout(area: Rect) -> ([Rect; 4], Rect) {
             Constraint::Percentage(50),
         ])
         .split(body);
-        let l = two_boxes(halves[0]);
-        let r = two_boxes(halves[2]);
-        ([l[0], l[1], r[0], r[1]], btn)
+        let l = stacked_boxes::<3>(halves[0]); // family, size, accent
+        let r = stacked_boxes::<2>(halves[2]); // nav width, show nav
+                                               // Returned in Field order: family, size, nav, show-nav, accent.
+        ([l[0], l[1], r[0], r[1], l[2]], btn)
     } else {
         let v = Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Length(1),
             Constraint::Length(3),
             Constraint::Length(1),
             Constraint::Length(3),
@@ -100,20 +111,20 @@ fn field_layout(area: Rect) -> ([Rect; 4], Rect) {
             Constraint::Min(0),
         ])
         .split(body);
-        ([v[0], v[2], v[4], v[6]], btn)
+        ([v[0], v[2], v[4], v[6], v[8]], btn)
     }
 }
 
-/// Split a column into two stacked 3-row box rects (with a 1-row gap).
-fn two_boxes(col: Rect) -> [Rect; 2] {
-    let v = Layout::vertical([
-        Constraint::Length(3),
-        Constraint::Length(1),
-        Constraint::Length(3),
-        Constraint::Min(0),
-    ])
-    .split(col);
-    [v[0], v[2]]
+/// Split a column into `N` stacked 3-row box rects, each followed by a 1-row gap.
+fn stacked_boxes<const N: usize>(col: Rect) -> [Rect; N] {
+    let mut constraints = Vec::with_capacity(N * 2 + 1);
+    for _ in 0..N {
+        constraints.push(Constraint::Length(3));
+        constraints.push(Constraint::Length(1));
+    }
+    constraints.push(Constraint::Min(0));
+    let v = Layout::vertical(constraints).split(col);
+    std::array::from_fn(|i| v[i * 2])
 }
 
 /// A rounded input box (field name as the legend) with the value inside.
