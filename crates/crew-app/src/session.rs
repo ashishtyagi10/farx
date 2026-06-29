@@ -29,11 +29,7 @@ pub fn key_to_bytes(event: &KeyEvent, ctrl: bool, shift: bool) -> Option<Vec<u8>
         return None;
     }
     if let Key::Named(n) = &event.logical_key {
-        // Shift+Tab is backtab (CSI Z) — used by the Claude CLI and others.
-        if *n == NamedKey::Tab && shift {
-            return Some(b"\x1b[Z".to_vec());
-        }
-        return named_bytes(*n);
+        return named_bytes_shift(*n, shift);
     }
     if let Key::Character(s) = &event.logical_key {
         // Ctrl+<letter/@-_> → the ASCII control code (Ctrl+C = 0x03, etc.).
@@ -45,6 +41,21 @@ pub fn key_to_bytes(event: &KeyEvent, ctrl: bool, shift: bool) -> Option<Vec<u8>
         return Some(s.as_bytes().to_vec());
     }
     None
+}
+
+/// Named-key bytes honouring Shift: Shift+Tab is backtab (CSI Z), and Shift+Enter
+/// is a line feed (0x0a) rather than carriage-return (0x0d) — the de-facto
+/// terminal convention for a soft return, so agent CLIs (Claude/codex) and
+/// editors insert a newline instead of submitting. Otherwise the plain mapping.
+fn named_bytes_shift(n: NamedKey, shift: bool) -> Option<Vec<u8>> {
+    if shift {
+        match n {
+            NamedKey::Tab => return Some(b"\x1b[Z".to_vec()),
+            NamedKey::Enter => return Some(b"\n".to_vec()),
+            _ => {}
+        }
+    }
+    named_bytes(n)
 }
 
 /// Bytes for a named key: control chars and xterm escape sequences for the
@@ -166,6 +177,15 @@ mod tests {
         assert_eq!(wrap_paste("a\r\nb\nc", false), b"a\rb\rc");
         let w = wrap_paste("x", true);
         assert!(w.starts_with(b"\x1b[200~") && w.ends_with(b"\x1b[201~"));
+    }
+
+    #[test]
+    fn shift_enter_is_line_feed_plain_enter_is_return() {
+        assert_eq!(named_bytes_shift(NamedKey::Enter, true).unwrap(), b"\n");
+        assert_eq!(named_bytes_shift(NamedKey::Enter, false).unwrap(), b"\r");
+        // Shift+Tab is still backtab; unshifted Tab is a plain tab.
+        assert_eq!(named_bytes_shift(NamedKey::Tab, true).unwrap(), b"\x1b[Z");
+        assert_eq!(named_bytes_shift(NamedKey::Tab, false).unwrap(), b"\t");
     }
 
     #[test]
