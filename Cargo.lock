@@ -551,6 +551,7 @@ dependencies = [
  "crew-render",
  "crew-term",
  "dirs",
+ "image",
  "open",
  "ratatui",
  "self_update",

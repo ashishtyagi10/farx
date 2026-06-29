@@ -25,3 +25,4 @@ open = { workspace = true }
 crew-hive = { path = "../crew-hive" }
 tokio = { workspace = true }
 self_update = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png"] }

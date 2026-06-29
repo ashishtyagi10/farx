@@ -32,36 +32,63 @@ fn one_line(s: &str) -> String {
 impl CrewApp {
     /// Paste the system clipboard into the focused surface: the command input
     /// bar, a chat pane's input (single-line), or the focused terminal (using
-    /// bracketed paste when the running program enabled it).
+    /// bracketed paste when the running program enabled it). When the clipboard
+    /// holds an image (and no text), it's saved to a temp PNG and the file path
+    /// is pasted instead — so agent CLIs can read the image by path.
     pub(crate) fn paste(&mut self) {
         let Ok(mut cb) = arboard::Clipboard::new() else {
             return;
         };
-        let Ok(text) = cb.get_text() else {
-            return;
+        let text = match cb.get_text() {
+            Ok(t) if !t.is_empty() => t,
+            _ => match self.paste_image(&mut cb) {
+                Some(path) => path,
+                None => return,
+            },
         };
-        if text.is_empty() {
-            return;
-        }
+        self.insert_paste(&text);
+    }
+
+    /// Insert pasted `text` into the focused surface and redraw.
+    fn insert_paste(&mut self, text: &str) {
         if self.input.focused {
-            self.input.text.push_str(&one_line(&text));
+            self.input.text.push_str(&one_line(text));
             self.redraw();
             return;
         }
         if let Some(pane) = self.panes.get_mut(self.focused) {
             match &mut pane.content {
                 PaneContent::Terminal(t) => {
-                    let bytes = crate::session::wrap_paste(&text, t.pty.bracketed_paste());
+                    let bytes = crate::session::wrap_paste(text, t.pty.bracketed_paste());
                     t.pty.scroll_to_bottom();
                     if let Err(e) = t.input.write_all(&bytes).and_then(|_| t.input.flush()) {
                         eprintln!("paste write error: {e}");
                     }
                 }
-                PaneContent::Chat(c) => c.input.push_str(&one_line(&text)),
+                PaneContent::Chat(c) => c.input.push_str(&one_line(text)),
                 PaneContent::Settings(_) | PaneContent::Far(_) => {}
             }
         }
         self.redraw();
+    }
+
+    /// Save a clipboard image to a temp PNG, returning its path as a string to
+    /// paste. `None` when there's no image or it can't be written.
+    fn paste_image(&mut self, cb: &mut arboard::Clipboard) -> Option<String> {
+        let img = cb.get_image().ok()?;
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let path = std::env::temp_dir().join(format!("crew-paste-{stamp}.png"));
+        let buf = image::RgbaImage::from_raw(
+            img.width as u32,
+            img.height as u32,
+            img.bytes.into_owned(),
+        )?;
+        buf.save(&path).ok()?;
+        self.set_status(format!("pasted image → {}", path.display()));
+        Some(path.to_string_lossy().into_owned())
     }
 
     /// Copy the focused terminal's visible screen to the system clipboard,
