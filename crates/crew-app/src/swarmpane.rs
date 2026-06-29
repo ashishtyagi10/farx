@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use crew_hive::agent::StubFactory;
 use crew_hive::{
-    AgentFactory, AgentKind, AnthropicProvider, ApiFactory, Budget, Fleet, LlmPlanner, ModelTier,
-    Planner, StubPlanner, TaskGraph, TaskId, TaskSpec,
+    batch_graph, AgentFactory, AgentKind, AnthropicProvider, ApiFactory, Budget, Fleet, GraphError,
+    Job, LlmPlanner, ModelTier, Planner, StubPlanner, TaskGraph, TaskId, TaskSpec,
 };
 use crew_render::CellView;
 
@@ -30,9 +30,12 @@ const GOAL_FANOUT: usize = 3;
 const PLAN_TIER: ModelTier = ModelTier::Standard;
 /// Per-task output token cap for worker agents.
 const WORK_MAX_TOKENS: u32 = 2048;
-/// Default cost ceiling for a real-LLM `/goal` run ($1.00 in micros-USD). The
-/// budget governor cancels the swarm once fleet spend exceeds this.
+/// Default cost ceiling for a real-LLM `/goal` or `/batch` run ($1.00 in
+/// micros-USD). The budget governor cancels the swarm once fleet spend exceeds
+/// this.
 const GOAL_BUDGET_MICROS_USD: u64 = 1_000_000;
+/// Model tier for `/batch` jobs (no planner assigns one; keep it cost-conscious).
+const BATCH_TIER: ModelTier = ModelTier::Cheap;
 
 /// Which planning + execution backend a goal pane uses.
 #[derive(Debug, PartialEq, Eq)]
@@ -82,6 +85,17 @@ impl SwarmPane {
         Self {
             state: running(demo_graph(), Arc::new(StubFactory), None),
         }
+    }
+
+    /// Run a batch of independent `jobs` as one all-parallel swarm — no planning
+    /// step, since the jobs already are the task list. Uses the real API backend
+    /// (capped) when a key is set, else the offline stub backend.
+    pub fn for_batch(jobs: Vec<Job>) -> Result<Self, GraphError> {
+        let graph = batch_graph(jobs)?;
+        let (factory, budget) = executor();
+        Ok(Self {
+            state: running(graph, factory, budget),
+        })
     }
 
     /// Plan `goal` into a task graph off-thread, then run it. Uses the real LLM
@@ -219,6 +233,38 @@ fn running(graph: TaskGraph, factory: Arc<dyn AgentFactory>, budget: Option<Budg
         handle: SwarmHandle::spawn(graph, factory, 4, budget),
         fleet: Fleet::new(),
     }
+}
+
+/// Choose the execution backend for a graph that's already planned: real,
+/// budget-capped API agents when `ANTHROPIC_API_KEY` is set, else free stub
+/// agents. (`/goal` selects its own backend because it also needs a planner.)
+fn executor() -> (Arc<dyn AgentFactory>, Option<Budget>) {
+    let provider = AnthropicProvider::from_env().ok();
+    match backend_for(provider.is_some()) {
+        Backend::Llm => {
+            let provider = provider.expect("Llm backend implies a provider");
+            let factory = Arc::new(ApiFactory::new(Arc::new(provider), WORK_MAX_TOKENS));
+            let budget = Some(Budget {
+                max_micros_usd: GOAL_BUDGET_MICROS_USD,
+            });
+            (factory, budget)
+        }
+        Backend::Stub => (Arc::new(StubFactory), None),
+    }
+}
+
+/// Parse batch jobs from text: one job per non-blank line, the line serving as
+/// both the (truncated) title and the prompt. Empty input yields no jobs.
+pub(crate) fn jobs_from_lines(text: &str) -> Vec<Job> {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|l| Job {
+            title: l.chars().take(40).collect(),
+            prompt: l.to_string(),
+            tier: BATCH_TIER,
+        })
+        .collect()
 }
 
 /// Lay `text` across row 0 as a single line of cell views (truncated to `cols`).

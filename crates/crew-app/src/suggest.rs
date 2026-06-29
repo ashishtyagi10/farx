@@ -116,6 +116,10 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         desc: "Plan a goal into a task graph and run it as a swarm (/goal <text>)",
     },
     Cmd {
+        name: "/batch",
+        desc: "Run a file of jobs (one per line) as a parallel swarm (/batch <file>)",
+    },
+    Cmd {
         name: "/exit",
         desc: "Quit Crew",
     },

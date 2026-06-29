@@ -78,6 +78,23 @@ fn goal_slash_command_spawns_swarm_pane() {
 }
 
 #[test]
+fn batch_slash_command_spawns_swarm_pane_from_a_file() {
+    use crate::pane::PaneContent;
+    let mut app = CrewApp::default();
+    // bare /batch → usage hint, no pane.
+    assert!(!app.submit_input("/batch".to_string()));
+    assert!(app.panes.is_empty(), "bare /batch opens no pane");
+
+    let path = std::env::temp_dir().join("crew_batch_slash_test_jobs.txt");
+    std::fs::write(&path, "first job\nsecond job\n").unwrap();
+    assert!(!app.submit_input(format!("/batch {}", path.display())));
+    assert_eq!(app.panes.len(), 1);
+    assert!(matches!(app.panes[0].content, PaneContent::Swarm(_)));
+    assert_eq!(app.panes[0].title_text(), "swarm");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn zoom_chord_toggles() {
     let mut app = CrewApp::default();
     assert!(!app.zoomed);

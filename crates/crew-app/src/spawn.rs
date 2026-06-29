@@ -163,6 +163,37 @@ impl CrewApp {
         self.push_swarm_pane(crate::swarmpane::SwarmPane::for_goal(goal.to_string()));
     }
 
+    /// Run a batch of jobs read from a file (one job per line) as an all-parallel
+    /// swarm. An empty path shows a usage hint; an unreadable/empty file reports
+    /// why instead of opening an empty pane.
+    pub(crate) fn spawn_batch_pane(&mut self, path: &str) {
+        let path = path.trim();
+        if path.is_empty() {
+            self.set_status("usage: /batch <file> (one job per line)");
+            return;
+        }
+        let text = match std::fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(e) => {
+                self.set_status(format!("batch: cannot read {path}: {e}"));
+                return;
+            }
+        };
+        let jobs = crate::swarmpane::jobs_from_lines(&text);
+        if jobs.is_empty() {
+            self.set_status(format!("batch: no jobs in {path}"));
+            return;
+        }
+        let n = jobs.len();
+        match crate::swarmpane::SwarmPane::for_batch(jobs) {
+            Ok(swarm) => {
+                self.push_swarm_pane(swarm);
+                self.set_status(format!("batch: running {n} jobs"));
+            }
+            Err(e) => self.set_status(format!("batch: {e}")),
+        }
+    }
+
     /// Push a swarm pane into the grid and focus it.
     fn push_swarm_pane(&mut self, swarm: crate::swarmpane::SwarmPane) {
         let grid = self

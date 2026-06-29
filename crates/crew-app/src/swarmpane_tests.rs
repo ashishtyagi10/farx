@@ -1,7 +1,9 @@
 //! Headless tests for the live swarm pane. The planner and engine run on
 //! std::threads with stub implementations — no GPU, no winit, no network — so
 //! these are fully deterministic.
-use super::{backend_for, demo_graph, Backend, SwarmPane, SwarmState, GOAL_FANOUT};
+use super::{
+    backend_for, demo_graph, jobs_from_lines, Backend, SwarmPane, SwarmState, GOAL_FANOUT,
+};
 use std::time::{Duration, Instant};
 
 /// Drive `pane.poll()` until `done` predicate holds or the deadline passes.
@@ -26,6 +28,44 @@ fn done_count(pane: &SwarmPane) -> usize {
 fn demo_graph_is_fanout_merge() {
     // 1 root + 3 parallel workers + 1 merge.
     assert_eq!(demo_graph().len(), 5);
+}
+
+#[test]
+fn jobs_from_lines_skips_blanks_and_trims() {
+    let jobs = jobs_from_lines("  summarize the docs \n\n   \ntranslate the readme\n");
+    assert_eq!(jobs.len(), 2);
+    assert_eq!(jobs[0].prompt, "summarize the docs");
+    assert_eq!(jobs[1].prompt, "translate the readme");
+    // Title is the (here untruncated) line.
+    assert_eq!(jobs[0].title, "summarize the docs");
+}
+
+#[test]
+fn jobs_from_lines_truncates_long_titles() {
+    let line = "x".repeat(100);
+    let jobs = jobs_from_lines(&line);
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(
+        jobs[0].title.chars().count(),
+        40,
+        "title capped at 40 chars"
+    );
+    assert_eq!(
+        jobs[0].prompt.chars().count(),
+        100,
+        "prompt keeps the full line"
+    );
+}
+
+#[test]
+fn for_batch_runs_all_jobs_in_parallel() {
+    // No key in the test env → stub backend, so this completes offline.
+    let jobs = jobs_from_lines("job one\njob two\njob three");
+    let mut pane = SwarmPane::for_batch(jobs).expect("batch graph builds");
+    // Batch skips planning — it starts Running immediately.
+    assert!(matches!(pane.state, SwarmState::Running { .. }));
+    pump_until(&mut pane, Duration::from_secs(5), |p| done_count(p) >= 3);
+    assert_eq!(done_count(&pane), 3, "all 3 batch jobs complete");
 }
 
 #[test]
