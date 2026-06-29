@@ -64,6 +64,7 @@ mod statspane;
 mod status;
 mod suggest;
 mod swarm;
+mod swarmpane;
 mod termwrite;
 mod toggles;
 mod tui;

@@ -10,6 +10,7 @@ use crate::farpane::FarPane;
 use crate::layout::Rect;
 use crate::session::to_cellviews;
 use crate::settingspane::SettingsPane;
+use crate::swarmpane::SwarmPane;
 
 /// Raw terminal pane: owns its PTY and writer.
 pub struct TermPane {
@@ -23,6 +24,7 @@ pub enum PaneContent {
     Chat(ChatPane),
     Settings(SettingsPane),
     Far(FarPane),
+    Swarm(SwarmPane),
 }
 
 /// A single pane: owns its content, grid size, and pixel rect.
@@ -59,6 +61,7 @@ impl Pane {
             PaneContent::Chat(_) => "chat".into(),
             PaneContent::Settings(_) => "settings".into(),
             PaneContent::Far(_) => "far".into(),
+            PaneContent::Swarm(_) => "swarm".into(),
         }
     }
 
@@ -70,6 +73,7 @@ impl Pane {
             PaneContent::Chat(c) => c.cells(self.grid.cols, self.grid.rows),
             PaneContent::Settings(s) => s.cells(self.grid.cols, self.grid.rows),
             PaneContent::Far(f) => f.cells(self.grid.cols, self.grid.rows),
+            PaneContent::Swarm(s) => s.cells(self.grid.cols, self.grid.rows),
         }
     }
 }

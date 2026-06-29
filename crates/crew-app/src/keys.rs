@@ -127,6 +127,8 @@ impl CrewApp {
                 PaneContent::Far(f) => {
                     far_close = matches!(f.on_key(event), Some(crate::farpane::FarAction::Close));
                 }
+                // The swarm view is non-interactive; it ignores key input.
+                PaneContent::Swarm(_) => {}
             }
         }
         if far_close {

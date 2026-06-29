@@ -57,10 +57,15 @@ impl SwarmHandle {
     }
 
     /// Non-blocking drain of pending events into the fleet (call each frame).
-    pub fn drain(&self, fleet: &mut Fleet) {
+    /// Returns the number of events applied, so callers can skip a redraw when
+    /// nothing changed.
+    pub fn drain(&self, fleet: &mut Fleet) -> usize {
+        let mut n = 0;
         while let Ok(ev) = self.rx.try_recv() {
             fleet.apply(&ev);
+            n += 1;
         }
+        n
     }
 
     /// Signal the scheduler to stop spawning new tasks.

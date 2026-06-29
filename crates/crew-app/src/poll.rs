@@ -34,6 +34,7 @@ impl CrewApp {
                     collected_actions.extend(result.actions);
                     result.changed
                 }
+                PaneContent::Swarm(s) => s.poll(),
                 PaneContent::Settings(_) | PaneContent::Far(_) => false,
             };
             // Output / bells in a pane you're not watching flag it.

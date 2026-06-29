@@ -108,6 +108,10 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         desc: "Open a dual-pane file manager",
     },
     Cmd {
+        name: "/swarm",
+        desc: "Run a demo multi-agent swarm with a live visualization",
+    },
+    Cmd {
         name: "/exit",
         desc: "Quit Crew",
     },

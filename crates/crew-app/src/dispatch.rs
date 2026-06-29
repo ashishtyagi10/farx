@@ -10,6 +10,7 @@ impl CrewApp {
             "exit" => return true,
             "keys" => self.help_open = true,
             "far" => self.spawn_far_pane(),
+            "swarm" => self.spawn_swarm_pane(),
             "crew" => self.spawn_crew_pane(),
             // Native AI coding-agent CLIs, each in its own terminal pane (the
             // pane re-execs the shell on exit, so a missing tool just shows its

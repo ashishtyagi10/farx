@@ -146,6 +146,27 @@ impl CrewApp {
         self.focus_new_pane();
     }
 
+    /// Spawn a live swarm pane running the self-contained demo graph, and focus
+    /// it. The engine runs on a background worker; the pane drains it each frame.
+    pub(crate) fn spawn_swarm_pane(&mut self) {
+        let grid = self
+            .renderer
+            .as_ref()
+            .map(Self::current_grid)
+            .unwrap_or(FALLBACK_SIZE);
+        self.panes.push(Pane {
+            content: PaneContent::Swarm(crate::swarmpane::SwarmPane::demo()),
+            grid,
+            rect: PLACEHOLDER_RECT,
+            label: None,
+            name: None,
+            activity: false,
+            bell: false,
+        });
+        self.focus_new_pane();
+        self.redraw();
+    }
+
     /// Apply updated config: set font family + size live, persist to disk, and redraw.
     pub(crate) fn apply_settings(&mut self, cfg: CrewConfig) {
         self.apply_config(cfg);

@@ -66,7 +66,7 @@ impl CrewApp {
                     }
                 }
                 PaneContent::Chat(c) => c.input.push_str(&one_line(text)),
-                PaneContent::Settings(_) | PaneContent::Far(_) => {}
+                PaneContent::Settings(_) | PaneContent::Far(_) | PaneContent::Swarm(_) => {}
             }
         }
         self.redraw();
