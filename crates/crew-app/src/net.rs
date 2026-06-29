@@ -23,7 +23,7 @@ pub fn rate(bytes: u64) -> String {
 }
 
 /// Render the network section: a `NET` rule on row 0, the `↓ rx  ↑ tx` rates on
-/// row 1, and a moving throughput sparkline on row 2 (auto-scaled to its peak).
+/// row 1, and a moving throughput line chart on row 2 (auto-scaled to its peak).
 pub fn net_cells(rx: u64, tx: u64, hist: &crate::spark::History, cols: u16) -> Vec<CellView> {
     if cols < 10 {
         return Vec::new();
@@ -36,7 +36,7 @@ pub fn net_cells(rx: u64, tx: u64, hist: &crate::spark::History, cols: u16) -> V
         cols,
         LABEL,
     );
-    out.extend(crate::spark::sparkline_cells(
+    out.extend(crate::spark::line_cells(
         hist,
         cols.saturating_sub(4),
         3,
@@ -86,9 +86,9 @@ mod tests {
         // both rates now share row 1
         assert!(cells.iter().any(|c| c.c == '↓' && c.row == 1));
         assert!(cells.iter().any(|c| c.c == '↑' && c.row == 1));
-        // the throughput sparkline draws block glyphs on row 2
+        // the throughput line chart draws braille glyphs on row 2
         assert!(cells
             .iter()
-            .any(|c| c.row == 2 && c.fg == SPARK && c.c != ' '));
+            .any(|c| c.row == 2 && c.fg == SPARK && ('\u{2800}'..='\u{28FF}').contains(&c.c)));
     }
 }
