@@ -46,7 +46,8 @@ impl CrewApp {
                 self.panes.push(pane);
                 self.focus_new_pane();
             }
-            Err(e) => eprintln!("spawn_new_pane failed: {e:#}"),
+            // Surface the failure in the UI — stderr is invisible in the GUI.
+            Err(e) => self.set_status(format!("couldn't open shell: {e}")),
         }
     }
 
@@ -75,7 +76,8 @@ impl CrewApp {
                 self.focus_new_pane();
                 self.redraw();
             }
-            Err(e) => eprintln!("spawn_labeled_terminal failed: {e:#}"),
+            // Surface the failure in the UI — stderr is invisible in the GUI.
+            Err(e) => self.set_status(format!("couldn't run {command}: {e}")),
         }
     }
 

@@ -136,6 +136,21 @@ fn clearall_with_no_terminals_reports_nothing() {
 }
 
 #[test]
+fn spawn_labeled_terminal_failure_is_shown_in_status() {
+    let mut app = CrewApp::default();
+    // A binary that cannot be exec'd → spawn errors; the failure must be visible
+    // (it used to vanish to stderr, invisible in the GUI).
+    app.spawn_labeled_terminal("crew-no-such-binary-xyzzy", &[], "x".to_string());
+    assert!(app.panes.is_empty(), "a failed spawn opens no pane");
+    let msg = app
+        .status
+        .as_ref()
+        .map(|(m, _)| m.clone())
+        .unwrap_or_default();
+    assert!(msg.contains("couldn't run"), "failure shown, got {msg:?}");
+}
+
+#[test]
 fn zoom_chord_toggles() {
     let mut app = CrewApp::default();
     assert!(!app.zoomed);
