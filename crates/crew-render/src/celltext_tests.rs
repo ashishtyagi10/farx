@@ -98,6 +98,28 @@ fn build_pane_buffer_handles_empty_cells() {
 }
 
 #[test]
+fn adjacent_same_style_cells_coalesce_into_one_span() {
+    // Three same-styled cells on row 0 should collapse to a single shaping run.
+    let style = |col: u16, c: char| CellView {
+        col,
+        row: 0,
+        c,
+        fg: (200, 200, 200),
+        bg: (0, 0, 0),
+        bold: false,
+        italic: false,
+    };
+    let mut fs = FontSystem::new();
+    let cells = vec![style(0, 'a'), style(1, 'b'), style(2, 'c')];
+    let buf = build_pane_buffer(&mut fs, &cells, 3, 1, 16.0, 20.0, &params(None));
+    // One physical line, and the glyphs spell "abc" in order.
+    let runs: Vec<_> = buf.layout_runs().collect();
+    assert_eq!(runs.len(), 1, "single row lays out one line");
+    let glyphs = runs[0].glyphs.len();
+    assert_eq!(glyphs, 3, "three columns shape to three glyphs");
+}
+
+#[test]
 fn build_pane_buffer_ignores_out_of_range_cells() {
     let mut fs = FontSystem::new();
     // A cell beyond cols/rows must be dropped without panicking.

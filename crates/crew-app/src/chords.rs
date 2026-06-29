@@ -68,6 +68,7 @@ impl CrewApp {
                 self.spawn_chat_pane(&cmd);
             }
             "w" => return self.close_pane(self.focused),
+            "k" => self.clear_focused_scrollback(),
             "m" => self.toggle_maximize(),
             "[" => self.focused = (self.focused + n - 1) % n,
             "]" => self.focused = (self.focused + 1) % n,

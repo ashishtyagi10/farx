@@ -71,14 +71,28 @@ pub(crate) fn build_pane_buffer(
     buffer
 }
 
+/// Per-column styling key, used to coalesce horizontally-adjacent cells that
+/// share a style into one shaping span. `Default` = an empty cell (rendered as a
+/// space in the buffer's default attrs).
+#[derive(PartialEq)]
+enum RunKey {
+    Default,
+    Styled((u8, u8, u8), bool, bool),
+}
+
 /// Fill an existing `Buffer` with rich-text spans for `cells` laid out in cols×rows.
-pub(crate) fn fill_rich_text<'a>(
+///
+/// The whole grid is built into a single text `String`, and runs of adjacent
+/// cells that share styling collapse into one span. This avoids the previous
+/// one-`String`-and-one-span-per-cell layout (10k+ heap allocations per pane per
+/// frame on a large grid), cutting both allocations and shaping spans sharply.
+pub(crate) fn fill_rich_text(
     buffer: &mut Buffer,
     font_system: &mut FontSystem,
     cells: &[CellView],
     cols: usize,
     rows: usize,
-    family: &'a Option<String>,
+    family: &Option<String>,
 ) {
     let fam = family_from(family);
     // Bucket cells into a 2-D grid (row × col).
@@ -93,40 +107,48 @@ pub(crate) fn fill_rich_text<'a>(
 
     let default_attrs = Attrs::new().family(fam);
 
-    // Collect span strings + attrs; keep strings alive so we can borrow them.
-    let mut span_strings: Vec<String> = Vec::new();
-    let mut span_attrs: Vec<Attrs<'a>> = Vec::new();
-
+    // Build the entire buffer text once, recording `(start, end, key)` byte
+    // ranges into it; consecutive same-key cells extend the current run.
+    let mut text = String::with_capacity(rows * (cols + 1));
+    let mut runs: Vec<(usize, usize, RunKey)> = Vec::new();
     for (row_i, row) in grid.iter().enumerate() {
         for cell_opt in row.iter() {
-            let (ch, attrs) = match cell_opt {
-                Some(cell) => {
-                    let mut a = Attrs::new()
-                        .family(fam)
-                        .color(Color::rgb(cell.fg.0, cell.fg.1, cell.fg.2));
-                    if cell.bold {
-                        a = a.weight(Weight::BOLD);
-                    }
-                    if cell.italic {
-                        a = a.style(Style::Italic);
-                    }
-                    (cell.c.to_string(), a)
-                }
-                None => (" ".to_string(), default_attrs.clone()),
+            let (ch, key) = match cell_opt {
+                Some(cell) => (cell.c, RunKey::Styled(cell.fg, cell.bold, cell.italic)),
+                None => (' ', RunKey::Default),
             };
-            span_strings.push(ch);
-            span_attrs.push(attrs);
+            let start = text.len();
+            text.push(ch);
+            match runs.last_mut() {
+                Some((_, last_end, last_key)) if *last_key == key => *last_end = text.len(),
+                _ => runs.push((start, text.len(), key)),
+            }
         }
         if row_i + 1 < rows {
-            span_strings.push("\n".to_string());
-            span_attrs.push(default_attrs.clone());
+            let start = text.len();
+            text.push('\n');
+            runs.push((start, text.len(), RunKey::Default));
         }
     }
 
-    let spans: Vec<(&str, Attrs<'_>)> = span_strings
+    let spans: Vec<(&str, Attrs<'_>)> = runs
         .iter()
-        .zip(span_attrs.iter())
-        .map(|(s, a)| (s.as_str(), a.clone()))
+        .map(|(s, e, key)| {
+            let attrs = match key {
+                RunKey::Default => default_attrs.clone(),
+                RunKey::Styled(fg, bold, italic) => {
+                    let mut a = Attrs::new().family(fam).color(Color::rgb(fg.0, fg.1, fg.2));
+                    if *bold {
+                        a = a.weight(Weight::BOLD);
+                    }
+                    if *italic {
+                        a = a.style(Style::Italic);
+                    }
+                    a
+                }
+            };
+            (&text[*s..*e], attrs)
+        })
         .collect();
 
     buffer.set_rich_text(font_system, spans, &default_attrs, Shaping::Advanced, None);

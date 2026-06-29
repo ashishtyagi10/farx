@@ -107,6 +107,7 @@ Press **`/keys`** in the input bar for the full list in-app.
 | Font bigger / smaller / reset | **Cmd+=** / **Cmd+-** / **Cmd+0** |
 | Copy visible screen / paste | **Cmd+C** / **Cmd+V** |
 | Close pane / maximize window | **Cmd+W** / **Cmd+M** |
+| Clear focused pane scrollback | **Cmd+K** (or `/clear`) |
 | Scroll focused pane | **Shift+PageUp** / **Shift+PageDown**, or mouse wheel |
 | Quit | **Cmd+Q** (press twice to confirm when panes are open) |
 
