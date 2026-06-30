@@ -51,8 +51,12 @@ pub struct CrewApp {
     pub(crate) broadcast: bool,
     /// Time + pane index of the last left click, for double-click detection.
     pub(crate) last_click: Option<(Instant, usize)>,
-    /// In-progress mouse drag selection over a terminal pane, if any.
+    /// In-progress mouse drag selection over any pane, if any.
     pub(crate) drag: Option<crate::select::Drag>,
+    /// Active text selection over a non-terminal pane (chat/settings/etc.),
+    /// which lack alacritty's grid model. Persists after the drag so `Cmd+C`
+    /// can copy it; cleared by the next press or a scroll. See [`crate::gridsel`].
+    pub(crate) cell_sel: Option<crate::gridsel::CellSel>,
     /// Last `/find` term, so repeating it walks to the next older match.
     pub(crate) last_find: Option<String>,
     /// Crew's working directory: shown in the input-bar legend and used as the

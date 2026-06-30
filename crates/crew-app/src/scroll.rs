@@ -79,6 +79,8 @@ impl CrewApp {
         if lines == 0 {
             return;
         }
+        // A generic selection's cell coords go stale once content scrolls.
+        self.cell_sel = None;
         let Some(i) = self.pane_at_cursor() else {
             return;
         };

@@ -25,6 +25,7 @@ mod gauges;
 mod git;
 pub(crate) mod grid;
 mod gridrows;
+mod gridsel;
 mod handler;
 mod help;
 mod history;

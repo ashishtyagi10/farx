@@ -1,7 +1,9 @@
-//! Mouse text selection in terminal panes: click-drag highlights a range
-//! (Alt+drag for a rectangular block), releasing copies it, and the highlight
-//! is rendered by the terminal model. Built on alacritty's own `Selection`.
+//! Mouse text selection: click-drag highlights a range, releasing copies it.
+//! Terminal panes select through alacritty's own `Selection` (Alt+drag for a
+//! rectangular block); every other pane kind selects through the pane-agnostic
+//! [`crate::gridsel`] path, which works off the rendered cell grid.
 use crate::app::CrewApp;
+use crate::gridsel::CellSel;
 use crate::pane::PaneContent;
 
 /// An in-progress drag selection. `anchor` is the cell where the press landed;
@@ -16,10 +18,10 @@ pub(crate) struct Drag {
 }
 
 impl CrewApp {
-    /// The terminal pane and viewport cell (col, row) under the cursor, or
-    /// `None` when the cursor isn't over a terminal pane's content area. Mirrors
+    /// The pane and viewport cell `(col, row)` under the cursor, for *any* pane
+    /// kind, or `None` when the cursor isn't over a pane's content area. Mirrors
     /// `cursor_cell`'s geometry, including the one-row title-bar offset.
-    pub(crate) fn cursor_term_cell(&self) -> Option<(usize, u16, u16)> {
+    pub(crate) fn cursor_any_cell(&self) -> Option<(usize, u16, u16)> {
         let i = self.pane_at_cursor()?;
         let (cw, ch, _sw, _sh, _scale) = self.frame_geometry()?;
         let rect = self
@@ -33,16 +35,23 @@ impl CrewApp {
         if col < 0 || row < 0 {
             return None;
         }
-        matches!(self.panes.get(i)?.content, PaneContent::Terminal(_))
-            .then_some((i, col as u16, row as u16))
+        Some((i, col as u16, row as u16))
     }
 
-    /// On left-press: focus whatever is under the cursor and, when that's a
-    /// terminal pane, arm a drag selection from this cell (clearing any prior
-    /// selection). Returns the focused pane index, for double-click handling.
+    /// As [`Self::cursor_any_cell`], but only when the cursor is over a terminal
+    /// pane — used by mouse-wheel forwarding into full-screen programs.
+    pub(crate) fn cursor_term_cell(&self) -> Option<(usize, u16, u16)> {
+        let (i, col, row) = self.cursor_any_cell()?;
+        matches!(self.panes.get(i)?.content, PaneContent::Terminal(_)).then_some((i, col, row))
+    }
+
+    /// On left-press: focus whatever is under the cursor and arm a drag
+    /// selection from this cell, clearing any prior selection (terminal or
+    /// generic). Returns the focused pane index, for double-click handling.
     pub(crate) fn selection_press(&mut self) -> Option<usize> {
         let focused = self.focus_at_cursor();
-        if let Some((pane, col, row)) = self.cursor_term_cell() {
+        self.cell_sel = None;
+        if let Some((pane, col, row)) = self.cursor_any_cell() {
             if let Some(PaneContent::Terminal(t)) = self.panes.get_mut(pane).map(|p| &mut p.content)
             {
                 t.pty.sel_clear();
@@ -65,7 +74,7 @@ impl CrewApp {
         let Some(drag) = self.drag else {
             return;
         };
-        let Some((pane, col, row)) = self.cursor_term_cell() else {
+        let Some((pane, col, row)) = self.cursor_any_cell() else {
             return;
         };
         if pane != drag.pane || (!drag.moved && (col, row) == drag.anchor) {
@@ -79,6 +88,13 @@ impl CrewApp {
                 t.pty.sel_start(drag.anchor.0, drag.anchor.1, drag.block);
             }
             t.pty.sel_update(col, row);
+        } else {
+            // Non-terminal pane: track a generic grid selection it can render.
+            self.cell_sel = Some(CellSel {
+                pane: drag.pane,
+                anchor: drag.anchor,
+                cursor: (col, row),
+            });
         }
         if let Some(d) = self.drag.as_mut() {
             d.moved = true;
@@ -102,12 +118,16 @@ impl CrewApp {
         true
     }
 
-    /// The selected text of pane `i`, if it's a terminal with a selection.
+    /// The selected text of pane `i`: from the terminal model for terminals, or
+    /// from the rendered cell grid for any other pane with a generic selection.
     pub(crate) fn pane_selection_text(&self, i: usize) -> Option<String> {
-        match &self.panes.get(i)?.content {
-            PaneContent::Terminal(t) => t.pty.sel_text(),
-            _ => None,
+        let pane = self.panes.get(i)?;
+        if let PaneContent::Terminal(t) = &pane.content {
+            return t.pty.sel_text();
         }
+        let sel = self.cell_sel.as_ref().filter(|s| s.pane == i)?;
+        let text = crate::gridsel::selection_text(&pane.cells(false), sel);
+        (!text.is_empty()).then_some(text)
     }
 
     /// Copy `text` to the system clipboard and flash a status line.

@@ -3,6 +3,7 @@
 //! ride separate text buffers so the border never shifts the content.
 use crew_render::PaneScene;
 
+use crate::gridsel::CellSel;
 use crate::pane::{Pane, PaneContent};
 use crate::panecard::{pane_card, Bar};
 
@@ -17,6 +18,7 @@ pub fn build_scenes(
     focused: Option<usize>,
     broadcast: bool,
     find: Option<&str>,
+    sel: Option<&CellSel>,
     cw: f32,
     ch: f32,
 ) -> Vec<PaneScene> {
@@ -24,6 +26,8 @@ pub fn build_scenes(
     let mut scenes = Vec::with_capacity(panes.len() * 2);
     for (i, p) in panes.iter().enumerate() {
         let foc = focused == Some(i);
+        // This slice is index-rebased (zoom renders a 1-pane slice), so the
+        // selection — keyed by absolute index — is matched to the focused pane.
         push_pane_scenes(
             &mut scenes,
             p,
@@ -31,6 +35,7 @@ pub fn build_scenes(
             foc,
             broadcast,
             find,
+            foc.then_some(sel).flatten(),
             cw,
             ch,
         );
@@ -43,12 +48,14 @@ pub fn build_scenes(
 /// *pane index* of the focused pane.
 /// Callers must have applied `relayout_one` to each placed full pane first
 /// (build_frame does this) — this reads `pane.rect`.
+#[allow(clippy::too_many_arguments)]
 pub fn full_scenes(
     panes: &[Pane],
     placed: &[(usize, crate::layout::Rect)],
     focused: Option<usize>,
     broadcast: bool,
     find: Option<&str>,
+    sel: Option<&CellSel>,
     cw: f32,
     ch: f32,
 ) -> Vec<PaneScene> {
@@ -63,6 +70,7 @@ pub fn full_scenes(
             foc,
             broadcast,
             find,
+            sel.filter(|s| s.pane == idx),
             cw,
             ch,
         );
@@ -88,6 +96,7 @@ fn push_pane_scenes(
     foc: bool,
     broadcast: bool,
     find: Option<&str>,
+    sel: Option<&CellSel>,
     cw: f32,
     ch: f32,
 ) {
@@ -107,6 +116,11 @@ fn push_pane_scenes(
         if let Some(term) = find {
             crate::findhl::highlight(&mut cells, term, p.grid.cols, p.grid.rows);
         }
+    }
+    // Wash a generic mouse selection over a non-terminal pane (terminals carry
+    // their selection in the cell data already).
+    if let Some(s) = sel {
+        crate::gridsel::highlight(&mut cells, s, crew_theme::theme().find_hl_bg);
     }
     let r = p.rect;
     // Content: its own buffer, inset one cell past the top-left border so it

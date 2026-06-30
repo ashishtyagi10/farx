@@ -80,11 +80,13 @@ impl CrewApp {
                 relayout(&mut self.panes[i..=i], &[r], cw, ch);
             }
             let f = (!self.input.focused).then_some(0);
+            let sel = self.cell_sel.as_ref().filter(|s| s.pane == i);
             build_scenes(
                 &self.panes[i..=i],
                 f,
                 self.broadcast,
                 self.last_find.as_deref(),
+                sel,
                 cw,
                 ch,
             )
@@ -99,6 +101,7 @@ impl CrewApp {
                 f,
                 self.broadcast,
                 self.last_find.as_deref(),
+                self.cell_sel.as_ref(),
                 cw,
                 ch,
             )
