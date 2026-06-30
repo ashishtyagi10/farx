@@ -17,9 +17,6 @@ const DIM: Color = Color::Rgb(120, 130, 140);
 /// Dim fieldset frame, matching every other panel's unfocused border/legend.
 const BORDER: (u8, u8, u8) = (110, 110, 120);
 const LEGEND: (u8, u8, u8) = (140, 140, 150);
-/// The card fills solid black — the overlay pass paints a black backdrop behind
-/// these cells, so nothing on the canvas (rain, panes) shows through.
-const BLACK: (u8, u8, u8) = (0, 0, 0);
 
 /// Most command rows shown at once; beyond this the palette scrolls to keep the
 /// selection in view (the list grew past a comfortable popup height).
@@ -40,7 +37,14 @@ pub fn menu_card(matches: &[&Cmd], sel: usize, cols: u16, rows: u16) -> Vec<Cell
     if cols < 4 || rows < 3 || matches.is_empty() {
         return Vec::new();
     }
-    let mut cells = titled_card(cols, rows, "commands", BORDER, LEGEND, BLACK);
+    let mut cells = titled_card(
+        cols,
+        rows,
+        "commands",
+        BORDER,
+        LEGEND,
+        crew_theme::theme().page_bg,
+    );
     // The list fills the 1-cell-inset interior; shift it inside the border.
     for mut cell in menu_cells(matches, sel, cols - 2, rows - 2) {
         cell.col += 1;
@@ -76,14 +80,7 @@ fn menu_cells(matches: &[&Cmd], sel: usize, cols: u16, rows: u16) -> Vec<CellVie
     let mut state = ListState::default();
     state.select(Some(sel.min(matches.len() - 1)));
     StatefulWidget::render(list, buf.area, &mut buf, &mut state);
-    // Transparent: blank cells are skipped, so only glyphs sit on the black card.
-    // Pin BLACK on every returned cell — the theme page_bg fallback in to_cells
-    // would otherwise tint the palette interior with the warm page colour.
-    let mut cells = crate::tui::to_cells(&buf);
-    for cell in &mut cells {
-        cell.bg = BLACK;
-    }
-    cells
+    crate::tui::to_cells(&buf)
 }
 
 #[cfg(test)]
@@ -102,12 +99,16 @@ mod tests {
     }
 
     #[test]
-    fn card_is_fully_black_no_highlight_bar() {
+    fn card_bg_uniform_no_highlight_bar() {
         let matches = crate::suggest::matches("/s");
         let cells = menu_card(&matches, 0, 40, menu_rows(matches.len()));
-        // No selection bar that could wash out text: every cell is transparent
-        // over the black backdrop, so the description stays legible on any row.
-        assert!(cells.iter().all(|c| c.bg == (0, 0, 0)));
+        // No selection bar that could wash out text: every cell background is
+        // uniform (the theme page_bg), so the description stays legible on any row.
+        let bg = crew_theme::theme().page_bg;
+        assert!(
+            cells.iter().all(|c| c.bg == bg),
+            "menu background must be uniform (no highlight bar)"
+        );
     }
 
     #[test]
