@@ -37,7 +37,6 @@ mod keys;
 mod layout;
 mod linkhl;
 mod load;
-mod matrix;
 mod minstrip;
 mod navcard;
 mod navlog;
