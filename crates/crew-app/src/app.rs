@@ -140,6 +140,17 @@ impl CrewApp {
         if let Some(cmd) = slash_command(&line) {
             return self.run_slash_command(cmd);
         }
+        // `!cmd` runs a shell command in its own pane (like `/run`), regardless of
+        // which pane is focused — a quick `ls`/`git status` without leaving the
+        // agent pane you're driving.
+        if let Some(cmd) = bang_command(&line) {
+            if cmd.is_empty() {
+                self.set_status("usage: !<command>");
+            } else {
+                self.run_in_pane(cmd);
+            }
+            return false;
+        }
         // `cd` in the input bar moves Crew's working directory, not the terminal's.
         if self.try_change_dir(&line) {
             return false;
@@ -189,6 +200,12 @@ impl CrewApp {
 /// If `line` is a `/command`, return the trimmed command name; else `None`.
 pub(crate) fn slash_command(line: &str) -> Option<&str> {
     line.strip_prefix('/').map(str::trim)
+}
+
+/// If `line` is a `!command`, return the trimmed command (empty when just `!`);
+/// else `None`. The command runs in its own pane via [`CrewApp::run_in_pane`].
+pub(crate) fn bang_command(line: &str) -> Option<&str> {
+    line.strip_prefix('!').map(str::trim)
 }
 
 /// Bytes to write when submitting an input-bar line to a terminal: the line

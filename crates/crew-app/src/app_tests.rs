@@ -1,4 +1,4 @@
-use super::{slash_command, submit_bytes, CrewApp};
+use super::{bang_command, slash_command, submit_bytes, CrewApp};
 
 #[test]
 fn submit_sends_carriage_return_not_soft_newline() {
@@ -37,6 +37,27 @@ fn slash_command_parses() {
     assert_eq!(slash_command("/ settings "), Some("settings"));
     assert_eq!(slash_command("ls -la"), None);
     assert_eq!(slash_command("/"), Some(""));
+}
+
+#[test]
+fn bang_command_parses() {
+    assert_eq!(bang_command("!ls -la"), Some("ls -la"));
+    assert_eq!(bang_command("! git status "), Some("git status"));
+    assert_eq!(bang_command("!"), Some(""));
+    assert_eq!(bang_command("ls"), None);
+    assert_eq!(bang_command("/run x"), None);
+}
+
+#[test]
+fn bang_runs_command_in_a_pane() {
+    let mut app = CrewApp::default();
+    assert!(app.panes.is_empty());
+    // `!cmd` spawns a pane running the command in the user's shell.
+    assert!(!app.submit_input("!true".to_string()));
+    assert_eq!(app.panes.len(), 1, "!cmd opens a command pane");
+    // bare `!` is just a usage hint — no pane.
+    assert!(!app.submit_input("!".to_string()));
+    assert_eq!(app.panes.len(), 1, "bare ! opens no pane");
 }
 
 #[test]
