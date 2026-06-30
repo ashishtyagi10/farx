@@ -19,7 +19,7 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(window: Arc<Window>, font_size: f32) -> anyhow::Result<Self> {
         let gpu = Gpu::new(window)?;
-        let cell_grid = CellGrid::new(&gpu, font_size);
+        let cell_grid = CellGrid::new(&gpu.device, &gpu.queue, gpu.format, font_size);
         let paper_bg = PaperBgPass::new(&gpu.device, gpu.format);
         Ok(Self {
             gpu,
@@ -73,8 +73,13 @@ impl Renderer {
     /// Upload a scene of panes, render, and present the frame.
     /// Skips the frame on surface errors (Outdated/Lost).
     pub fn frame(&mut self, panes: &[PaneScene]) {
-        self.cell_grid.set_scene(&self.gpu, panes);
-        self.cell_grid.prepare(&self.gpu);
+        self.cell_grid.set_scene(&self.gpu.device, panes);
+        self.cell_grid.prepare(
+            &self.gpu.device,
+            &self.gpu.queue,
+            self.gpu.config.width,
+            self.gpu.config.height,
+        );
 
         let frame = match self.gpu.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t) => t,

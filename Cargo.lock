@@ -593,6 +593,7 @@ dependencies = [
  "anyhow",
  "crew-theme",
  "glyphon",
+ "image",
  "pollster",
  "wgpu",
  "winit",

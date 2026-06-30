@@ -1,7 +1,6 @@
 use glyphon::{Cache, FontSystem, Resolution, SwashCache, TextAtlas, TextRenderer, Viewport};
 
 use crate::celltext::{cell_metrics, monospace_families, FontParams};
-use crate::gpu::Gpu;
 use crate::quads::QuadLayer;
 use crate::roundborder::RoundBorderLayer;
 use crate::scene::{build_scene, PaneBuffer, PaneScene};
@@ -48,14 +47,19 @@ pub struct CellGrid {
 }
 
 impl CellGrid {
-    pub fn new(gpu: &Gpu, font_size: f32) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        format: wgpu::TextureFormat,
+        font_size: f32,
+    ) -> Self {
         let mut font_system = FontSystem::new();
         let swash = SwashCache::new();
-        let cache = Cache::new(&gpu.device);
-        let viewport = Viewport::new(&gpu.device, &cache);
-        let mut atlas = TextAtlas::new(&gpu.device, &gpu.queue, &cache, gpu.format);
+        let cache = Cache::new(device);
+        let viewport = Viewport::new(device, &cache);
+        let mut atlas = TextAtlas::new(device, queue, &cache, format);
         let mk_renderer = |atlas: &mut TextAtlas| {
-            TextRenderer::new(atlas, &gpu.device, wgpu::MultisampleState::default(), None)
+            TextRenderer::new(atlas, device, wgpu::MultisampleState::default(), None)
         };
         let renderer = mk_renderer(&mut atlas);
         let overlay_renderer = mk_renderer(&mut atlas);
@@ -63,9 +67,9 @@ impl CellGrid {
         let font_family: Option<String> = None;
         let (cell_w, cell_h) = cell_metrics(&mut font_system, font_size, &font_family);
         let line_height = font_size * 1.25;
-        let quad_layer = QuadLayer::new(&gpu.device, gpu.format);
-        let overlay_quad_layer = QuadLayer::new(&gpu.device, gpu.format);
-        let round_border_layer = RoundBorderLayer::new(&gpu.device, gpu.format);
+        let quad_layer = QuadLayer::new(device, format);
+        let overlay_quad_layer = QuadLayer::new(device, format);
+        let round_border_layer = RoundBorderLayer::new(device, format);
 
         Self {
             font_system,
@@ -120,7 +124,7 @@ impl CellGrid {
     pub fn resize(&mut self, _width: f32, _height: f32) {}
 
     /// Upload a scene of panes: backgrounds as quads, rounded borders, one Buffer per pane.
-    pub fn set_scene(&mut self, gpu: &Gpu, panes: &[PaneScene]) {
+    pub fn set_scene(&mut self, device: &wgpu::Device, panes: &[PaneScene]) {
         let params = FontParams {
             font_size: self.font_size,
             line_height: self.line_height,
@@ -131,31 +135,26 @@ impl CellGrid {
             build_scene(panes, cw, ch, &mut self.font_system, &params, false);
         let (oquads, obuffers, _) =
             build_scene(panes, cw, ch, &mut self.font_system, &params, true);
-        self.quad_layer.set_quads(&gpu.device, &quads);
-        self.overlay_quad_layer.set_quads(&gpu.device, &oquads);
-        self.round_border_layer.set_borders(&gpu.device, &borders);
+        self.quad_layer.set_quads(device, &quads);
+        self.overlay_quad_layer.set_quads(device, &oquads);
+        self.round_border_layer.set_borders(device, &borders);
         self.pane_buffers = buffers;
         self.overlay_buffers = obuffers;
     }
 
     /// Update viewports and prepare GPU uploads for all pane text areas.
-    pub fn prepare(&mut self, gpu: &Gpu) {
-        let w = gpu.config.width as f32;
-        let h = gpu.config.height as f32;
-        self.quad_layer.set_viewport(&gpu.queue, w, h);
-        self.overlay_quad_layer.set_viewport(&gpu.queue, w, h);
-        self.round_border_layer.set_viewport(&gpu.queue, w, h);
-        self.viewport.update(
-            &gpu.queue,
-            Resolution {
-                width: gpu.config.width,
-                height: gpu.config.height,
-            },
-        );
+    pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) {
+        let w = width as f32;
+        let h = height as f32;
+        self.quad_layer.set_viewport(queue, w, h);
+        self.overlay_quad_layer.set_viewport(queue, w, h);
+        self.round_border_layer.set_viewport(queue, w, h);
+        self.viewport.update(queue, Resolution { width, height });
 
         prepare_renderer(
             &mut self.renderer,
-            gpu,
+            device,
+            queue,
             &mut self.font_system,
             &mut self.atlas,
             &self.viewport,
@@ -164,7 +163,8 @@ impl CellGrid {
         );
         prepare_renderer(
             &mut self.overlay_renderer,
-            gpu,
+            device,
+            queue,
             &mut self.font_system,
             &mut self.atlas,
             &self.viewport,

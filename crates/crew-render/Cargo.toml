@@ -11,3 +11,6 @@ glyphon.workspace = true
 anyhow.workspace = true
 pollster = "0.4"
 crew-theme = { path = "../crew-theme" }
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }

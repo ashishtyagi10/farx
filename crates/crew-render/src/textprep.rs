@@ -3,7 +3,6 @@
 //! popups) without duplicating the TextArea setup.
 use glyphon::{Color, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
 
-use crate::gpu::Gpu;
 use crate::scene::PaneBuffer;
 
 /// Default text colour for glyphs that don't carry their own (Crew's accent).
@@ -13,7 +12,8 @@ const DEFAULT_TEXT: Color = Color::rgb(0, 255, 160);
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_renderer(
     renderer: &mut TextRenderer,
-    gpu: &Gpu,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
     font_system: &mut glyphon::FontSystem,
     atlas: &mut TextAtlas,
     viewport: &Viewport,
@@ -39,14 +39,6 @@ pub(crate) fn prepare_renderer(
         .collect();
 
     renderer
-        .prepare(
-            &gpu.device,
-            &gpu.queue,
-            font_system,
-            atlas,
-            viewport,
-            areas,
-            swash,
-        )
+        .prepare(device, queue, font_system, atlas, viewport, areas, swash)
         .expect("glyphon prepare failed");
 }

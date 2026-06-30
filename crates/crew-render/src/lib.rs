@@ -8,6 +8,7 @@ mod renderer;
 mod roundborder;
 mod scene;
 mod textprep;
+pub use cellgrid::CellGrid;
 pub use cellgrid::CellView;
 pub use paperbg::PaperBgPass;
 pub use renderer::Renderer;
