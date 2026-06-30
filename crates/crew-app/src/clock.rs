@@ -4,9 +4,6 @@ use crew_render::CellView;
 use crate::boxdraw::section_header;
 
 use crate::palette::accent;
-const LABEL: (u8, u8, u8) = (200, 200, 200);
-const BORDER: (u8, u8, u8) = (110, 110, 120);
-const BG: (u8, u8, u8) = (0, 0, 0);
 
 /// Rows the clock section occupies, including a one-row gap below it.
 pub const CLOCK_H: u16 = 4;
@@ -26,9 +23,10 @@ pub fn clock_cells(time: &str, date: &str, cols: u16) -> Vec<CellView> {
     if cols < 10 {
         return Vec::new();
     }
-    let mut out = section_header("TIME", cols, BORDER, accent(), BG);
-    put_centered(&mut out, time, 1, cols, accent(), true);
-    put_centered(&mut out, date, 2, cols, LABEL, false);
+    let t = crew_theme::theme();
+    let mut out = section_header("TIME", cols, t.border_normal, accent(), t.page_bg);
+    put_centered(&mut out, time, 1, cols, accent(), true, t.page_bg);
+    put_centered(&mut out, date, 2, cols, t.ink, false, t.page_bg);
     out
 }
 
@@ -39,6 +37,7 @@ fn put_centered(
     cols: u16,
     fg: (u8, u8, u8),
     bold: bool,
+    bg: (u8, u8, u8),
 ) {
     let w = s.chars().count() as u16;
     let start = if w < cols { (cols - w) / 2 } else { 0 };
@@ -52,7 +51,7 @@ fn put_centered(
             row,
             c,
             fg,
-            bg: BG,
+            bg,
             bold,
             italic: false,
         });

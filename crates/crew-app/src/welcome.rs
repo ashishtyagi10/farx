@@ -3,15 +3,8 @@
 //! the gaps between them, so the wordmark feels part of the rain.
 use crew_render::CellView;
 
-/// Bright white-green for a letter at the peak of its pulse (= the rain's head).
-const HEAD: (u8, u8, u8) = (210, 255, 220);
-const BG: (u8, u8, u8) = (0, 0, 0);
 const WORD: &str = "CREW";
-/// Dim grey for the discoverability hint under the wordmark.
-const HINT_FG: (u8, u8, u8) = (110, 110, 120);
 const HINT: &str = "Cmd+T  new shell    ·    /  commands";
-/// Faint colour for the version stamp in the corner.
-const VERSION_FG: (u8, u8, u8) = (70, 75, 85);
 /// Columns between successive letters (one rain cell shows through each gap).
 const STEP: u16 = 2;
 /// Frames for one brighten→dim→brighten pulse of a letter.
@@ -27,13 +20,13 @@ pub fn anim_should_redraw(tick: u64) -> bool {
 }
 
 /// Rain-like colour for letter `i` at `tick`: each letter pulses between the
-/// bright head and a dim green (never fully gone), out of phase with the others.
+/// bright accent head and a dim green (never fully gone), out of phase with the others.
 fn letter_style(tick: u64, i: usize) -> ((u8, u8, u8), bool) {
     let phase = (tick / 2 + i as u64 * 11) % PULSE;
     let half = PULSE / 2;
     let dist = if phase < half { phase } else { PULSE - phase }; // 0 = brightest
     if dist == 0 {
-        return (HEAD, true);
+        return (crate::palette::accent(), true);
     }
     let frac = dist as f32 / half as f32; // 0..1 → bright..dim
     let g = (235.0 - frac * 150.0) as u8; // 235..85
@@ -56,6 +49,7 @@ pub fn welcome_cells_animated(cols: u16, rows: u16, tick: u64) -> Vec<CellView> 
     let row = rows / 2;
     // Overlaid last so the letters win over any rain glyph in their cell, while
     // the cells between them keep showing the rain underneath.
+    let t = crew_theme::theme();
     for (i, &ch) in letters.iter().enumerate() {
         let (fg, bold) = letter_style(tick, i);
         cells.push(CellView {
@@ -63,7 +57,7 @@ pub fn welcome_cells_animated(cols: u16, rows: u16, tick: u64) -> Vec<CellView> 
             row,
             c: ch,
             fg,
-            bg: BG,
+            bg: t.page_bg,
             bold,
             italic: false,
         });
@@ -79,8 +73,8 @@ pub fn welcome_cells_animated(cols: u16, rows: u16, tick: u64) -> Vec<CellView> 
                 col: hstart + i as u16,
                 row: hint_row,
                 c: ch,
-                fg: HINT_FG,
-                bg: BG,
+                fg: t.hint_fg,
+                bg: t.page_bg,
                 bold: false,
                 italic: false,
             });
@@ -97,8 +91,8 @@ pub fn welcome_cells_animated(cols: u16, rows: u16, tick: u64) -> Vec<CellView> 
                 col: vstart + i as u16,
                 row: rows - 1,
                 c: ch,
-                fg: VERSION_FG,
-                bg: BG,
+                fg: t.dim,
+                bg: t.page_bg,
                 bold: false,
                 italic: false,
             });
@@ -122,11 +116,13 @@ mod tests {
                 .any(|c| c.c == ch && c.row == 12 && c.fg.1 >= c.fg.0 && c.fg.1 > 80));
         }
         // the dim hint is shown two rows below the wordmark
-        assert!(cells.iter().any(|c| c.row == 14 && c.fg == HINT_FG));
+        assert!(cells
+            .iter()
+            .any(|c| c.row == 14 && c.fg == crew_theme::theme().hint_fg));
         // a faint version stamp sits on the bottom row
         assert!(cells
             .iter()
-            .any(|c| c.c == 'v' && c.row == 23 && c.fg == VERSION_FG));
+            .any(|c| c.c == 'v' && c.row == 23 && c.fg == crew_theme::theme().dim));
     }
 
     #[test]

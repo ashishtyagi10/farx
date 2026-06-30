@@ -6,11 +6,6 @@ use crew_render::CellView;
 use crate::boxdraw::section_header;
 
 use crate::palette::accent;
-const TITLE_ON: (u8, u8, u8) = (225, 225, 225);
-const TITLE_OFF: (u8, u8, u8) = (150, 150, 160);
-const ACTIVITY: (u8, u8, u8) = (120, 200, 255);
-const BORDER: (u8, u8, u8) = (110, 110, 120);
-const BG: (u8, u8, u8) = (0, 0, 0);
 
 /// One row of the PANES list.
 pub struct PaneRow {
@@ -23,14 +18,15 @@ pub struct PaneRow {
 /// Render the PANES section: a `PANES` rule on row 0, then one row per pane
 /// (up to `limit`) beneath it.
 pub fn pane_cells(panes: &[PaneRow], cols: u16, limit: usize) -> Vec<CellView> {
-    let mut out = section_header("PANES", cols, BORDER, accent(), BG);
+    let t = crew_theme::theme();
+    let mut out = section_header("PANES", cols, t.border_normal, accent(), t.page_bg);
     for (k, p) in panes.iter().take(limit).enumerate() {
         let row = 1 + k as u16;
         let head = format!("{} {}", if p.focused { '▸' } else { ' ' }, p.index);
-        let head_fg = if p.focused { accent() } else { TITLE_OFF };
-        write(&mut out, &head, 2, row, head_fg, cols - 1);
+        let head_fg = if p.focused { accent() } else { t.text_muted };
+        write(&mut out, &head, 2, row, head_fg, cols - 1, t.page_bg);
         let tstart = 2 + head.chars().count() as u16 + 1;
-        let title_fg = if p.focused { TITLE_ON } else { TITLE_OFF };
+        let title_fg = if p.focused { t.ink } else { t.text_muted };
         write(
             &mut out,
             &p.title,
@@ -38,16 +34,33 @@ pub fn pane_cells(panes: &[PaneRow], cols: u16, limit: usize) -> Vec<CellView> {
             row,
             title_fg,
             cols.saturating_sub(3),
+            t.page_bg,
         );
         if p.activity {
-            write(&mut out, "●", cols.saturating_sub(2), row, ACTIVITY, cols);
+            write(
+                &mut out,
+                "●",
+                cols.saturating_sub(2),
+                row,
+                t.activity,
+                cols,
+                t.page_bg,
+            );
         }
     }
     out
 }
 
 /// Write `s` at `(col, row)`, stopping before `max_col`.
-fn write(out: &mut Vec<CellView>, s: &str, col: u16, row: u16, fg: (u8, u8, u8), max_col: u16) {
+fn write(
+    out: &mut Vec<CellView>,
+    s: &str,
+    col: u16,
+    row: u16,
+    fg: (u8, u8, u8),
+    max_col: u16,
+    bg: (u8, u8, u8),
+) {
     for (i, c) in s.chars().enumerate() {
         let x = col + i as u16;
         if x >= max_col {
@@ -58,7 +71,7 @@ fn write(out: &mut Vec<CellView>, s: &str, col: u16, row: u16, fg: (u8, u8, u8),
             row,
             c,
             fg,
-            bg: BG,
+            bg,
             bold: false,
             italic: false,
         });
@@ -89,14 +102,14 @@ mod tests {
         assert!(cells.iter().any(|c| c.c == '▸' && c.row == 1));
         assert!(cells
             .iter()
-            .any(|c| c.c == 'b' && c.row == 1 && c.fg == TITLE_ON));
+            .any(|c| c.c == 'b' && c.row == 1 && c.fg == crew_theme::theme().ink));
         // the unfocused pane's title is dimmed on row 2, with an activity dot
         assert!(cells
             .iter()
-            .any(|c| c.c == 's' && c.row == 2 && c.fg == TITLE_OFF));
+            .any(|c| c.c == 's' && c.row == 2 && c.fg == crew_theme::theme().text_muted));
         assert!(cells
             .iter()
-            .any(|c| c.c == '●' && c.row == 2 && c.fg == ACTIVITY));
+            .any(|c| c.c == '●' && c.row == 2 && c.fg == crew_theme::theme().activity));
     }
 
     #[test]

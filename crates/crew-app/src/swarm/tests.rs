@@ -145,8 +145,12 @@ fn swarm_cells_hud_row_present() {
 
     let hud: Vec<_> = cells.iter().filter(|c| c.row == 0).collect();
     assert!(!hud.is_empty(), "HUD row 0 must have cells");
-    // HUD background should be the dark navy (20,20,40).
-    assert_eq!(hud[0].bg, (20, 20, 40), "HUD bg colour mismatch");
+    // HUD background should be the themed page background.
+    assert_eq!(
+        hud[0].bg,
+        crew_theme::theme().page_bg,
+        "HUD bg colour mismatch"
+    );
 }
 
 #[test]
@@ -162,9 +166,10 @@ fn swarm_cells_content_offset_by_hud() {
 
     let cells = swarm_cells(&graph, &fleet, 40, 10);
     // All non-HUD cells must be at row >= 1.
+    let hud_bg = crew_theme::theme().page_bg;
     let bad: Vec<_> = cells
         .iter()
-        .filter(|c| c.row == 0 && c.bg != (20, 20, 40))
+        .filter(|c| c.row == 0 && c.bg != hud_bg)
         .collect();
     assert!(bad.is_empty(), "non-HUD cell at row 0");
 }

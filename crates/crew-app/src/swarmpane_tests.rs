@@ -131,8 +131,10 @@ fn cells_have_hud_row_when_running() {
     let pane = SwarmPane::demo();
     let cells = pane.cells(60, 12);
     assert!(
-        cells.iter().any(|c| c.row == 0 && c.bg == (20, 20, 40)),
-        "row 0 must carry the dark-navy HUD"
+        cells
+            .iter()
+            .any(|c| c.row == 0 && c.bg == crew_theme::theme().page_bg),
+        "row 0 must carry the themed HUD background"
     );
 }
 

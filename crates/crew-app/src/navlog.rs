@@ -7,9 +7,6 @@ use crew_render::CellView;
 use crate::boxdraw::section_header;
 
 use crate::palette::accent;
-const TEXT: (u8, u8, u8) = (165, 170, 180);
-const BORDER: (u8, u8, u8) = (110, 110, 120);
-const BG: (u8, u8, u8) = (0, 0, 0);
 
 /// Most recent log entries shown in the LOG section (older ones scroll off).
 pub const LOG_LINES: usize = 5;
@@ -32,17 +29,34 @@ pub fn log_cells(entries: &[String], cols: u16, max_lines: usize) -> Vec<CellVie
     if entries.is_empty() || max_lines == 0 || cols < 4 {
         return Vec::new();
     }
-    let mut out = section_header("LOG", cols, BORDER, accent(), BG);
+    let t = crew_theme::theme();
+    let mut out = section_header("LOG", cols, t.border_normal, accent(), t.page_bg);
     let shown = entries.len().min(max_lines);
     let start = entries.len() - shown;
     for (k, e) in entries[start..].iter().enumerate() {
-        write(&mut out, e, 2, 1 + k as u16, TEXT, cols.saturating_sub(1));
+        write(
+            &mut out,
+            e,
+            2,
+            1 + k as u16,
+            t.text_muted,
+            cols.saturating_sub(1),
+            t.page_bg,
+        );
     }
     out
 }
 
 /// Write `s` at `(col, row)`, stopping before `max_col`.
-fn write(out: &mut Vec<CellView>, s: &str, col: u16, row: u16, fg: (u8, u8, u8), max_col: u16) {
+fn write(
+    out: &mut Vec<CellView>,
+    s: &str,
+    col: u16,
+    row: u16,
+    fg: (u8, u8, u8),
+    max_col: u16,
+    bg: (u8, u8, u8),
+) {
     for (i, c) in s.chars().enumerate() {
         let x = col + i as u16;
         if x >= max_col {
@@ -53,7 +67,7 @@ fn write(out: &mut Vec<CellView>, s: &str, col: u16, row: u16, fg: (u8, u8, u8),
             row,
             c,
             fg,
-            bg: BG,
+            bg,
             bold: false,
             italic: false,
         });

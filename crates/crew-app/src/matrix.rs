@@ -3,7 +3,6 @@
 //! a frame is a pure function of `(cols, rows, tick)`.
 use crew_render::CellView;
 
-const BG: (u8, u8, u8) = (0, 0, 0);
 const TRAIL: i64 = 14;
 const GAP: i64 = 8;
 
@@ -63,7 +62,7 @@ pub fn rain(cols: u16, rows: u16, tick: u64) -> Vec<CellView> {
                 row: r as u16,
                 c: glyph(c, r as u16, salt),
                 fg,
-                bg: BG,
+                bg: crew_theme::theme().page_bg,
                 bold,
                 italic: false,
             });

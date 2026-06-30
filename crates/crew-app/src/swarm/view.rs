@@ -20,6 +20,7 @@ pub fn swarm_cells(graph: &TaskGraph, fleet: &Fleet, cols: u16, rows: u16) -> Ve
     let view = fleet_view(graph, fleet, cols as usize);
     let glyphs = render_cells(&view, cols, content_rows);
 
+    let theme = crew_theme::theme();
     let mut cells: Vec<CellView> = glyphs
         .into_iter()
         .map(|g| {
@@ -29,7 +30,7 @@ pub fn swarm_cells(graph: &TaskGraph, fleet: &Fleet, cols: u16, rows: u16) -> Ve
                 row: g.row.saturating_add(1), // shift below HUD
                 c: g.ch,
                 fg: (r, gv, b),
-                bg: (0, 0, 0),
+                bg: theme.page_bg,
                 bold: false,
                 italic: false,
             }
@@ -53,8 +54,8 @@ pub fn swarm_cells(graph: &TaskGraph, fleet: &Fleet, cols: u16, rows: u16) -> Ve
             col: col as u16,
             row: 0,
             c: ch,
-            fg: (200, 200, 200),
-            bg: (20, 20, 40),
+            fg: theme.ink,
+            bg: theme.page_bg,
             bold: false,
             italic: false,
         });
@@ -67,6 +68,7 @@ pub fn swarm_cells(graph: &TaskGraph, fleet: &Fleet, cols: u16, rows: u16) -> Ve
 /// a cancelled run doesn't just look "done".
 pub fn cancelled_notice(cols: u16, rows: u16) -> Vec<CellView> {
     let last = rows.saturating_sub(1);
+    let page_bg = crew_theme::theme().page_bg;
     "budget exceeded — swarm cancelled"
         .chars()
         .take(cols as usize)
@@ -76,7 +78,7 @@ pub fn cancelled_notice(cols: u16, rows: u16) -> Vec<CellView> {
             row: last,
             c,
             fg: (235, 180, 70),
-            bg: (0, 0, 0),
+            bg: page_bg,
             bold: true,
             italic: false,
         })

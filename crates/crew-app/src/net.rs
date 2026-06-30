@@ -4,9 +4,6 @@ use crew_render::CellView;
 use crate::boxdraw::section_header;
 
 use crate::palette::accent;
-const LABEL: (u8, u8, u8) = (200, 200, 200);
-const BORDER: (u8, u8, u8) = (110, 110, 120);
-const BG: (u8, u8, u8) = (0, 0, 0);
 /// Blue-cyan for the throughput sparkline (distinct from the green CPU chart).
 const SPARK: (u8, u8, u8) = (120, 200, 255);
 
@@ -28,13 +25,15 @@ pub fn net_cells(rx: u64, tx: u64, hist: &crate::spark::History, cols: u16) -> V
     if cols < 10 {
         return Vec::new();
     }
-    let mut out = section_header("NET", cols, BORDER, accent(), BG);
+    let t = crew_theme::theme();
+    let mut out = section_header("NET", cols, t.border_normal, accent(), t.page_bg);
     put(
         &mut out,
         &format!("↓ {}  ↑ {}", rate(rx), rate(tx)),
         1,
         cols,
-        LABEL,
+        t.ink,
+        t.page_bg,
     );
     out.extend(crate::spark::line_cells(
         hist,
@@ -47,7 +46,7 @@ pub fn net_cells(rx: u64, tx: u64, hist: &crate::spark::History, cols: u16) -> V
     out
 }
 
-fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8)) {
+fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8), bg: (u8, u8, u8)) {
     let max = cols.saturating_sub(4) as usize;
     for (i, c) in s.chars().take(max).enumerate() {
         out.push(CellView {
@@ -55,7 +54,7 @@ fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8)) 
             row,
             c,
             fg,
-            bg: BG,
+            bg,
             bold: false,
             italic: false,
         });

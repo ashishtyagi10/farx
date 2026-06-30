@@ -5,10 +5,6 @@ use crew_render::CellView;
 use crate::boxdraw::section_header;
 
 use crate::palette::accent;
-const LABEL: (u8, u8, u8) = (200, 200, 200);
-const DIM: (u8, u8, u8) = (150, 150, 160);
-const BORDER: (u8, u8, u8) = (110, 110, 120);
-const BG: (u8, u8, u8) = (0, 0, 0);
 
 /// Current `(name, uptime)` display strings, e.g. `("mbp · macOS", "up 3h 12m")`.
 pub fn host_strings() -> (String, String) {
@@ -39,14 +35,15 @@ pub fn host_cells(name: &str, uptime: &str, cols: u16) -> Vec<CellView> {
     if cols < 10 {
         return Vec::new();
     }
-    let mut out = section_header("HOST", cols, BORDER, accent(), BG);
-    put(&mut out, name, 1, cols, LABEL);
-    put(&mut out, uptime, 2, cols, DIM);
+    let t = crew_theme::theme();
+    let mut out = section_header("HOST", cols, t.border_normal, accent(), t.page_bg);
+    put(&mut out, name, 1, cols, t.ink, t.page_bg);
+    put(&mut out, uptime, 2, cols, t.text_muted, t.page_bg);
     out
 }
 
 /// Draw `s` at `row`, indented to align under the section legend, clipped to `cols`.
-fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8)) {
+fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8), bg: (u8, u8, u8)) {
     let max = cols.saturating_sub(4) as usize;
     for (i, c) in s.chars().take(max).enumerate() {
         out.push(CellView {
@@ -54,7 +51,7 @@ fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8)) 
             row,
             c,
             fg,
-            bg: BG,
+            bg,
             bold: false,
             italic: false,
         });

@@ -8,9 +8,6 @@ use crate::boxdraw::section_header;
 use crate::palette::accent;
 const AMBER: (u8, u8, u8) = (230, 180, 90);
 const RED: (u8, u8, u8) = (230, 90, 90);
-const DIM: (u8, u8, u8) = (150, 150, 160);
-const BORDER: (u8, u8, u8) = (110, 110, 120);
-const BG: (u8, u8, u8) = (0, 0, 0);
 
 /// Current `(one, five, fifteen)`-minute load averages (0.0 where unsupported).
 pub fn load_avg() -> (f64, f64, f64) {
@@ -42,7 +39,8 @@ fn load_color(one: f64, cores: f64) -> (u8, u8, u8) {
 /// Render the load section: a `LOAD` rule on row 0 and the three averages on
 /// row 1, the trio coloured by the 1-minute load relative to `cores`.
 pub fn load_cells(one: f64, five: f64, fifteen: f64, cores: f64, cols: u16) -> Vec<CellView> {
-    let mut out = section_header("LOAD", cols, BORDER, accent(), BG);
+    let t = crew_theme::theme();
+    let mut out = section_header("LOAD", cols, t.border_normal, accent(), t.page_bg);
     let fg = load_color(one, cores);
     let nums = format!("{one:.2}  {five:.2}  {fifteen:.2}");
     let max = cols.saturating_sub(4) as usize;
@@ -52,7 +50,7 @@ pub fn load_cells(one: f64, five: f64, fifteen: f64, cores: f64, cols: u16) -> V
             row: 1,
             c,
             fg,
-            bg: BG,
+            bg: t.page_bg,
             bold: false,
             italic: false,
         });
@@ -66,8 +64,8 @@ pub fn load_cells(one: f64, five: f64, fifteen: f64, cores: f64, cols: u16) -> V
                 col: 3 + (hstart + i) as u16,
                 row: 1,
                 c,
-                fg: DIM,
-                bg: BG,
+                fg: t.text_muted,
+                bg: t.page_bg,
                 bold: false,
                 italic: false,
             });

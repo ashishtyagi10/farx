@@ -8,9 +8,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, List, ListItem, Widget};
 
 use crate::palette::accent_color;
-const TEXT: Color = Color::Rgb(220, 220, 220);
-const DIM: Color = Color::Rgb(150, 150, 160);
-const PANEL: Color = Color::Rgb(18, 18, 30);
 
 /// `(keys, description)` rows shown in the overlay.
 const BINDINGS: &[(&str, &str)] = &[
@@ -47,11 +44,15 @@ pub fn help_cells(cols: u16, rows: u16) -> Vec<CellView> {
     if cols < 12 || rows < 4 {
         return Vec::new();
     }
+    let t = crew_theme::theme();
+    let text_col = Color::Rgb(t.ink.0, t.ink.1, t.ink.2);
+    let dim_col = Color::Rgb(t.text_muted.0, t.text_muted.1, t.text_muted.2);
+    let panel_col = Color::Rgb(t.page_bg.0, t.page_bg.1, t.page_bg.2);
     let mut buf = Buffer::empty(Rect::new(0, 0, cols, rows));
     let item = |left: &str, right: &str| {
         ListItem::new(Line::from(vec![
             Span::styled(format!("{left:<26}"), Style::new().fg(accent_color())),
-            Span::styled(right.to_string(), Style::new().fg(TEXT)),
+            Span::styled(right.to_string(), Style::new().fg(text_col)),
         ]))
     };
     let mut items: Vec<ListItem> = BINDINGS.iter().map(|(k, d)| item(k, d)).collect();
@@ -62,7 +63,7 @@ pub fn help_cells(cols: u16, rows: u16) -> Vec<CellView> {
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(accent_color()))
-        .style(Style::new().bg(PANEL))
+        .style(Style::new().bg(panel_col))
         .title(Span::styled(
             format!(" keys & commands · crew v{} ", env!("CARGO_PKG_VERSION")),
             Style::new().fg(accent_color()),
@@ -76,7 +77,7 @@ pub fn help_cells(cols: u16, rows: u16) -> Vec<CellView> {
     for (i, ch) in hint.chars().enumerate() {
         let col = hint_col + i as u16;
         if let Some(cell) = buf.cell_mut((col, rows - 1)) {
-            cell.set_char(ch).set_fg(DIM);
+            cell.set_char(ch).set_fg(dim_col);
         }
     }
     crate::tui::to_cells_opaque(&buf)

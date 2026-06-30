@@ -14,9 +14,6 @@ use crate::suggest::Cmd;
 
 use crate::palette::accent_color;
 const DIM: Color = Color::Rgb(120, 130, 140);
-/// Dim fieldset frame, matching every other panel's unfocused border/legend.
-const BORDER: (u8, u8, u8) = (110, 110, 120);
-const LEGEND: (u8, u8, u8) = (140, 140, 150);
 
 /// Most command rows shown at once; beyond this the palette scrolls to keep the
 /// selection in view (the list grew past a comfortable popup height).
@@ -37,13 +34,14 @@ pub fn menu_card(matches: &[&Cmd], sel: usize, cols: u16, rows: u16) -> Vec<Cell
     if cols < 4 || rows < 3 || matches.is_empty() {
         return Vec::new();
     }
+    let t = crew_theme::theme();
     let mut cells = titled_card(
         cols,
         rows,
         "commands",
-        BORDER,
-        LEGEND,
-        crew_theme::theme().page_bg,
+        t.border_normal,
+        t.legend_off,
+        t.page_bg,
     );
     // The list fills the 1-cell-inset interior; shift it inside the border.
     for mut cell in menu_cells(matches, sel, cols - 2, rows - 2) {

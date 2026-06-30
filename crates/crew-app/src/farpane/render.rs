@@ -13,12 +13,8 @@ use ratatui::widgets::{
 use super::{FarPane, Panel, Side};
 
 use crate::palette::accent_color;
-const TEXT: Color = Color::Rgb(200, 200, 200);
-const DIM: Color = Color::Rgb(120, 130, 140);
+/// Blue-cyan for directory entries (semantic file type indicator).
 const DIR: Color = Color::Rgb(120, 200, 255);
-const BAR_BG: Color = Color::Rgb(0, 40, 80);
-const BAR_FG: Color = Color::Rgb(230, 230, 230);
-const BLACK: Color = Color::Rgb(0, 0, 0);
 
 /// Function-key labels shown along the bottom bar (classic Far layout).
 const FKEYS: [(&str, &str); 8] = [
@@ -53,7 +49,11 @@ pub(crate) fn render(p: &FarPane, cols: u16, rows: u16) -> Vec<CellView> {
 
 /// Render one directory panel: a rounded box (path as legend) with the listing.
 fn panel(buf: &mut Buffer, area: Rect, panel: &Panel, active: bool) {
-    let edge = if active { accent_color() } else { DIM };
+    let t = crew_theme::theme();
+    let dim_col = Color::Rgb(t.text_muted.0, t.text_muted.1, t.text_muted.2);
+    let text_col = Color::Rgb(t.ink.0, t.ink.1, t.ink.2);
+    let page_col = Color::Rgb(t.page_bg.0, t.page_bg.1, t.page_bg.2);
+    let edge = if active { accent_color() } else { dim_col };
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(edge))
@@ -77,14 +77,14 @@ fn panel(buf: &mut Buffer, area: Rect, panel: &Panel, active: bool) {
             } else {
                 e.name.clone()
             };
-            let fg = if e.is_dir { DIR } else { TEXT };
+            let fg = if e.is_dir { DIR } else { text_col };
             ListItem::new(Line::styled(label, Style::new().fg(fg)))
         })
         .collect();
     let hl = if active {
-        Style::new().fg(BLACK).bg(accent_color())
+        Style::new().fg(page_col).bg(accent_color())
     } else {
-        Style::new().fg(BLACK).bg(DIM)
+        Style::new().fg(page_col).bg(dim_col)
     };
     let mut state = ListState::default();
     state.select(Some(panel.sel - start));
@@ -111,33 +111,39 @@ fn legend(cwd: &std::path::Path, width: u16) -> String {
 
 /// The Far-style function-key bar across the bottom row.
 fn function_bar(buf: &mut Buffer, area: Rect) {
+    let t = crew_theme::theme();
+    let bar_bg = Color::Rgb(t.page_bg.0, t.page_bg.1, t.page_bg.2);
+    let bar_fg = Color::Rgb(t.ink.0, t.ink.1, t.ink.2);
     let mut spans = Vec::new();
     for (k, label) in FKEYS {
         spans.push(Span::styled(
             format!("F{k}"),
-            Style::new().fg(accent_color()).bg(BAR_BG),
+            Style::new().fg(accent_color()).bg(bar_bg),
         ));
         spans.push(Span::styled(
             format!("{label} "),
-            Style::new().fg(BAR_FG).bg(BAR_BG),
+            Style::new().fg(bar_fg).bg(bar_bg),
         ));
     }
     Paragraph::new(Line::from(spans))
-        .style(Style::new().bg(BAR_BG))
+        .style(Style::new().bg(bar_bg))
         .render(area, buf);
 }
 
 /// The bottom-row text prompt (F7 make-folder), replacing the function bar.
 fn prompt_bar(buf: &mut Buffer, area: Rect, prompt: &super::Prompt) {
+    let t = crew_theme::theme();
+    let bar_bg = Color::Rgb(t.page_bg.0, t.page_bg.1, t.page_bg.2);
+    let bar_fg = Color::Rgb(t.ink.0, t.ink.1, t.ink.2);
     let label = match prompt.kind {
         super::PromptKind::MkDir => "Create folder: ",
     };
     let line = format!("{label}{}▏", prompt.input);
     Paragraph::new(Line::from(Span::styled(
         line,
-        Style::new().fg(BAR_FG).bg(BAR_BG),
+        Style::new().fg(bar_fg).bg(bar_bg),
     )))
-    .style(Style::new().bg(BAR_BG))
+    .style(Style::new().bg(bar_bg))
     .render(area, buf);
 }
 

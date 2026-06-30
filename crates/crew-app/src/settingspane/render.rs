@@ -13,9 +13,6 @@ use ratatui::widgets::{
 use super::{Field, SettingsPane};
 
 use crate::palette::accent_color;
-const TEXT: Color = Color::Rgb(200, 200, 200);
-const DIM: Color = Color::Rgb(120, 130, 140);
-const BG: Color = Color::Rgb(0, 0, 0);
 
 /// Render the form into a ratatui buffer, then hand the cells to the GPU.
 pub(crate) fn render(p: &SettingsPane, cols: u16, rows: u16) -> Vec<CellView> {
@@ -129,8 +126,11 @@ fn stacked_boxes<const N: usize>(col: Rect) -> [Rect; N] {
 
 /// A rounded input box (field name as the legend) with the value inside.
 fn input_box(buf: &mut Buffer, area: Rect, legend: &str, value: &str, focused: bool, cursor: bool) {
-    let edge = if focused { accent_color() } else { DIM };
-    let fg = if focused { accent_color() } else { TEXT };
+    let t = crew_theme::theme();
+    let dim_col = Color::Rgb(t.text_muted.0, t.text_muted.1, t.text_muted.2);
+    let text_col = Color::Rgb(t.ink.0, t.ink.1, t.ink.2);
+    let edge = if focused { accent_color() } else { dim_col };
+    let fg = if focused { accent_color() } else { text_col };
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(edge))
@@ -155,7 +155,9 @@ fn buttons(buf: &mut Buffer, area: Rect, f: Field) {
 }
 
 fn button_span(text: &str, focused: bool) -> Span<'static> {
-    let mut style = Style::new().fg(if focused { accent_color() } else { DIM });
+    let t = crew_theme::theme();
+    let dim_col = Color::Rgb(t.text_muted.0, t.text_muted.1, t.text_muted.2);
+    let mut style = Style::new().fg(if focused { accent_color() } else { dim_col });
     if focused {
         style = style.add_modifier(Modifier::BOLD);
     }
@@ -177,9 +179,11 @@ fn dropdown(buf: &mut Buffer, p: &SettingsPane, anchor: Rect) {
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(accent_color()))
         .title(Span::styled(" fonts ", Style::new().fg(accent_color())));
+    let t = crew_theme::theme();
+    let page_col = Color::Rgb(t.page_bg.0, t.page_bg.1, t.page_bg.2);
     let list = List::new(items)
         .block(block)
-        .highlight_style(Style::new().fg(BG).bg(accent_color()))
+        .highlight_style(Style::new().fg(page_col).bg(accent_color()))
         .highlight_symbol("› ");
     let mut state = ListState::default();
     state.select(Some(p.family_sel));

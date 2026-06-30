@@ -13,11 +13,6 @@ use crate::palette::accent;
 
 /// Minimum seconds between git queries while the working directory is unchanged.
 const GIT_POLL_SECS: u64 = 3;
-const LABEL: (u8, u8, u8) = (200, 200, 200);
-const DIM: (u8, u8, u8) = (150, 150, 160);
-const BORDER: (u8, u8, u8) = (110, 110, 120);
-const DIRTY: (u8, u8, u8) = (230, 180, 90);
-const BG: (u8, u8, u8) = (0, 0, 0);
 
 /// Branch name, number of changed files, and commits ahead/behind the upstream.
 #[derive(Clone, PartialEq, Eq)]
@@ -173,7 +168,8 @@ fn run(dir: &Path, args: &[&str]) -> Option<String> {
 /// Render the GIT section: a `GIT` rule on row 0, the branch on row 1, and a
 /// clean/dirty marker on row 2.
 pub fn git_cells(info: &GitInfo, cols: u16) -> Vec<CellView> {
-    let mut out = section_header("GIT", cols, BORDER, accent(), BG);
+    let t = crew_theme::theme();
+    let mut out = section_header("GIT", cols, t.border_normal, accent(), t.page_bg);
     let mut head = info.branch.clone();
     if info.ahead > 0 {
         head.push_str(&format!(" ↑{}", info.ahead));
@@ -181,18 +177,18 @@ pub fn git_cells(info: &GitInfo, cols: u16) -> Vec<CellView> {
     if info.behind > 0 {
         head.push_str(&format!(" ↓{}", info.behind));
     }
-    put(&mut out, &head, 1, cols, LABEL);
+    put(&mut out, &head, 1, cols, t.ink, t.page_bg);
     let (marker, fg) = if info.changed > 0 {
-        (format!("● {} changed", info.changed), DIRTY)
+        (format!("● {} changed", info.changed), t.status_fg)
     } else {
-        ("✓ clean".to_string(), DIM)
+        ("✓ clean".to_string(), t.text_muted)
     };
-    put(&mut out, &marker, 2, cols, fg);
+    put(&mut out, &marker, 2, cols, fg, t.page_bg);
     out
 }
 
 /// Draw `s` at `row`, indented to align under the section legend, clipped to `cols`.
-fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8)) {
+fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8), bg: (u8, u8, u8)) {
     let max = cols.saturating_sub(4) as usize;
     for (i, c) in s.chars().take(max).enumerate() {
         out.push(CellView {
@@ -200,7 +196,7 @@ fn put(out: &mut Vec<CellView>, s: &str, row: u16, cols: u16, fg: (u8, u8, u8)) 
             row,
             c,
             fg,
-            bg: BG,
+            bg,
             bold: false,
             italic: false,
         });
@@ -278,10 +274,10 @@ mod tests {
         // branch + ahead arrow on row 1
         assert!(cells.iter().any(|c| c.c == 'm' && c.row == 1));
         assert!(cells.iter().any(|c| c.c == '↑' && c.row == 1));
-        // changed-count marker (amber) on row 2, with the count
+        // changed-count marker (amber/status) on row 2, with the count
         assert!(cells
             .iter()
-            .any(|c| c.c == '●' && c.row == 2 && c.fg == DIRTY));
+            .any(|c| c.c == '●' && c.row == 2 && c.fg == crew_theme::theme().status_fg));
         assert!(cells.iter().any(|c| c.c == '2' && c.row == 2));
     }
 

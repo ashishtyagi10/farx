@@ -2,19 +2,16 @@
 use crew_render::CellView;
 
 use crate::boxdraw;
+use crate::palette::accent;
 use crate::stats::Stats;
 
-const FILL: (u8, u8, u8) = (0, 255, 160);
 const TRACK: (u8, u8, u8) = (70, 70, 80);
-const BG: (u8, u8, u8) = (0, 0, 0);
-const LABEL: (u8, u8, u8) = (200, 200, 200);
-const BORDER: (u8, u8, u8) = (110, 110, 120);
 const HEADER: &str = "SYSTEM";
 
 /// Bar colour by load: accent green when low, amber past 70%, red past 90%.
 fn fill_color(frac: f32) -> (u8, u8, u8) {
     if frac < 0.7 {
-        FILL
+        accent()
     } else if frac < 0.9 {
         (230, 180, 90)
     } else {
@@ -32,6 +29,7 @@ fn gauge_cells(label: &str, frac: f32, row: u16, cols: u16) -> Vec<CellView> {
     let pct_str = format!("{pct:>3}%");
     let pct_len = pct_str.len();
 
+    let t = crew_theme::theme();
     let label_chars: Vec<char> = label.chars().collect();
     let label_len = label_chars.len();
     let mut cells: Vec<CellView> = Vec::with_capacity(cols);
@@ -40,10 +38,10 @@ fn gauge_cells(label: &str, frac: f32, row: u16, cols: u16) -> Vec<CellView> {
         if cells.len() >= cols {
             break;
         }
-        cells.push(cell(i as u16, row, c, LABEL));
+        cells.push(cell(i as u16, row, c, t.ink, t.page_bg));
     }
     if cells.len() < cols {
-        cells.push(cell(label_len as u16, row, ' ', LABEL));
+        cells.push(cell(label_len as u16, row, ' ', t.ink, t.page_bg));
     }
 
     let used = cells.len();
@@ -59,7 +57,7 @@ fn gauge_cells(label: &str, frac: f32, row: u16, cols: u16) -> Vec<CellView> {
         } else {
             ('░', TRACK)
         };
-        cells.push(cell((used + i) as u16, row, c, fg));
+        cells.push(cell((used + i) as u16, row, c, fg, t.page_bg));
     }
 
     let pct_start = cols.saturating_sub(pct_len);
@@ -69,21 +67,21 @@ fn gauge_cells(label: &str, frac: f32, row: u16, cols: u16) -> Vec<CellView> {
             break;
         }
         if col < cells.len() {
-            cells[col] = cell(col as u16, row, c, LABEL);
+            cells[col] = cell(col as u16, row, c, t.ink, t.page_bg);
         } else {
-            cells.push(cell(col as u16, row, c, LABEL));
+            cells.push(cell(col as u16, row, c, t.ink, t.page_bg));
         }
     }
     cells
 }
 
-fn cell(col: u16, row: u16, c: char, fg: (u8, u8, u8)) -> CellView {
+fn cell(col: u16, row: u16, c: char, fg: (u8, u8, u8), bg: (u8, u8, u8)) -> CellView {
     CellView {
         col,
         row,
         c,
         fg,
-        bg: BG,
+        bg,
         bold: false,
         italic: false,
     }
@@ -97,7 +95,14 @@ pub(crate) fn render_stats(stats: Stats, cols: u16, rows: u16) -> Vec<CellView> 
     if cols < 8 || rows < 4 {
         return out;
     }
-    out.extend(boxdraw::section_header(HEADER, cols, BORDER, FILL, BG));
+    let t = crew_theme::theme();
+    out.extend(boxdraw::section_header(
+        HEADER,
+        cols,
+        t.border_normal,
+        accent(),
+        t.page_bg,
+    ));
 
     // Content indented to align under the section legend (col 3).
     let cstart = 3u16;
@@ -128,7 +133,7 @@ mod tests {
 
     #[test]
     fn fill_color_thresholds() {
-        assert_eq!(fill_color(0.5), FILL);
+        assert_eq!(fill_color(0.5), crate::palette::accent());
         assert_eq!(fill_color(0.8), (230, 180, 90));
         assert_eq!(fill_color(0.95), (230, 90, 90));
     }

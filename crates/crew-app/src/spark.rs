@@ -8,8 +8,6 @@ use std::collections::VecDeque;
 
 use crew_render::CellView;
 
-const BG: (u8, u8, u8) = (0, 0, 0);
-
 /// Fixed-capacity ring of recent samples (oldest at the front, newest at back).
 pub struct History {
     cap: usize,
@@ -89,7 +87,7 @@ pub fn line_cells(
             row,
             c: BLOCKS[level],
             fg,
-            bg: BG,
+            bg: crew_theme::theme().page_bg,
             bold: false,
             italic: false,
         });

@@ -6,14 +6,12 @@ use crew_render::CellView;
 use crate::palette::accent;
 use crate::update::{Stage, UpdateState, SPINNER};
 
-const TEXT: (u8, u8, u8) = (185, 190, 200);
-const BG: (u8, u8, u8) = (0, 0, 0);
-
 /// Interior cells for the UPDATE card: line 0 = spinner/result, line 1 = detail.
 pub(crate) fn update_cells(u: &UpdateState, cols: u16, rows: u16) -> Vec<CellView> {
     if cols < 4 || rows == 0 {
         return Vec::new();
     }
+    let t = crew_theme::theme();
     let current = env!("CARGO_PKG_VERSION");
     let spin = SPINNER[u.spinner % SPINNER.len()];
     let (lead, head, detail) = match &u.stage {
@@ -28,34 +26,42 @@ pub(crate) fn update_cells(u: &UpdateState, cols: u16, rows: u16) -> Vec<CellVie
     };
     let max = cols.saturating_sub(1);
     let mut out = Vec::new();
-    out.push(glyph(0, 0, lead, accent()));
-    write(&mut out, &head, 2, 0, TEXT, max);
+    out.push(glyph(0, 0, lead, accent(), t.page_bg));
+    write(&mut out, &head, 2, 0, t.ink, max, t.page_bg);
     if rows > 1 && !detail.is_empty() {
-        write(&mut out, &detail, 2, 1, TEXT, max);
+        write(&mut out, &detail, 2, 1, t.ink, max, t.page_bg);
     }
     out
 }
 
-fn glyph(col: u16, row: u16, c: char, fg: (u8, u8, u8)) -> CellView {
+fn glyph(col: u16, row: u16, c: char, fg: (u8, u8, u8), bg: (u8, u8, u8)) -> CellView {
     CellView {
         col,
         row,
         c,
         fg,
-        bg: BG,
+        bg,
         bold: false,
         italic: false,
     }
 }
 
 /// Write `s` at `(col, row)`, stopping before `max_col`.
-fn write(out: &mut Vec<CellView>, s: &str, col: u16, row: u16, fg: (u8, u8, u8), max_col: u16) {
+fn write(
+    out: &mut Vec<CellView>,
+    s: &str,
+    col: u16,
+    row: u16,
+    fg: (u8, u8, u8),
+    max_col: u16,
+    bg: (u8, u8, u8),
+) {
     for (i, c) in s.chars().enumerate() {
         let x = col + i as u16;
         if x >= max_col {
             break;
         }
-        out.push(glyph(x, row, c, fg));
+        out.push(glyph(x, row, c, fg, bg));
     }
 }
 
