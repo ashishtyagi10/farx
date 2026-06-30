@@ -32,11 +32,13 @@ impl CrewApp {
         let focused = self.focused;
         for (i, p) in self.panes.iter_mut().enumerate() {
             let mut rang = false;
+            let mut new_cwd = None;
             let changed = match &mut p.content {
                 PaneContent::Terminal(t) => {
                     let n = t.pty.try_read() > 0;
                     more_pending |= t.pty.has_pending();
                     rang = t.pty.take_bell();
+                    new_cwd = t.pty.take_cwd();
                     n
                 }
                 PaneContent::Chat(c) => {
@@ -47,6 +49,12 @@ impl CrewApp {
                 PaneContent::Swarm(s) => s.poll(),
                 PaneContent::Settings(_) | PaneContent::Far(_) => false,
             };
+            // Follow `cd` inside the pane: a new OSC 7 cwd report retitles the
+            // pane to that folder (a `/name` override still wins in title_text).
+            if let Some(cwd) = new_cwd {
+                p.dir = Some(cwd);
+                any_changed = true;
+            }
             // Output / bells in a pane you're not watching flag it.
             if i != focused {
                 p.activity |= changed;

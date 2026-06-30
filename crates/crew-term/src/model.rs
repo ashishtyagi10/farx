@@ -10,6 +10,17 @@ use alacritty_terminal::vte::ansi::Processor;
 /// Background painted over selected cells.
 const SELECTION_BG: (u8, u8, u8) = (54, 84, 130);
 
+/// A dark, desaturated (grey) background — the kind agent CLIs paint behind the
+/// line you just sent (e.g. `ESC[48;2;55;55;55m`). The `≤96` cap keeps it dark
+/// (covering ANSI "bright black", 85), and the `≤24` channel spread keeps it
+/// grey, so saturated dark backgrounds that carry meaning (diff red/green, error
+/// rows) are preserved while the muddy echo highlight is dropped.
+fn is_dim_grey((r, g, b): (u8, u8, u8)) -> bool {
+    let mx = r.max(g).max(b);
+    let mn = r.min(g).min(b);
+    mx <= 96 && mx - mn <= 24
+}
+
 use crate::color::{resolve_color, DEFAULT_BG, DEFAULT_FG};
 use crate::listener::TermEvents;
 
@@ -63,6 +74,9 @@ pub(crate) struct TermCore {
     term: Term<TermEvents>,
     parser: Processor,
     events: TermEvents,
+    /// Sniffs OSC 7 working-directory reports — which the ANSI parser ignores —
+    /// so a `cd` inside the pane can retitle it.
+    osc7: crate::osc7::Osc7Scanner,
 }
 
 impl TermCore {
@@ -77,6 +91,7 @@ impl TermCore {
             term,
             parser: Processor::new(),
             events,
+            osc7: crate::osc7::Osc7Scanner::default(),
         }
     }
 
@@ -85,12 +100,19 @@ impl TermCore {
         self.events.title.lock().unwrap().clone()
     }
 
+    /// The directory reported by the program (OSC 7) if it changed since the last
+    /// call, else `None`.
+    pub(crate) fn take_cwd(&mut self) -> Option<std::path::PathBuf> {
+        self.osc7.take_cwd()
+    }
+
     /// Take any pending OSC 52 clipboard-store text (clearing it).
     pub(crate) fn take_clipboard(&self) -> Option<String> {
         self.events.clipboard.lock().unwrap().take()
     }
 
     pub(crate) fn feed(&mut self, bytes: &[u8]) {
+        self.osc7.feed(bytes);
         self.parser.advance(&mut self.term, bytes);
     }
 
@@ -114,6 +136,14 @@ impl TermCore {
                 // (e.g. agent CLIs) use it to "highlight" the line you just sent,
                 // which renders as a hard-to-read block. Dropping the fg/bg swap
                 // shows that text plainly instead.
+                // Agent CLIs (Claude/codex) also paint the just-sent line with a
+                // real dark-grey background (e.g. ESC[48;2;55;55;55m), which reads
+                // as a muddy block on Crew's black canvas. Drop dark, near-grey
+                // backgrounds so that text shows plainly, while keeping saturated
+                // or bright backgrounds that carry meaning (diffs, errors).
+                if is_dim_grey(bg) {
+                    bg = DEFAULT_BG;
+                }
                 // Selected cells take the selection background, drawn over any
                 // program colours (the copied text comes from the engine).
                 if selection.is_some_and(|r| r.contains(ind.point)) {
@@ -243,6 +273,10 @@ impl HeadlessTerm {
         self.core.title()
     }
 
+    pub fn take_cwd(&mut self) -> Option<std::path::PathBuf> {
+        self.core.take_cwd()
+    }
+
     pub fn take_bell(&self) -> bool {
         self.core.take_bell()
     }
@@ -311,6 +345,30 @@ mod selection_tests {
         let h = cells.iter().find(|c| c.c == 'H').expect("H rendered");
         assert_eq!(h.fg, x.fg, "inverse cell should keep the normal foreground");
         assert_eq!(h.bg, x.bg, "inverse cell should keep the normal background");
+    }
+
+    #[test]
+    fn dim_grey_echo_background_is_dropped() {
+        // Agent CLIs paint the just-sent line with a dark-grey background
+        // (ESC[48;2;55;55;55m). 'X' is plain; 'H' carries that grey bg — which
+        // must be dropped so it renders on the same canvas as the plain cell.
+        let mut t = HeadlessTerm::new(GridSize { cols: 20, rows: 2 });
+        t.feed(b"X\x1b[48;2;55;55;55mH\x1b[0m");
+        let cells = t.cells(false);
+        let x = cells.iter().find(|c| c.c == 'X').expect("X rendered");
+        let h = cells.iter().find(|c| c.c == 'H').expect("H rendered");
+        assert_eq!(h.bg, x.bg, "dark-grey echo background should be dropped");
+    }
+
+    #[test]
+    fn saturated_dark_background_is_kept() {
+        // A dark-but-coloured background (e.g. a diff's green) carries meaning and
+        // must survive — only desaturated greys are treated as echo highlights.
+        let mut t = HeadlessTerm::new(GridSize { cols: 20, rows: 2 });
+        t.feed(b"\x1b[48;2;0;60;0mD\x1b[0m");
+        let cells = t.cells(false);
+        let d = cells.iter().find(|c| c.c == 'D').expect("D rendered");
+        assert_eq!(d.bg, (0, 60, 0), "saturated dark background should be kept");
     }
 
     #[test]

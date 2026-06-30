@@ -4,6 +4,7 @@ mod cursor;
 mod listener;
 mod model;
 mod modes;
+mod osc7;
 mod pty;
 pub use model::{GridSize, HeadlessTerm, RenderCell, TermModel};
 pub use modes::InputModes;

@@ -43,6 +43,21 @@ fn osc_title_is_captured() {
 }
 
 #[test]
+fn osc7_cwd_report_is_captured() {
+    let mut term = HeadlessTerm::new(GridSize { cols: 20, rows: 3 });
+    assert_eq!(term.take_cwd(), None);
+    // A shell reports its directory via OSC 7 on each prompt — the ANSI parser
+    // ignores it, so the model sniffs it out of the stream.
+    term.feed(b"\x1b]7;file://host/Users/me/code/crew\x07");
+    assert_eq!(
+        term.take_cwd(),
+        Some(std::path::PathBuf::from("/Users/me/code/crew"))
+    );
+    // One-shot: nothing to take until it changes again.
+    assert_eq!(term.take_cwd(), None);
+}
+
+#[test]
 fn osc52_clipboard_store_is_captured() {
     let mut term = HeadlessTerm::new(GridSize { cols: 20, rows: 3 });
     assert_eq!(term.take_clipboard(), None);

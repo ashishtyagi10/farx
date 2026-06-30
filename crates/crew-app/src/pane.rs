@@ -36,8 +36,9 @@ pub struct Pane {
     pub label: Option<String>,
     /// User-set pane name (via `/name`), shown in the title bar when present.
     pub name: Option<String>,
-    /// The directory this pane was opened in, if any — its folder name is shown
-    /// as the title (below a `/name` override). Static: not the live cwd.
+    /// The pane's working directory, if known — its folder name is shown as the
+    /// title (below a `/name` override). Seeded at spawn and kept live: a `cd`
+    /// inside the pane (reported via OSC 7, see `poll_panes`) updates it.
     pub dir: Option<std::path::PathBuf>,
     /// Unseen output since this pane was last focused (drives the activity dot).
     pub activity: bool,

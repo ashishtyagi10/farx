@@ -203,6 +203,12 @@ impl PtyTerm {
         self.core.title()
     }
 
+    /// The directory the program reported via OSC 7 if it changed since the last
+    /// call, else `None` — used to retitle the pane when the user `cd`s inside it.
+    pub fn take_cwd(&mut self) -> Option<std::path::PathBuf> {
+        self.core.take_cwd()
+    }
+
     /// Take any pending OSC 52 clipboard-store text (clearing it).
     pub fn take_clipboard(&self) -> Option<String> {
         self.core.take_clipboard()
