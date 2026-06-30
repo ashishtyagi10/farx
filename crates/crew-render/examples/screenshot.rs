@@ -64,9 +64,6 @@ fn main() {
 
     let (cell_w, cell_h) = cell_grid.cell_size();
 
-    // --- build the representative scene ---
-    let panes = build_scene(cell_w, cell_h);
-
     // render both themes
     for (theme_id, out_path) in [
         (
@@ -79,6 +76,11 @@ fn main() {
         ),
     ] {
         crew_theme::set_theme(theme_id);
+
+        // Build the scene AFTER set_theme: `place_str` bakes `CellView.bg` from the
+        // active theme's page_bg, so cells must be constructed per-theme for the
+        // CellGrid bg-skip (cell.bg == page_bg) to fire and stay transparent.
+        let panes = build_scene(cell_w, cell_h);
 
         // Upload scene (quads + borders + text buffers).
         cell_grid.set_scene(&device, &panes);
