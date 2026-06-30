@@ -1,33 +1,18 @@
 use alacritty_terminal::term::color::Colors;
 use alacritty_terminal::vte::ansi::{Color, Rgb};
 
-/// Neutral light-grey for unstyled terminal text — natural terminal colours,
-/// not Crew's UI accent (which only themes the app chrome, not shell output).
-pub(crate) const DEFAULT_FG: (u8, u8, u8) = (220, 220, 220);
-pub(crate) const DEFAULT_BG: (u8, u8, u8) = (0, 0, 0);
+/// The active theme's terminal default foreground.
+pub(crate) fn default_fg() -> (u8, u8, u8) {
+    crew_theme::theme().term_fg
+}
 
-/// Standard xterm 16-color palette (indices 0–15) used when the terminal hasn't
-/// explicitly defined those slots in its color table.
-const ANSI16: [(u8, u8, u8); 16] = [
-    (0, 0, 0),       // 0  Black
-    (170, 0, 0),     // 1  Red
-    (0, 170, 0),     // 2  Green
-    (170, 85, 0),    // 3  Yellow (dark)
-    (0, 0, 170),     // 4  Blue
-    (170, 0, 170),   // 5  Magenta
-    (0, 170, 170),   // 6  Cyan
-    (170, 170, 170), // 7  White
-    (85, 85, 85),    // 8  Bright Black
-    (255, 85, 85),   // 9  Bright Red
-    (85, 255, 85),   // 10 Bright Green
-    (255, 255, 85),  // 11 Bright Yellow
-    (85, 85, 255),   // 12 Bright Blue
-    (255, 85, 255),  // 13 Bright Magenta
-    (85, 255, 255),  // 14 Bright Cyan
-    (255, 255, 255), // 15 Bright White
-];
+/// The active theme's terminal default background.
+pub(crate) fn default_bg() -> (u8, u8, u8) {
+    crew_theme::theme().term_bg
+}
 
 pub(crate) fn resolve_color(color: Color, palette: &Colors, default: (u8, u8, u8)) -> (u8, u8, u8) {
+    let ansi = &crew_theme::theme().ansi;
     match color {
         Color::Spec(Rgb { r, g, b }) => (r, g, b),
         Color::Named(named) => {
@@ -35,7 +20,7 @@ pub(crate) fn resolve_color(color: Color, palette: &Colors, default: (u8, u8, u8
             if let Some(rgb) = palette[idx] {
                 (rgb.r, rgb.g, rgb.b)
             } else if idx < 16 {
-                ANSI16[idx]
+                ansi[idx]
             } else {
                 default
             }
@@ -45,10 +30,30 @@ pub(crate) fn resolve_color(color: Color, palette: &Colors, default: (u8, u8, u8
             if let Some(rgb) = palette[idx] {
                 (rgb.r, rgb.g, rgb.b)
             } else if idx < 16 {
-                ANSI16[idx]
+                ansi[idx]
             } else {
                 default
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alacritty_terminal::term::color::Colors;
+    use alacritty_terminal::vte::ansi::{Color, NamedColor};
+
+    #[test]
+    fn named_red_resolves_to_active_theme_ansi() {
+        crew_theme::set_theme(crew_theme::ThemeId::PaperLight);
+        let palette = Colors::default(); // all slots unset → fall back to theme
+        let got = resolve_color(
+            Color::Named(NamedColor::Red),
+            &palette,
+            crew_theme::theme().term_fg,
+        );
+        assert_eq!(got, crew_theme::PAPER_LIGHT.ansi[1]);
+        crew_theme::set_theme(crew_theme::ThemeId::PaperDark);
     }
 }

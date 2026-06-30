@@ -21,7 +21,7 @@ fn is_dim_grey((r, g, b): (u8, u8, u8)) -> bool {
     mx <= 96 && mx - mn <= 24
 }
 
-use crate::color::{resolve_color, DEFAULT_BG, DEFAULT_FG};
+use crate::color::{default_bg, default_fg, resolve_color};
 use crate::listener::TermEvents;
 
 #[derive(Clone, Copy, Debug)]
@@ -130,8 +130,8 @@ impl TermCore {
             .map(|ind| {
                 let bold = ind.flags.contains(Flags::BOLD);
                 let italic = ind.flags.contains(Flags::ITALIC);
-                let fg = resolve_color(ind.fg, palette, DEFAULT_FG);
-                let mut bg = resolve_color(ind.bg, palette, DEFAULT_BG);
+                let fg = resolve_color(ind.fg, palette, default_fg());
+                let mut bg = resolve_color(ind.bg, palette, default_bg());
                 // Reverse-video (SGR 7) is intentionally NOT honoured: programs
                 // (e.g. agent CLIs) use it to "highlight" the line you just sent,
                 // which renders as a hard-to-read block. Dropping the fg/bg swap
@@ -142,7 +142,7 @@ impl TermCore {
                 // backgrounds so that text shows plainly, while keeping saturated
                 // or bright backgrounds that carry meaning (diffs, errors).
                 if is_dim_grey(bg) {
-                    bg = DEFAULT_BG;
+                    bg = default_bg();
                 }
                 // Selected cells take the selection background, drawn over any
                 // program colours (the copied text comes from the engine).

@@ -11,9 +11,12 @@ fn sgr_red_bold_is_resolved_to_rgb_and_flags() {
         .find(|c| c.c == 'X')
         .expect("cell X");
     assert!(cell.bold);
-    assert!(
-        cell.fg.0 > 120 && cell.fg.1 < 100 && cell.fg.2 < 100,
-        "fg should be reddish, got {:?}",
+    // Red resolves from the active theme's ANSI palette slot 1; the theme's red
+    // has a dominant red channel, so check R > G and R > B with a clear margin.
+    let expected = crew_theme::theme().ansi[1];
+    assert_eq!(
+        cell.fg, expected,
+        "fg should be the theme's red ({expected:?}), got {:?}",
         cell.fg
     );
 }
