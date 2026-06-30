@@ -125,9 +125,9 @@ impl CrewApp {
 
         self.push_sidebar(&mut scenes, sh, scale, cw, ch);
 
-        let ib = chrome::inputbar_rect(content, sh, ih, GAP);
+        let ib = chrome::inputbar_rect(content, sh, ch, GAP);
         let ic = (ib.w / cw).floor() as u16;
-        let ir = (ib.h / ch).floor() as u16;
+        let ir = (ib.h / ch).round() as u16;
         scenes.push(PaneScene {
             cells: self.input.cells(ic, ir, self.active_status()),
             x: ib.x,

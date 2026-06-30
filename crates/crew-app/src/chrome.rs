@@ -13,14 +13,24 @@ pub fn input_h(cell_h: f32) -> f32 {
     cell_h * 3.0 + 2.0 * crate::app::GAP + INPUT_PAD
 }
 
-/// Bottom strip for the docked input bar, spanning the **action area** only
-/// (`content`'s x/width, gap-inset to match pane width) — never under the sidebar.
-pub fn inputbar_rect(content: Rect, sh: f32, ih: f32, gap: f32) -> Rect {
+/// Cell-aligned bottom y shared by the full-height sidebar and the input-bar
+/// card, so their bottom borders land on the exact same pixel row. Both are
+/// drawn as whole-cell fieldset cards (each floors its height to `floor(h/ch)`
+/// rows), so aligning their bottoms requires a common cell-quantized baseline.
+pub fn card_bottom(sh: f32, ch: f32, gap: f32) -> f32 {
+    gap + ((sh - 2.0 * gap) / ch).floor() * ch
+}
+
+/// Bottom input-bar card, bottom-aligned to [`card_bottom`] so its bottom border
+/// lines up exactly with the sidebar's. Spans the action area width (content
+/// x/width, gap-inset). Always a 3-cell-row card.
+pub fn inputbar_rect(content: Rect, sh: f32, ch: f32, gap: f32) -> Rect {
+    let h = 3.0 * ch;
     Rect {
         x: content.x + gap,
-        y: sh - ih + gap,
+        y: card_bottom(sh, ch, gap) - h,
         w: content.w - 2.0 * gap,
-        h: ih - 2.0 * gap,
+        h,
     }
 }
 
@@ -101,17 +111,36 @@ mod tests {
 
     #[test]
     fn inputbar_rect_spans_action_area() {
-        // content (with nav) = {x:208, w:792}; input: x=208+8=216,
-        // y=800-60+8=748, w=792-16=776, h=60-16=44
+        // content (with nav) = {x:208, w:792}; x and w are unchanged.
+        // ch=20: card_bottom(800,20,8) = 8 + floor(784/20)*20 = 8+780 = 788;
+        // h = 3*20 = 60; y = 788-60 = 728.
         let content = content_rect(1000.0, 800.0, true, 200.0, 8.0, 60.0);
         assert_eq!(
-            inputbar_rect(content, 800.0, 60.0, 8.0),
+            inputbar_rect(content, 800.0, 20.0, 8.0),
             Rect {
                 x: 216.0,
-                y: 748.0,
+                y: 728.0,
                 w: 776.0,
-                h: 44.0
+                h: 60.0
             }
+        );
+    }
+
+    #[test]
+    fn sidebar_and_inputbar_bottoms_align() {
+        // Fractional cell height (font 14 -> ch 17.5) used to leave the sidebar's
+        // floored bottom border above the input bar's bottom. Their drawn bottom
+        // borders must now land on the exact same pixel row.
+        let (sw, sh, ch, gap, nav) = (1000.0_f32, 800.0_f32, 17.5_f32, 8.0_f32, 200.0_f32);
+        let sb = sidebar_rect(sh, nav, gap);
+        // push_card draws floor(h/ch) rows starting at sb.y; bottom-border bottom edge:
+        let sb_bottom = sb.y + (sb.h / ch).floor() * ch;
+        let content = content_rect(sw, sh, true, nav, gap, input_h(ch));
+        let ib = inputbar_rect(content, sh, ch, gap);
+        let ib_bottom = ib.y + (ib.h / ch).floor() * ch;
+        assert_eq!(
+            sb_bottom, ib_bottom,
+            "sidebar and input-bar card bottoms must align"
         );
     }
 

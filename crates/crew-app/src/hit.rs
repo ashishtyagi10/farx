@@ -42,7 +42,7 @@ impl CrewApp {
         let ih = chrome::input_h(ch);
         let content =
             chrome::content_rect(sw, sh, self.config.show_nav, self.nav_px(scale), GAP, ih);
-        let ib = chrome::inputbar_rect(content, sh, ih, GAP);
+        let ib = chrome::inputbar_rect(content, sh, ch, GAP);
         chrome::point_in(ib, self.cursor.0, self.cursor.1)
     }
 
