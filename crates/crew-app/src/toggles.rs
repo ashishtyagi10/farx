@@ -14,6 +14,16 @@ impl CrewApp {
         self.redraw();
     }
 
+    /// Flip between the two paper themes (Ctrl+Shift+L). Reuses `set_theme_cmd`
+    /// so it persists and repaints exactly like the `/theme` command.
+    pub(crate) fn toggle_theme(&mut self) {
+        let next = match crew_theme::current_id() {
+            crew_theme::ThemeId::PaperDark => crew_theme::ThemeId::PaperLight,
+            crew_theme::ThemeId::PaperLight => crew_theme::ThemeId::PaperDark,
+        };
+        self.set_theme_cmd(next.as_str());
+    }
+
     /// Toggle zoom — the focused pane fills the content area.
     pub(crate) fn toggle_zoom(&mut self) {
         self.zoomed = !self.zoomed;
@@ -25,6 +35,16 @@ impl CrewApp {
 #[cfg(test)]
 mod tests {
     use crate::app::CrewApp;
+
+    #[test]
+    fn toggle_theme_flips() {
+        crew_theme::set_theme(crew_theme::ThemeId::PaperDark);
+        let mut app = crate::app::CrewApp::default();
+        app.toggle_theme();
+        assert_eq!(crew_theme::current_id(), crew_theme::ThemeId::PaperLight);
+        app.toggle_theme();
+        assert_eq!(crew_theme::current_id(), crew_theme::ThemeId::PaperDark);
+    }
 
     #[test]
     fn toggle_broadcast_flips_and_mirrors_input() {

@@ -77,6 +77,16 @@ impl CrewApp {
             return;
         }
 
+        // Ctrl+Shift+L toggles the paper light/dark theme.
+        if event.state.is_pressed()
+            && mstate.control_key()
+            && mstate.shift_key()
+            && matches!(&event.logical_key, Key::Character(s) if s.eq_ignore_ascii_case("l"))
+        {
+            self.toggle_theme();
+            return;
+        }
+
         // Super-chords (e.g. Cmd+I, Cmd+T, …) are handled first.
         if mstate.super_key() && event.state.is_pressed() {
             if let Key::Character(s) = &event.logical_key {
