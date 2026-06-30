@@ -118,7 +118,7 @@ Press **`/keys`** in the input bar for the full list in-app.
 
 The docked command bar supports slash commands (type `/` for a palette:
 `/shell`, `/crew`, `/claude`, `/codex`, `/opencode`, `/swarm`, `/goal <text>`, `/batch <file>`, `/run <cmd>`, `/edit <file>`, `/settings`, `/find <text>`, `/name <text>`, `/clear`, `/only`, `/copy`, `/dump`, `/open`,
-`/clearall`, `/closeall`, `/pwd`, `/about`, `/font`, `/reload`, `/update`, `/broadcast`, `/zoom`, `/sidebar`, `/keys`, `/far`, `/exit`), fish-style autosuggest from history, `cd`
+`/clearall`, `/closeall`, `/pwd`, `/about`, `/font`, `/theme`, `/reload`, `/update`, `/broadcast`, `/zoom`, `/sidebar`, `/keys`, `/far`, `/exit`), fish-style autosuggest from history, `cd`
 completion with `$VAR` expansion, and `Up`/`Down` history recall persisted to
 `$XDG_CONFIG/crew/history`. Anything that isn't a slash command or `cd` is sent
 to the focused terminal.
@@ -201,10 +201,17 @@ trips. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 
 `/settings` opens a form for font family, font size, and the sidebar. Settings
 persist to `$XDG_CONFIG/crew/config.toml` and apply live on Save. The config
-file also accepts `accent = "#rrggbb"` to recolour Crew's accent — the input-bar
-border/cursor, the sidebar widgets, and the popup overlays (`/keys`, the command
-menu, settings, and the file manager); omit it (or give an invalid value) for the
-built-in Crew green. It applies at launch and on `/reload`.
+file also accepts `accent = "#rrggbb"` to override Crew's accent; omit it (or
+give an invalid value) to use the active theme's default accent. It applies at
+launch and on `/reload`.
+
+**Themes.** Crew ships two paper/e-ink themes: `paper-dark` (default — a
+high-contrast "newspaper" look) and `paper-light` (a warm paper page). Switch
+with `/theme paper-light` / `/theme paper-dark` or toggle live with
+`Ctrl+Shift+L`; the choice persists. A subtle GPU paper-grain + vignette sits
+behind everything. Config keys: `theme = "paper-dark"`, `paper_texture = true`
+(grain on/off), `paper_grain = 1.3` (strength `0.0`–`2.0`). See
+[docs/CREW.md](docs/CREW.md#themes).
 
 ## Architecture
 

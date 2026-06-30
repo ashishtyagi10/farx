@@ -95,7 +95,7 @@ config and plugins load.
 The docked command bar supports:
 
 - **Slash commands** — type `/` for a command palette (↑/↓ to pick, Tab/→ to
-  fill, Enter to run): `/shell`, `/crew`, `/claude`, `/codex`, `/opencode`, `/run <cmd>`, `/edit <file>`, `/settings`, `/find <text>`, `/name <text>`, `/clear`, `/only`, `/copy`, `/dump`, `/open`, `/font`, `/reload`, `/update`,
+  fill, Enter to run): `/shell`, `/crew`, `/claude`, `/codex`, `/opencode`, `/run <cmd>`, `/edit <file>`, `/settings`, `/find <text>`, `/name <text>`, `/clear`, `/only`, `/copy`, `/dump`, `/open`, `/font`, `/reload`, `/theme`, `/update`,
   `/broadcast`, `/zoom`, `/sidebar`, `/keys`, `/far`, `/exit`. The palette is **fuzzy** — prefix matches rank first,
   then subsequence matches (e.g. `/dmp` finds `/dump`) — and **scrolls** to the
   selection when the match list is long. When several commands share a prefix,
@@ -106,8 +106,11 @@ The docked command bar supports:
 - **`/font <n>`** — sets the font size to an exact value (clamped 12–32), unlike
   the `Cmd+=`/`Cmd+-` chords that step by one; no argument reports the current size.
 - **`/reload`** — re-reads `config.toml` from disk and applies it live (font,
-  sidebar width/visibility) without rewriting the file, so edits made outside the
-  `/settings` pane take effect without a restart.
+  sidebar width/visibility, theme) without rewriting the file, so edits made
+  outside the `/settings` pane take effect without a restart.
+- **`/theme [paper-light|paper-dark]`** — switches the theme live and persists
+  it; no argument reports the current theme. `Ctrl+Shift+L` toggles between the
+  two. See [Themes](#themes).
 - **`/only`** — closes every pane except the focused one (a quick "focus mode");
   a no-op when only one pane is open.
 - **`/claude`, `/codex`, `/opencode`** — open a native AI coding-agent CLI in its
@@ -362,8 +365,29 @@ activity dot) fills the remaining height. Click a PANES row to focus that pane
 
 Settings persist to `$XDG_CONFIG/crew/config.toml` and apply live on Save.
 
-## Theme
+## Themes
 
-The canvas is pure black; terminal content shows its natural ANSI colors. The
-accent green is reserved for chrome (borders, the CREW wordmark, the command
-palette). A configurable theme is future work.
+Crew ships two e-ink-reader themes designed to read like paper rather than a
+screen:
+
+- **`paper-dark`** (default) — a high-contrast "newspaper" look: a near-black
+  page (`#0a0a0a`) with near-white ink (`#ececec`) and grey rules. Terminal
+  output keeps muted-but-readable ANSI colours so error/diff cues survive.
+- **`paper-light`** — a warm off-white page (`#f4f1ea`) with soft dark ink and
+  ink-toned ANSI colours (sage, brick, faded indigo). No pure black or white
+  anywhere; every surface reads as the same sheet of paper.
+
+A faint procedural **paper grain** + edge vignette is drawn behind everything
+(GPU). Colours are picked for measured WCAG contrast on both palettes.
+
+**Switching:** `/theme paper-light` / `/theme paper-dark`, or toggle live with
+**`Ctrl+Shift+L`**. The choice persists to `config.toml`.
+
+**Config keys** (`$XDG_CONFIG/crew/config.toml`, applied on launch and `/reload`):
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `theme` | `"paper-dark"` | `paper-dark` or `paper-light`; unknown ⇒ default |
+| `accent` | theme default | `"#rrggbb"` override for the accent (chrome only); omit to use the theme's accent |
+| `paper_texture` | `true` | turn the paper grain + vignette pass on/off |
+| `paper_grain` | `1.3` | grain strength (`0.0`–`2.0`; `0` = no grain) |
