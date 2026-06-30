@@ -31,6 +31,7 @@ impl ApplicationHandler for CrewApp {
             Ok(mut renderer) => {
                 // Apply the persisted font family up front, not just on Save.
                 renderer.set_font_family(self.config.font_family.clone());
+                renderer.set_paper_texture(self.config.paper_texture);
                 if self.config.maximized {
                     window.set_maximized(true);
                 }

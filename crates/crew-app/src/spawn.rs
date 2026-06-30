@@ -251,6 +251,7 @@ impl CrewApp {
         if let Some(r) = &mut self.renderer {
             r.set_font_family(self.config.font_family.clone());
             r.set_font_size(self.config.font_size * scale);
+            r.set_paper_texture(self.config.paper_texture);
         }
         // Pick up any change to the watched notification patterns on live panes.
         self.apply_notify_patterns();

@@ -71,6 +71,10 @@ pub struct CrewConfig {
     /// `paper-dark`. Applied app-wide via [`crew_theme`].
     #[serde(default)]
     pub theme: Option<String>,
+    /// Whether to render the subtle paper grain + vignette background texture.
+    /// When off, the window background is a plain flat colour.
+    #[serde(default = "default_true")]
+    pub paper_texture: bool,
 }
 
 impl Default for CrewConfig {
@@ -92,6 +96,7 @@ impl Default for CrewConfig {
             notify_min_secs: default_notify_min_secs(),
             notify_patterns: Vec::new(),
             theme: None,
+            paper_texture: true,
         }
     }
 }
@@ -139,6 +144,7 @@ impl CrewConfig {
                 .filter(|p| !p.is_empty())
                 .collect(),
             theme: self.theme.filter(|s| !s.is_empty()),
+            paper_texture: self.paper_texture,
         }
     }
 
@@ -280,6 +286,7 @@ mod tests {
             notify_min_secs: 30,
             notify_patterns: vec!["error".to_string(), "done".to_string()],
             theme: Some("paper-light".to_string()),
+            paper_texture: false,
         };
         assert_eq!(CrewConfig::from_toml_str(&c.to_toml_str()), c);
     }
