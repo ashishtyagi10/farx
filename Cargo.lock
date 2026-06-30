@@ -550,6 +550,7 @@ dependencies = [
  "crew-plugin",
  "crew-render",
  "crew-term",
+ "crew-theme",
  "dirs",
  "image",
  "open",
@@ -590,6 +591,7 @@ name = "crew-render"
 version = "0.5.11"
 dependencies = [
  "anyhow",
+ "crew-theme",
  "glyphon",
  "pollster",
  "wgpu",
@@ -602,8 +604,13 @@ version = "0.5.11"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
+ "crew-theme",
  "portable-pty",
 ]
+
+[[package]]
+name = "crew-theme"
+version = "0.5.11"
 
 [[package]]
 name = "crossbeam-deque"
