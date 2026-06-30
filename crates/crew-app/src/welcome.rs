@@ -1,105 +1,118 @@
-//! The empty-screen welcome: the word CREW centred on the canvas with a pulsing
-//! glow, a keyboard hint below it, and a version stamp in the corner.
+//! The empty-screen welcome: ASCII-art CREW banner centred on the canvas
+//! with a per-column shimmer, a tagline + keyboard hint, and a version stamp.
 use crew_render::CellView;
 
-const WORD: &str = "CREW";
+/// ASCII-art "CREW" — Standard figlet style; every row padded to equal width.
+const BANNER: &[&str] = &[
+    r"  ____   ____   _____  __        __",
+    r" / ___| |  _ \ | ____| \ \      / /",
+    r"| |     | |_) ||  _|    \ \ /\ / / ",
+    r"| |___  |  _ < | |___    \ V  V /  ",
+    r" \____| |_| \_||_____|    \_/\_/   ",
+];
+/// Character width every banner line must equal (asserted in tests).
+pub const BANNER_W: u16 = 35;
+const BANNER_H: u16 = BANNER.len() as u16;
+const TAGLINE: &str = "fast terminals. clean flow.";
 const HINT: &str = "Cmd+T  new shell    ·    /  commands";
-/// Columns between successive letters.
-const STEP: u16 = 2;
-/// Frames for one brighten→dim→brighten pulse of a letter.
+/// Ticks for one full wave cycle (brighten → dim → brighten).
 const PULSE: u64 = 56;
-/// Poll ticks per rendered frame: the poll loop runs at ~60 Hz, but the
-/// idle welcome animation only needs ~20 fps, so we redraw every third tick and
-/// advance the animation frame by one — cutting idle redraws to a third.
+/// Poll ticks per rendered frame; idle animation runs at ~20 fps.
 pub const ANIM_DIV: u64 = 3;
 
-/// Whether this poll `tick` should redraw the welcome screen (every [`ANIM_DIV`]).
+/// Whether this poll `tick` should redraw the welcome screen.
 pub fn anim_should_redraw(tick: u64) -> bool {
     tick.is_multiple_of(ANIM_DIV)
 }
 
-/// Colour for letter `i` at `tick`: each letter pulses between the accent
-/// colour and a muted dim, out of phase with the others.
-fn letter_style(tick: u64, i: usize) -> ((u8, u8, u8), bool) {
-    let phase = (tick / 2 + i as u64 * 11) % PULSE;
+/// Per-column shimmer: returns `(fg, bold)` for banner column `col` at `tick`.
+/// Phase offset proportional to `col` creates a left-to-right wave across the art.
+fn col_style(tick: u64, col: u16) -> ((u8, u8, u8), bool) {
+    let phase = (tick / 2 + u64::from(col) * 3) % PULSE;
     let half = PULSE / 2;
-    let dist = if phase < half { phase } else { PULSE - phase }; // 0 = brightest
+    let dist = if phase < half { phase } else { PULSE - phase };
     if dist == 0 {
         return (crate::palette::accent(), true);
     }
     let t = crew_theme::theme();
-    let frac = dist as f32 / half as f32; // 0..1 → bright..dim
+    let frac = dist as f32 / half as f32;
     let lerp = |a: u8, b: u8| (a as f32 + frac * (b as f32 - a as f32)) as u8;
-    let acc = crate::palette::accent();
-    let dim = t.text_muted;
-    (
-        (lerp(acc.0, dim.0), lerp(acc.1, dim.1), lerp(acc.2, dim.2)),
-        false,
-    )
+    let (ar, ag, ab) = crate::palette::accent();
+    let (dr, dg, db) = t.text_muted;
+    ((lerp(ar, dr), lerp(ag, dg), lerp(ab, db)), false)
 }
 
-/// Render one animation frame: CREW wordmark centred, hint below, version stamp.
-pub fn welcome_cells_animated(cols: u16, rows: u16, tick: u64) -> Vec<CellView> {
-    if cols == 0 || rows == 0 {
-        return Vec::new();
+/// Push every character of `s` as cells starting at `(col, row)`.
+// rustfmt::skip keeps the CellView struct literal on one line (7 fields → 9-line expand otherwise).
+#[rustfmt::skip]
+fn push_str(cells: &mut Vec<CellView>, row: u16, col: u16, s: &str, fg: (u8,u8,u8), bg: (u8,u8,u8)) {
+    for (i, ch) in s.chars().enumerate() {
+        cells.push(CellView { col: col + i as u16, row, c: ch, fg, bg, bold: false, italic: false });
     }
+}
+
+/// Render one animation frame: CREW ASCII-art banner centred, tagline + hint
+/// below, version stamp bottom-right. Falls back to a spaced single-line "CREW"
+/// when the banner doesn't fit (too few cols or rows). All cells stay within
+/// `cols × rows`.
+// rustfmt::skip preserves compact inline struct literals to stay within the 200-line budget.
+#[rustfmt::skip]
+pub fn welcome_cells_animated(cols: u16, rows: u16, tick: u64) -> Vec<CellView> {
+    if cols == 0 || rows == 0 { return Vec::new(); }
     let mut cells = Vec::new();
+    let t = crew_theme::theme();
+    let bg = t.page_bg;
 
-    let letters: Vec<char> = WORD.chars().collect();
-    let span = (letters.len() as u16 - 1) * STEP + 1;
-    if span < cols {
-        let start_col = (cols - span) / 2;
-        let row = rows / 2;
-        let t = crew_theme::theme();
-        for (i, &ch) in letters.iter().enumerate() {
-            let (fg, bold) = letter_style(tick, i);
-            cells.push(CellView {
-                col: start_col + i as u16 * STEP,
-                row,
-                c: ch,
-                fg,
-                bg: t.page_bg,
-                bold,
-                italic: false,
-            });
+    if BANNER_W < cols && BANNER_H + 4 < rows {
+        let top  = (rows.saturating_sub(BANNER_H + 4)) / 2;
+        let left = (cols - BANNER_W) / 2;
+        for (li, line) in BANNER.iter().enumerate() {
+            let row = top + li as u16;
+            if row >= rows { break; }
+            for (ci, ch) in line.chars().enumerate() {
+                if ch == ' ' { continue; }
+                let abs_col = left + ci as u16;
+                if abs_col >= cols { break; }
+                let (fg, bold) = col_style(tick, ci as u16);
+                cells.push(CellView { col: abs_col, row, c: ch, fg, bg, bold, italic: false });
+            }
         }
-
-        // A dim hint two rows below the wordmark, when it fits.
+        // Tagline one row below the banner.
+        let tl_row = top + BANNER_H + 1;
+        let tl_w = TAGLINE.chars().count() as u16;
+        if tl_row < rows && tl_w < cols {
+            push_str(&mut cells, tl_row, (cols - tl_w) / 2, TAGLINE, t.hint_fg, bg);
+        }
+        // Keyboard hint below the tagline.
+        let hint_row = tl_row + 1;
         let hint_w = HINT.chars().count() as u16;
-        let hint_row = row + 2;
-        if hint_w < cols && hint_row < rows {
-            let hstart = (cols - hint_w) / 2;
-            for (i, ch) in HINT.chars().enumerate() {
-                cells.push(CellView {
-                    col: hstart + i as u16,
-                    row: hint_row,
-                    c: ch,
-                    fg: t.hint_fg,
-                    bg: t.page_bg,
-                    bold: false,
-                    italic: false,
-                });
+        if hint_row < rows && hint_w < cols {
+            push_str(&mut cells, hint_row, (cols - hint_w) / 2, HINT, t.hint_fg, bg);
+        }
+    } else {
+        // Fallback: spaced single-line "CREW" with per-column shimmer.
+        let letters: Vec<char> = "CREW".chars().collect();
+        let span = (letters.len() as u16 - 1) * 2 + 1;
+        if span < cols {
+            let row   = rows / 2;
+            let start = (cols - span) / 2;
+            for (i, &ch) in letters.iter().enumerate() {
+                let (fg, bold) = col_style(tick, i as u16 * 7);
+                cells.push(CellView { col: start + i as u16 * 2, row, c: ch, fg, bg, bold, italic: false });
+            }
+            let hint_w   = HINT.chars().count() as u16;
+            let hint_row = row + 2;
+            if hint_w < cols && hint_row < rows {
+                push_str(&mut cells, hint_row, (cols - hint_w) / 2, HINT, t.hint_fg, bg);
             }
         }
     }
 
-    // Version stamp in the bottom-right corner.
-    let t = crew_theme::theme();
+    // Version stamp bottom-right.
     let ver = concat!("v", env!("CARGO_PKG_VERSION"));
     let vw = ver.chars().count() as u16;
-    if vw + 1 < cols && rows > 0 {
-        let vstart = cols - vw - 1;
-        for (i, ch) in ver.chars().enumerate() {
-            cells.push(CellView {
-                col: vstart + i as u16,
-                row: rows - 1,
-                c: ch,
-                fg: t.dim,
-                bg: t.page_bg,
-                bold: false,
-                italic: false,
-            });
-        }
+    if vw + 1 < cols {
+        push_str(&mut cells, rows - 1, cols - vw - 1, ver, t.dim, bg);
     }
     cells
 }
@@ -109,29 +122,53 @@ mod tests {
     use super::*;
 
     #[test]
-    fn renders_crew_in_bounds() {
+    fn banner_cells_in_bounds() {
         let cells = welcome_cells_animated(80, 24, 7);
-        assert!(cells.iter().all(|c| c.col < 80 && c.row < 24));
-        // every CREW letter is present on the center row
-        for ch in WORD.chars() {
-            assert!(cells.iter().any(|c| c.c == ch && c.row == 12));
-        }
-        // the dim hint is shown two rows below the wordmark
-        assert!(cells
-            .iter()
-            .any(|c| c.row == 14 && c.fg == crew_theme::theme().hint_fg));
-        // a faint version stamp sits on the bottom row
-        assert!(cells
-            .iter()
-            .any(|c| c.c == 'v' && c.row == 23 && c.fg == crew_theme::theme().dim));
+        assert!(!cells.is_empty());
+        assert!(
+            cells.iter().all(|c| c.col < 80 && c.row < 24),
+            "cell out of 80×24 bounds"
+        );
     }
 
     #[test]
-    fn letters_pulse_over_time() {
-        // a letter's colour changes between frames (shimmer, not constant)
-        let a = letter_style(0, 0);
-        let b = letter_style(20, 0);
-        assert_ne!(a, b);
+    fn banner_lines_equal_width() {
+        for line in BANNER {
+            let w = line.chars().count() as u16;
+            assert_eq!(
+                w, BANNER_W,
+                "banner line width {w} ≠ BANNER_W {BANNER_W}: {line:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn hint_present() {
+        let cells = welcome_cells_animated(80, 24, 0);
+        let hint_fg = crew_theme::theme().hint_fg;
+        assert!(
+            cells.iter().any(|c| c.fg == hint_fg),
+            "no hint_fg cells in welcome output"
+        );
+    }
+
+    #[test]
+    fn version_stamp_present() {
+        let cells = welcome_cells_animated(80, 24, 0);
+        let dim = crew_theme::theme().dim;
+        assert!(
+            cells
+                .iter()
+                .any(|c| c.c == 'v' && c.row == 23 && c.fg == dim),
+            "no version stamp on bottom row"
+        );
+    }
+
+    #[test]
+    fn shimmer_changes_over_time() {
+        let a = col_style(0, 0);
+        let b = col_style(20, 0);
+        assert_ne!(a, b, "shimmer colour did not change between frames");
     }
 
     #[test]
@@ -141,16 +178,15 @@ mod tests {
     }
 
     #[test]
+    fn empty_screen_produces_cells() {
+        assert!(!welcome_cells_animated(80, 24, 0).is_empty());
+    }
+
+    #[test]
     fn anim_redraws_one_in_every_anim_div_ticks() {
         let redraws = (0..ANIM_DIV * 4).filter(|&t| anim_should_redraw(t)).count();
         assert_eq!(redraws as u64, 4, "one redraw per ANIM_DIV ticks");
         assert!(anim_should_redraw(0) && anim_should_redraw(ANIM_DIV));
         assert!(!anim_should_redraw(1));
-    }
-
-    #[test]
-    fn empty_screen_produces_cells() {
-        let cells = welcome_cells_animated(80, 24, 0);
-        assert!(!cells.is_empty());
     }
 }
