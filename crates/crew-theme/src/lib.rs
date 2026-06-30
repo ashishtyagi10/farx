@@ -46,42 +46,45 @@ pub struct Theme {
     pub ansi: [(u8, u8, u8); 16],
 }
 
-/// Warm e-ink "night" page — charcoal-brown, never blue-black. The default.
+/// High-contrast monochrome ("newspaper") dark theme — near-black/near-white
+/// chrome for maximum legibility with minimal glare. Terminal ANSI output
+/// keeps muted-but-readable colours so error/diff colour cues survive.
+/// The default.
 pub static PAPER_DARK: Theme = Theme {
-    page_bg: (32, 32, 28),
-    ink: (207, 199, 184),
-    text_muted: (170, 162, 148),
-    term_fg: (207, 199, 184),
-    term_bg: (32, 32, 28),
-    border_normal: (74, 70, 61),
-    border_focused: (138, 132, 116),
-    legend_off: (107, 101, 87),
-    accent_default: (199, 154, 94),
-    status_fg: (204, 170, 106),
+    page_bg: (10, 10, 10),
+    ink: (236, 236, 236),
+    text_muted: (175, 175, 175),
+    term_fg: (236, 236, 236),
+    term_bg: (10, 10, 10),
+    border_normal: (85, 85, 85),
+    border_focused: (205, 205, 205),
+    legend_off: (120, 120, 120),
+    accent_default: (230, 230, 230),
+    status_fg: (210, 180, 120),
     broadcast: (181, 138, 168),
     activity: (125, 154, 184),
-    bell: (204, 170, 106),
-    dim: (110, 104, 92),
-    placeholder: (95, 90, 80),
-    hint_fg: (107, 101, 87),
-    find_hl_bg: (74, 67, 31),
+    bell: (210, 180, 120),
+    dim: (110, 110, 110),
+    placeholder: (95, 95, 95),
+    hint_fg: (120, 120, 120),
+    find_hl_bg: (60, 55, 20),
     ansi: [
-        (50, 49, 44),    // 0  black
-        (192, 106, 90),  // 1  red
-        (154, 167, 106), // 2  green
-        (204, 170, 106), // 3  yellow
-        (125, 154, 184), // 4  blue
-        (181, 138, 168), // 5  magenta
-        (127, 176, 170), // 6  cyan
-        (207, 199, 184), // 7  white
-        (107, 101, 87),  // 8  bright black
-        (214, 128, 112), // 9  bright red
-        (176, 189, 128), // 10 bright green
-        (224, 192, 128), // 11 bright yellow
-        (147, 176, 206), // 12 bright blue
-        (203, 160, 190), // 13 bright magenta
-        (149, 198, 192), // 14 bright cyan
-        (236, 229, 214), // 15 bright white
+        (90, 90, 90),    // 0  black -> neutral grey (visible on near-black)
+        (210, 120, 105), // 1  red
+        (160, 185, 110), // 2  green
+        (215, 180, 110), // 3  yellow
+        (130, 165, 200), // 4  blue
+        (190, 145, 180), // 5  magenta
+        (135, 190, 185), // 6  cyan
+        (220, 220, 220), // 7  white -> neutral light grey
+        (130, 130, 130), // 8  bright black
+        (225, 140, 120), // 9  bright red
+        (180, 200, 130), // 10 bright green
+        (230, 200, 135), // 11 bright yellow
+        (150, 185, 215), // 12 bright blue
+        (210, 165, 200), // 13 bright magenta
+        (155, 205, 200), // 14 bright cyan
+        (240, 240, 240), // 15 bright white
     ],
 };
 
