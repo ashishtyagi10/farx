@@ -10,8 +10,9 @@ use serde::Deserialize;
 use super::{Completion, CompletionRequest, Provider, ProviderError};
 
 const ENDPOINT: &str = "https://openrouter.ai/api/v1/chat/completions";
-/// How many times to retry a transiently rate-limited / upstream-erroring call.
-const MAX_RETRIES: u32 = 3;
+/// How many times to retry one model on a transient error before the chain
+/// advances to the next model (kept low because the fallback chain adds breadth).
+const MAX_RETRIES: u32 = 2;
 
 /// Seconds to wait before retrying, or `None` to not retry. A call is treated as
 /// transiently retryable when the HTTP status is 429/5xx *or* the body carries an
@@ -48,6 +49,62 @@ fn retry_delay(status: u16, retry_after_hdr: Option<u64>, body: &str, attempt: u
 pub struct OpenRouterProvider {
     client: reqwest::Client,
     api_key: String,
+    /// Fallback model chain: when the requested model is rate-limited or
+    /// unavailable, `complete` advances to the next slug here. Empty = no
+    /// fallback (just the request's own model, with transient retry).
+    fallbacks: Vec<String>,
+}
+
+/// The ordered, de-duplicated models to try for one request: the requested model
+/// first, then each configured fallback not already present. Because free
+/// OpenRouter models route to *different* upstream providers, a different slug
+/// often dodges a provider-specific throttle even when the account-wide daily
+/// cap is shared.
+fn attempt_chain(primary: &str, fallbacks: &[String]) -> Vec<String> {
+    let mut chain = vec![primary.to_string()];
+    for m in fallbacks {
+        if !m.is_empty() && !chain.contains(m) {
+            chain.push(m.clone());
+        }
+    }
+    chain
+}
+
+/// One model's request with transient-error retry (see [`retry_delay`]).
+async fn request_with_retry(
+    client: &reqwest::Client,
+    key: &str,
+    body: &serde_json::Value,
+) -> Result<Completion, ProviderError> {
+    let mut attempt = 0u32;
+    loop {
+        let resp = client
+            .post(ENDPOINT)
+            .header("authorization", format!("Bearer {key}"))
+            .header("content-type", "application/json")
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Http(e.to_string()))?;
+        let status = resp.status().as_u16();
+        let retry_after_hdr = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.trim().parse::<u64>().ok());
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| ProviderError::Http(e.to_string()))?;
+        if attempt < MAX_RETRIES {
+            if let Some(wait) = retry_delay(status, retry_after_hdr, &text, attempt) {
+                attempt += 1;
+                tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+                continue;
+            }
+        }
+        return OpenRouterProvider::parse_response(&text);
+    }
 }
 
 #[derive(Deserialize, Default)]
@@ -84,7 +141,15 @@ impl OpenRouterProvider {
         Self {
             client: reqwest::Client::new(),
             api_key,
+            fallbacks: Vec::new(),
         }
+    }
+
+    /// Set the fallback model chain (see [`OpenRouterProvider::fallbacks`]). The
+    /// request's own model is always tried first; these are the alternates.
+    pub fn with_fallbacks(mut self, models: Vec<String>) -> Self {
+        self.fallbacks = models;
+        self
     }
 
     pub fn from_env() -> Result<Self, ProviderError> {
@@ -123,55 +188,59 @@ impl Provider for OpenRouterProvider {
     ) -> Pin<Box<dyn Future<Output = Result<Completion, ProviderError>> + Send>> {
         let client = self.client.clone();
         let key = self.api_key.clone();
+        let chain = attempt_chain(&req.model, &self.fallbacks);
         Box::pin(async move {
             let mut messages = Vec::new();
             if let Some(sys) = &req.system {
                 messages.push(serde_json::json!({"role": "system", "content": sys}));
             }
             messages.push(serde_json::json!({"role": "user", "content": req.prompt}));
-            let body = serde_json::json!({
-                "model": req.model,
-                "max_tokens": req.max_tokens,
-                "messages": messages,
-            });
-            let mut attempt = 0u32;
-            loop {
-                let resp = client
-                    .post(ENDPOINT)
-                    .header("authorization", format!("Bearer {key}"))
-                    .header("content-type", "application/json")
-                    .json(&body)
-                    .send()
-                    .await
-                    .map_err(|e| ProviderError::Http(e.to_string()))?;
-                let status = resp.status().as_u16();
-                let retry_after_hdr = resp
-                    .headers()
-                    .get(reqwest::header::RETRY_AFTER)
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(|s| s.trim().parse::<u64>().ok());
-                let text = resp
-                    .text()
-                    .await
-                    .map_err(|e| ProviderError::Http(e.to_string()))?;
-                // Retry transient rate-limits/upstream errors; fall through to
-                // parse (which surfaces the error) once retries are exhausted.
-                if attempt < MAX_RETRIES {
-                    if let Some(wait) = retry_delay(status, retry_after_hdr, &text, attempt) {
-                        attempt += 1;
-                        tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
-                        continue;
-                    }
+            // Try each model in turn; a model that stays rate-limited or is
+            // unavailable (retired free slug, upstream error) hands off to the
+            // next. Only a missing key short-circuits — no model can fix that.
+            let mut last_err = ProviderError::Api("no model attempted".into());
+            for model in &chain {
+                let body = serde_json::json!({
+                    "model": model,
+                    "max_tokens": req.max_tokens,
+                    "messages": messages,
+                });
+                match request_with_retry(&client, &key, &body).await {
+                    Ok(c) => return Ok(c),
+                    Err(ProviderError::MissingKey) => return Err(ProviderError::MissingKey),
+                    Err(e) => last_err = e,
                 }
-                return OpenRouterProvider::parse_response(&text);
             }
+            Err(last_err)
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::retry_delay;
+    use super::{attempt_chain, retry_delay};
+
+    #[test]
+    fn chain_puts_requested_model_first_then_fallbacks() {
+        let fb = vec!["b:free".to_string(), "c:free".to_string()];
+        assert_eq!(
+            attempt_chain("a:free", &fb),
+            vec!["a:free", "b:free", "c:free"]
+        );
+    }
+
+    #[test]
+    fn chain_dedups_and_skips_empty() {
+        // The requested model also appearing in the fallbacks isn't tried twice,
+        // and empty entries are dropped.
+        let fb = vec!["a:free".to_string(), String::new(), "b:free".to_string()];
+        assert_eq!(attempt_chain("a:free", &fb), vec!["a:free", "b:free"]);
+    }
+
+    #[test]
+    fn chain_of_one_when_no_fallbacks() {
+        assert_eq!(attempt_chain("only:free", &[]), vec!["only:free"]);
+    }
 
     // The exact OpenRouter free-tier body the user hit: a 200 wrapping an
     // upstream 429 with a Retry-After hint in metadata.

@@ -6,10 +6,34 @@ use std::sync::Arc;
 use super::adapter::Adapter;
 use super::apiadapter::inbuilt_agents;
 
-/// Default OpenRouter model for the inbuilt agents — a free slug, since quality
-/// is not the current goal. OpenRouter rotates its free models, so override with
-/// `CREW_OPENROUTER_MODEL=<slug>` if this one is retired.
-const DEFAULT_OPENROUTER_MODEL: &str = "meta-llama/llama-3.3-70b-instruct:free";
+/// Default OpenRouter fallback chain for the inbuilt agents — free slugs across
+/// *different* upstream providers, so a provider-specific throttle on one model
+/// rolls to the next instead of failing the relay. Quality isn't the goal here.
+/// OpenRouter rotates its free models; override the whole chain with a
+/// comma-separated `CREW_OPENROUTER_MODEL=slug1,slug2,…` (a retired slug is
+/// skipped automatically when it errors).
+const DEFAULT_OPENROUTER_CHAIN: &[&str] = &[
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "deepseek/deepseek-chat-v3.1:free",
+    "qwen/qwen3-235b-a22b:free",
+    "meta-llama/llama-4-scout:free",
+];
+
+/// Parse `CREW_OPENROUTER_MODEL` (a comma-separated model chain) into an ordered
+/// list, falling back to `default` when unset or empty.
+fn parse_model_chain(env_val: Option<String>, default: &[&str]) -> Vec<String> {
+    let parsed: Vec<String> = env_val
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if parsed.is_empty() {
+        default.iter().map(|s| s.to_string()).collect()
+    } else {
+        parsed
+    }
+}
 
 pub struct Registry {
     agents: Vec<Box<dyn Adapter>>,
@@ -22,10 +46,11 @@ impl Registry {
     }
 
     /// Build the inbuilt agent roster (planner/coder/reviewer). Prefers OpenRouter
-    /// (`OPENROUTER_API_KEY`) — every role runs on [`DEFAULT_OPENROUTER_MODEL`],
-    /// overridable with `CREW_OPENROUTER_MODEL` — then falls back to Anthropic
-    /// (`ANTHROPIC_API_KEY`, per-tier native models). Empty when neither key is
-    /// set, so the broker explains how to enable it rather than routing to nothing.
+    /// (`OPENROUTER_API_KEY`) — every role runs on the [`DEFAULT_OPENROUTER_CHAIN`]
+    /// (or a `CREW_OPENROUTER_MODEL` override), auto-falling-back model to model on
+    /// rate-limits — then Anthropic (`ANTHROPIC_API_KEY`, per-tier native models).
+    /// Empty when neither key is set, so the broker explains how to enable it
+    /// rather than routing to nothing.
     ///
     /// `CREW_BROKER_MOCK_REPLY` overrides the provider with a fixed-reply mock
     /// (no network), so the relay can be driven deterministically offline and in
@@ -36,11 +61,15 @@ impl Registry {
             return Self::new(inbuilt_agents(provider, |t| t.model_id().to_string()));
         }
         if let Ok(provider) = crew_hive::OpenRouterProvider::from_env() {
-            let model = std::env::var("CREW_OPENROUTER_MODEL")
-                .unwrap_or_else(|_| DEFAULT_OPENROUTER_MODEL.to_string());
-            // Quality is not the goal here (a free model by default); every role
-            // shares one OpenRouter slug, with the role's system prompt steering it.
-            return Self::new(inbuilt_agents(Arc::new(provider), move |_| model.clone()));
+            let chain = parse_model_chain(
+                std::env::var("CREW_OPENROUTER_MODEL").ok(),
+                DEFAULT_OPENROUTER_CHAIN,
+            );
+            // Every role starts on the chain's first slug (the role's system prompt
+            // steers it); the provider rolls to later slugs when one is limited.
+            let primary = chain[0].clone();
+            let provider = provider.with_fallbacks(chain);
+            return Self::new(inbuilt_agents(Arc::new(provider), move |_| primary.clone()));
         }
         if let Ok(provider) = crew_hive::AnthropicProvider::from_env() {
             return Self::new(inbuilt_agents(Arc::new(provider), |t| {
@@ -139,5 +168,26 @@ mod tests {
         assert_eq!(r.len(), 2);
         assert_eq!(r.names(), vec!["claude", "codex"]);
         assert!(!r.is_empty());
+    }
+
+    #[test]
+    fn model_chain_defaults_when_unset() {
+        let chain = parse_model_chain(None, DEFAULT_OPENROUTER_CHAIN);
+        assert_eq!(chain.len(), DEFAULT_OPENROUTER_CHAIN.len());
+        assert_eq!(chain[0], DEFAULT_OPENROUTER_CHAIN[0]);
+    }
+
+    #[test]
+    fn model_chain_parses_comma_separated_override() {
+        let chain = parse_model_chain(Some(" a:free , b:free ,, c ".into()), &["x"]);
+        assert_eq!(chain, vec!["a:free", "b:free", "c"]); // trimmed, empties dropped
+    }
+
+    #[test]
+    fn model_chain_falls_back_to_default_when_blank() {
+        assert_eq!(
+            parse_model_chain(Some("  ,  ".into()), &["x", "y"]),
+            vec!["x", "y"]
+        );
     }
 }
