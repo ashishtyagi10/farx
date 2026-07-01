@@ -64,7 +64,10 @@ pub fn welcome_cells_animated(cols: u16, rows: u16, tick: u64) -> Vec<CellView> 
     let bg = t.page_bg;
 
     if BANNER_W < cols && BANNER_H + 4 < rows {
-        let top  = (rows.saturating_sub(BANNER_H + 4)) / 2;
+        // Reserve room for the worker scene (when it fits) so the whole stack stays centred.
+        let scene_fits = crate::welcomeart::SCENE_W < cols;
+        let extra = if scene_fits { crate::welcomeart::SCENE_H + 1 } else { 0 };
+        let top = (rows.saturating_sub(BANNER_H + 4 + extra)) / 2;
         let left = (cols - BANNER_W) / 2;
         for (li, line) in BANNER.iter().enumerate() {
             let row = top + li as u16;
@@ -77,7 +80,6 @@ pub fn welcome_cells_animated(cols: u16, rows: u16, tick: u64) -> Vec<CellView> 
                 cells.push(CellView { col: abs_col, row, c: ch, fg, bg, bold, italic: false });
             }
         }
-        // Tagline one row below the banner.
         let tl_row = top + BANNER_H + 1;
         let tl_w = TAGLINE.chars().count() as u16;
         if tl_row < rows && tl_w < cols {
@@ -88,6 +90,12 @@ pub fn welcome_cells_animated(cols: u16, rows: u16, tick: u64) -> Vec<CellView> 
         let hint_w = HINT.chars().count() as u16;
         if hint_row < rows && hint_w < cols {
             push_str(&mut cells, hint_row, (cols - hint_w) / 2, HINT, t.hint_fg, bg);
+        }
+        // Animated "dev at the terminal" worker below the hint (the creative bit).
+        let sc_top = hint_row + 2;
+        if scene_fits && sc_top + crate::welcomeart::SCENE_H < rows {
+            let sc_left = (cols - crate::welcomeart::SCENE_W) / 2;
+            crate::welcomeart::scene(&mut cells, sc_top, sc_left, tick, t.text_muted, crate::palette::accent(), bg);
         }
     } else {
         // Fallback: spaced single-line "CREW" with per-column shimmer.

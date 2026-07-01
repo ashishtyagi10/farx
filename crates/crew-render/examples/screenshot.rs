@@ -418,6 +418,9 @@ const WELCOME_BANNER_H: u16 = WELCOME_BANNER.len() as u16;
 const WELCOME_TAGLINE: &str = "fast terminals. clean flow.";
 const WELCOME_HINT: &str = "Cmd+T  new shell    ·    /  commands";
 const WELCOME_PULSE: u64 = 56;
+const WELCOME_SCENE_W: u16 = 26;
+const WELCOME_SCENE_H: u16 = 3;
+const WELCOME_BEAT: u64 = 8;
 
 fn welcome_col_style(tick: u64, col: u16) -> ((u8, u8, u8), bool) {
     let phase = (tick / 2 + u64::from(col) * 3) % WELCOME_PULSE;
@@ -439,6 +442,48 @@ fn welcome_col_style(tick: u64, col: u16) -> ((u8, u8, u8), bool) {
     ((lerp(ar, dr), lerp(ag, dg), lerp(ab, db)), false)
 }
 
+/// Screenshot-harness copy of `crew-app::welcomeart::scene` (the "dev at the
+/// terminal" worker). Pushes non-space glyphs; spaces let the page show through.
+fn welcome_worker(
+    cells: &mut Vec<CellView>,
+    top: u16,
+    left: u16,
+    tick: u64,
+    fg: (u8, u8, u8),
+    accent: (u8, u8, u8),
+    bg: (u8, u8, u8),
+) {
+    let f = (tick / WELCOME_BEAT) % 2;
+    let hand = if f == 0 { '╯' } else { '╮' };
+    let cur = if f == 0 { '▋' } else { ' ' };
+    let bar = "─".repeat(14);
+    let mut seg = |row: u16, x: u16, s: &str, color: (u8, u8, u8)| -> u16 {
+        for (i, ch) in s.chars().enumerate() {
+            if ch != ' ' {
+                cells.push(CellView {
+                    col: x + i as u16,
+                    row,
+                    c: ch,
+                    fg: color,
+                    bg,
+                    bold: false,
+                    italic: false,
+                });
+            }
+        }
+        x + s.chars().count() as u16
+    };
+    seg(top, left, &format!(" (•_•)    ┌{bar}┐"), fg);
+    seg(top + 2, left, &format!(r" /    \   └{bar}┘"), fg);
+    let y = top + 1;
+    let mut x = left;
+    x = seg(y, x, &format!("<)   ){hand}   │  "), fg);
+    x = seg(y, x, "crew:~$", accent);
+    x = seg(y, x, " ", fg);
+    x = seg(y, x, &cur.to_string(), accent);
+    seg(y, x, "   │", fg);
+}
+
 /// Build a welcome-screen scene: ASCII CREW banner centred on a `W×H` px canvas.
 fn build_welcome_scene(cols: u16, rows: u16, tick: u64, pw: f32, ph: f32) -> Vec<PaneScene> {
     let t = crew_theme::theme();
@@ -447,7 +492,12 @@ fn build_welcome_scene(cols: u16, rows: u16, tick: u64, pw: f32, ph: f32) -> Vec
 
     let use_banner = WELCOME_BANNER_W < cols && WELCOME_BANNER_H + 4 < rows;
     if use_banner {
-        let top = (rows.saturating_sub(WELCOME_BANNER_H + 4)) / 2;
+        // Mirror crew-app::welcome: reserve room for the worker scene so the
+        // whole stack stays centred. (crew-render can't depend on crew-app, so
+        // the welcome art is duplicated here for the screenshot harness.)
+        let scene_fits = WELCOME_SCENE_W < cols;
+        let extra = if scene_fits { WELCOME_SCENE_H + 1 } else { 0 };
+        let top = (rows.saturating_sub(WELCOME_BANNER_H + 4 + extra)) / 2;
         let left = (cols - WELCOME_BANNER_W) / 2;
         for (li, line) in WELCOME_BANNER.iter().enumerate() {
             let row = top + li as u16;
@@ -505,6 +555,19 @@ fn build_welcome_scene(cols: u16, rows: u16, tick: u64, pw: f32, ph: f32) -> Vec
                     italic: false,
                 });
             }
+        }
+        let sc_top = hint_row + 2;
+        if scene_fits && sc_top + WELCOME_SCENE_H < rows {
+            let sc_left = (cols - WELCOME_SCENE_W) / 2;
+            welcome_worker(
+                &mut cells,
+                sc_top,
+                sc_left,
+                tick,
+                t.text_muted,
+                t.accent_default,
+                bg,
+            );
         }
     }
     // Version stamp bottom-right.
