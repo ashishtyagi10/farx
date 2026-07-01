@@ -1,14 +1,15 @@
 //! The stdio broker loop behind the `/crew` pane. Reads `PluginCommand` JSON
 //! lines, discovers the installed agents, relays a task between them, and
 //! STREAMS each event as it happens — flushing per line — so the pane shows
-//! live progress ("calling codex…", each reply) instead of waiting for the
-//! whole (slow) relay to finish. Used both by the `crew-broker-plugin` binary
-//! and by the `crew` binary re-execing itself with `--broker-plugin`.
+//! live progress (activity, each reply) instead of waiting for the whole
+//! (slow) relay to finish. Used both by the `crew-broker-plugin` binary and by
+//! the `crew` binary re-execing itself with `--broker-plugin`.
 use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use crate::{Broker, Hop, HopKind, PluginCommand, PluginEvent, Registry};
+use super::relay::{msg, relay_turn, split_target};
+use crate::{Broker, PluginCommand, PluginEvent, Registry};
 
 static THREAD_SEQ: AtomicU64 = AtomicU64::new(1);
 
@@ -108,77 +109,7 @@ fn relay(input: &str, out: &mut impl Write) -> anyhow::Result<()> {
         ),
     )?;
     let broker = Broker::new(reg, max_hops(), call_timeout()).with_budget(token_budget());
-    let mut werr: anyhow::Result<()> = Ok(());
-    let stats = broker.run("user", &start, &body, &tid, &mut |hop| {
-        if werr.is_ok() {
-            werr = emit(out, &hop_to_msg(&hop));
-        }
-    });
-    werr?;
-    // The turn is over: clear the live activity indicator, then surface cost.
-    emit(
-        out,
-        &PluginEvent::Activity {
-            agent: String::new(),
-            state: "idle".into(),
-        },
-    )?;
-    emit(
-        out,
-        &msg(
-            "crew",
-            format!(
-                "done — {} exchange(s), ~{} tokens (approx)",
-                stats.exchanges, stats.approx_tokens
-            ),
-        ),
-    )
-}
-
-/// Split an optional leading `@agent` selector off the task. Falls back to the
-/// first discovered agent when no valid selector is present.
-pub(crate) fn split_target(task: &str, reg: &Registry) -> (String, String) {
-    let default = reg.names().into_iter().next().unwrap_or_default();
-    if let Some(rest) = task.strip_prefix('@') {
-        if let Some((name, body)) = rest.split_once(char::is_whitespace) {
-            if reg.get(name).is_some() {
-                return (name.to_string(), body.trim().to_string());
-            }
-        }
-    }
-    (default, task.to_string())
-}
-
-/// Render a hop as a plugin event. `Dialing` becomes a live `Activity` status
-/// (the agent is thinking) rather than transcript spam; every other hop is a
-/// message labelled `from → to`.
-pub(crate) fn hop_to_msg(hop: &Hop) -> PluginEvent {
-    match hop.kind {
-        HopKind::Dialing => PluginEvent::Activity {
-            agent: hop.to.clone(),
-            state: "thinking".into(),
-        },
-        _ => msg(&format!("{} → {}", hop.from, hop.to), hop_text(hop)),
-    }
-}
-
-fn hop_text(hop: &Hop) -> String {
-    match hop.kind {
-        HopKind::Dialing | HopKind::Reply => hop.text.clone(),
-        HopKind::Done if hop.text.is_empty() => "[done]".into(),
-        HopKind::Done => format!("[done] {}", hop.text),
-        HopKind::Terminated => format!("[stopped] {}", hop.text),
-        HopKind::Error => format!("[error] {}", hop.text),
-    }
-}
-
-fn msg(sender: &str, text: impl Into<String>) -> PluginEvent {
-    PluginEvent::Message {
-        channel: "crew".into(),
-        sender: sender.into(),
-        text: text.into(),
-        ts: String::new(),
-    }
+    relay_turn(&broker, &start, &body, &tid, &mut |ev| emit(out, &ev))
 }
 
 #[cfg(test)]

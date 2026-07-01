@@ -17,6 +17,7 @@ mod engine;
 mod hop;
 mod normalize;
 mod registry;
+mod relay;
 mod route;
 mod run;
 mod stdio;

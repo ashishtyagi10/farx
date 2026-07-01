@@ -42,8 +42,11 @@ a failure. Keep each iteration shippable on its own.
   affordance bar of available agents + slash actions, and send/enter hints.
 - [ ] **7 — Scrollbar + new-message affordance.** A visual scroll indicator and a
   "N new ↓" pill when scrolled up, with a jump-to-latest.
-- [ ] **8 — Thinking/stream timeline.** A per-turn activity timeline: which agent
-  is working, elapsed time, and a live token/cost meter in the header.
+- [x] **8 — Thinking/stream timeline.** A per-turn activity timeline: which agent
+  is working, elapsed time, and a live token/cost meter in the header. The broker
+  times each agent call and ends every turn with a structured `Stats` event plus
+  a `turn done — planner 4.2s → coder 8.1s · …` summary line; the header shows a
+  running `~N tok` meter.
 - [ ] **9 — Timestamps + per-message metadata.** Relative timestamps and a subtle
   metadata line (tokens/latency) per message when available.
 - [ ] **10 — Empty-state onboarding + polish.** A welcoming empty state (detected

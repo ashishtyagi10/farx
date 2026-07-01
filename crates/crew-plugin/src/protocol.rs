@@ -39,6 +39,12 @@ pub enum PluginEvent {
         agent: String,
         state: String,
     },
+    /// End-of-turn cost: agent exchanges made and approximate tokens spent.
+    /// Feeds the host's running token meter.
+    Stats {
+        exchanges: u32,
+        tokens: u64,
+    },
     Message {
         channel: String,
         sender: String,
@@ -102,6 +108,18 @@ mod tests {
                 assert_eq!(agents.len(), 2);
                 assert_eq!(agents[0].model, "m1");
                 assert_eq!(agents[1].role, ""); // role/model default to empty
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn stats_event_roundtrips() {
+        let line = r#"{"type":"stats","exchanges":3,"tokens":950}"#;
+        let ev: PluginEvent = serde_json::from_str(line).unwrap();
+        match ev {
+            PluginEvent::Stats { exchanges, tokens } => {
+                assert_eq!((exchanges, tokens), (3, 950));
             }
             _ => panic!("wrong variant"),
         }

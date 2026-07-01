@@ -23,6 +23,9 @@ pub struct ChatPane {
     /// The agent currently thinking (from `Activity` events) and when it
     /// started, for the header's live `agent · elapsed` status.
     active: Option<(String, std::time::Instant)>,
+    /// Session-wide approximate token spend (from `Stats` events), for the
+    /// header's running cost meter.
+    pub(crate) tokens: u64,
 }
 
 impl ChatPane {
@@ -37,6 +40,7 @@ impl ChatPane {
             scroll: 0,
             awaiting: false,
             active: None,
+            tokens: 0,
         }
     }
 
@@ -111,6 +115,9 @@ impl ChatPane {
                     PluginEvent::Activity { agent, state } => {
                         self.active = (state == "thinking" && !agent.is_empty())
                             .then(|| (agent, std::time::Instant::now()));
+                    }
+                    PluginEvent::Stats { tokens, .. } => {
+                        self.tokens = self.tokens.saturating_add(tokens);
                     }
                     PluginEvent::Message { sender, text, .. } => {
                         self.awaiting = false; // a reply landed

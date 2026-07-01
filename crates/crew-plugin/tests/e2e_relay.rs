@@ -23,11 +23,17 @@ fn relay_runs_through_the_binary_and_finishes() {
             .any(|(s, t)| s == "planner → user" && t.contains("did the work")),
         "{msgs:?}"
     );
-    // A cost summary is surfaced at the end.
+    // A per-turn timeline + cost summary is surfaced at the end…
     assert!(
         msgs.iter()
-            .any(|(s, t)| s == "crew" && t.contains("tokens")),
+            .any(|(s, t)| s == "crew" && t.starts_with("turn done") && t.contains("tok")),
         "{msgs:?}"
+    );
+    // …alongside a structured Stats event for the host's token meter.
+    assert!(
+        ev.iter()
+            .any(|e| matches!(e, PluginEvent::Stats { exchanges, tokens } if *exchanges > 0 && *tokens > 0)),
+        "{ev:?}"
     );
 }
 

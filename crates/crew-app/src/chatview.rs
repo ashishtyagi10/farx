@@ -27,6 +27,7 @@ pub(crate) fn cells(pane: &ChatPane, cols: u16, rows: u16) -> Vec<CellView> {
         pane.messages.len(),
         pane.is_busy(),
         active,
+        pane.tokens,
     );
     if top > 1 {
         cells.extend(crate::chatroster::roster_cells(
