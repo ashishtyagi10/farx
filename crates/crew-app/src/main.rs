@@ -3,6 +3,8 @@ mod anim;
 mod app;
 mod boxdraw;
 mod chat;
+mod chatbody;
+mod chatcode;
 mod chatevents;
 mod chathdr;
 mod chatkeys;

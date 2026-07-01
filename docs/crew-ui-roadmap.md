@@ -36,8 +36,10 @@ a failure. Keep each iteration shippable on its own.
   Plus: structured `Activity` events (agent + state) replace "calling X…"
   transcript spam; the header names the thinking agent with elapsed seconds and
   the roster highlights it (▸ + bold).
-- [ ] **5 — Code block rendering.** Detect fenced ```code``` in messages and
+- [x] **5 — Code block rendering.** Detect fenced ```code``` in messages and
   render it in a bordered monospace card with a dimmed background and language tag.
+  Bonus: message bodies are now newline-aware (multi-line replies render as real
+  lines), and code wraps verbatim (hard chunking, no dropped break spaces).
 - [ ] **6 — Rich input area.** A framed composer with an `@agent` target hint, a
   affordance bar of available agents + slash actions, and send/enter hints.
 - [ ] **7 — Scrollbar + new-message affordance.** A visual scroll indicator and a
