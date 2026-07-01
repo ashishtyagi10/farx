@@ -71,9 +71,14 @@ impl ChatPane {
     /// Scroll the message history by `delta` lines (positive = up/older),
     /// clamped to the available scrollback for the current width/height.
     pub fn scroll(&mut self, delta: i32, cols: u16, rows: u16) {
-        // The header/roster rows and the input row sit outside the message area.
+        // The header/roster rows and the composer sit outside the message area.
         let top = self.top_rows(rows);
-        let msg_rows = rows.saturating_sub(top + 1) as usize;
+        let bottom = if top == 0 {
+            1
+        } else {
+            crate::chatinput::composer_rows(rows)
+        };
+        let msg_rows = rows.saturating_sub(top + bottom) as usize;
         // The card view (normal panes) and the plain fallback (tiny panes)
         // wrap to different line counts; clamp against whichever is shown.
         let total = if top == 0 {

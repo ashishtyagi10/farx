@@ -40,8 +40,11 @@ a failure. Keep each iteration shippable on its own.
   render it in a bordered monospace card with a dimmed background and language tag.
   Bonus: message bodies are now newline-aware (multi-line replies render as real
   lines), and code wraps verbatim (hard chunking, no dropped break spaces).
-- [ ] **6 — Rich input area.** A framed composer with an `@agent` target hint, a
+- [x] **6 — Rich input area.** A framed composer with an `@agent` target hint, a
   affordance bar of available agents + slash actions, and send/enter hints.
+  Tall panes get an affordance bar (`@agent` chips in roster colours, key hints
+  right-aligned) above a `❯` prompt with a caret; a valid leading `@mention`
+  renders bold in that agent's colour.
 - [ ] **7 — Scrollbar + new-message affordance.** A visual scroll indicator and a
   "N new ↓" pill when scrolled up, with a jump-to-latest.
 - [x] **8 — Thinking/stream timeline.** A per-turn activity timeline: which agent

@@ -7,6 +7,7 @@ mod chatbody;
 mod chatcode;
 mod chatevents;
 mod chathdr;
+mod chatinput;
 mod chatkeys;
 mod chatlayout;
 mod chatmsgs;
