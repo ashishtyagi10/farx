@@ -24,20 +24,8 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         desc: "Open the multi-agent pane (claude/codex/opencode relay)",
     },
     Cmd {
-        name: "/claude",
-        desc: "Open Claude Code in a new pane",
-    },
-    Cmd {
-        name: "/codex",
-        desc: "Open Codex in a new pane",
-    },
-    Cmd {
-        name: "/opencode",
-        desc: "Open opencode in a new pane",
-    },
-    Cmd {
         name: "/run",
-        desc: "Run a command in a new pane (/run <cmd>)",
+        desc: "Run a command in a new pane (e.g. /run claude, /run codex)",
     },
     Cmd {
         name: "/find",

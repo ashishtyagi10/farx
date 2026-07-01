@@ -79,18 +79,18 @@ fn slash_completes_copy() {
 }
 
 #[test]
-fn slash_completes_agent_tools() {
-    // the agent CLIs are in the palette
+fn agent_cli_aliases_removed_in_favor_of_run() {
+    // The /claude, /codex, /opencode aliases were dropped — `/run <tool>` covers
+    // them (and /crew still opens the multi-agent relay).
     let all: Vec<&str> = matches("/").iter().map(|c| c.name).collect();
     for name in ["/claude", "/codex", "/opencode"] {
-        assert!(all.contains(&name), "{name} missing from palette");
+        assert!(
+            !all.contains(&name),
+            "{name} should no longer be in the palette"
+        );
     }
-    // shortest-match ghosting: the stems /copy and /open win at the ambiguous
-    // prefix; one more char reaches the agent tool.
-    assert_eq!(suggest("/cod", &[]).as_deref(), Some("ex"));
-    // /open is a strict prefix of /opencode, so the agent tool is reached past it.
-    assert_eq!(suggest("/openc", &[]).as_deref(), Some("ode"));
-    assert_eq!(suggest("/cla", &[]).as_deref(), Some("ude"));
+    assert!(all.contains(&"/run"));
+    assert!(all.contains(&"/crew"));
 }
 
 #[test]

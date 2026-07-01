@@ -14,12 +14,6 @@ impl CrewApp {
             "goal" => self.spawn_goal_pane(""), // show usage hint
             "batch" => self.spawn_batch_pane(""), // show usage hint
             "crew" => self.spawn_crew_pane(),
-            // Native AI coding-agent CLIs, each in its own terminal pane (the
-            // pane re-execs the shell on exit, so a missing tool just shows its
-            // "command not found" and leaves a usable shell behind).
-            "claude" => self.run_in_pane("claude"),
-            "codex" => self.run_in_pane("codex"),
-            "opencode" => self.run_in_pane("opencode"),
             "settings" => self.spawn_settings_pane(),
             "shell" => self.spawn_new_pane(),
             // Self-update in the background: progress shows in the left-nav UPDATE
