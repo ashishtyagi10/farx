@@ -45,8 +45,11 @@ a failure. Keep each iteration shippable on its own.
   Tall panes get an affordance bar (`@agent` chips in roster colours, key hints
   right-aligned) above a `❯` prompt with a caret; a valid leading `@mention`
   renders bold in that agent's colour.
-- [ ] **7 — Scrollbar + new-message affordance.** A visual scroll indicator and a
-  "N new ↓" pill when scrolled up, with a jump-to-latest.
+- [x] **7 — Scrollbar + new-message affordance.** A visual scroll indicator and a
+  "N new ↓" pill when scrolled up, with a jump-to-latest. Proportional thumb in
+  the last column while the transcript overflows; the `↓ N new` pill counts
+  messages that arrive out of view and clears on return to the live bottom
+  (sending also snaps to latest).
 - [x] **8 — Thinking/stream timeline.** A per-turn activity timeline: which agent
   is working, elapsed time, and a live token/cost meter in the header. The broker
   times each agent call and ends every turn with a structured `Stats` event plus

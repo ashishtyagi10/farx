@@ -50,6 +50,19 @@ pub(crate) fn cells(pane: &ChatPane, cols: u16, rows: u16) -> Vec<CellView> {
             top,
             pane.scroll,
         ));
+        // Scroll affordances sit over the message area's last column/row.
+        let total = crate::chatmsgs::card_line_count(&pane.messages, cols);
+        cells.extend(crate::chatscroll::scrollbar_cells(
+            total,
+            msg_rows as usize,
+            pane.scroll,
+            cols.saturating_sub(1),
+            top,
+        ));
+        if pane.scroll > 0 {
+            let last = top + msg_rows.saturating_sub(1);
+            cells.extend(crate::chatscroll::new_pill_cells(pane.unread, cols, last));
+        }
     }
     cells.extend(crate::chatinput::composer_cells(
         &pane.input,

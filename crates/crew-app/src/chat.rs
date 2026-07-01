@@ -26,6 +26,9 @@ pub struct ChatPane {
     /// Session-wide approximate token spend (from `Stats` events), for the
     /// header's running cost meter.
     pub(crate) tokens: u64,
+    /// Messages that arrived while scrolled up — the `↓ N new` pill. Cleared
+    /// when the view returns to the live bottom.
+    pub(crate) unread: usize,
 }
 
 impl ChatPane {
@@ -41,6 +44,7 @@ impl ChatPane {
             awaiting: false,
             active: None,
             tokens: 0,
+            unread: 0,
         }
     }
 
@@ -66,29 +70,6 @@ impl ChatPane {
             _ if self.agents.is_empty() => 1,
             _ => 2,
         }
-    }
-
-    /// Scroll the message history by `delta` lines (positive = up/older),
-    /// clamped to the available scrollback for the current width/height.
-    pub fn scroll(&mut self, delta: i32, cols: u16, rows: u16) {
-        // The header/roster rows and the composer sit outside the message area.
-        let top = self.top_rows(rows);
-        let bottom = if top == 0 {
-            1
-        } else {
-            crate::chatinput::composer_rows(rows)
-        };
-        let msg_rows = rows.saturating_sub(top + bottom) as usize;
-        // The card view (normal panes) and the plain fallback (tiny panes)
-        // wrap to different line counts; clamp against whichever is shown.
-        let total = if top == 0 {
-            crate::chatlayout::wrapped_line_count(&self.messages, cols)
-        } else {
-            crate::chatmsgs::card_line_count(&self.messages, cols)
-        };
-        let max = total.saturating_sub(msg_rows);
-        let next = self.scroll as i64 + delta as i64;
-        self.scroll = next.clamp(0, max as i64) as usize;
     }
 
     /// Drain plugin events; return PollResult with changed flag and any host actions.
@@ -132,6 +113,9 @@ impl ChatPane {
                         ..
                     } => {
                         self.awaiting = false; // a reply landed
+                        if self.scroll > 0 {
+                            self.unread += 1; // arrived out of view
+                        }
                         self.messages.push(Message {
                             sender,
                             text,

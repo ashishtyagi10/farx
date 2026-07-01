@@ -12,6 +12,7 @@ mod chatkeys;
 mod chatlayout;
 mod chatmsgs;
 mod chatroster;
+mod chatscroll;
 mod chatspawn;
 mod chattime;
 mod chatview;
