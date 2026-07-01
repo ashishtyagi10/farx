@@ -9,6 +9,82 @@ pub(crate) struct Cmd {
     pub desc: &'static str,
 }
 
+/// One row in the input-bar palette: either a slash command, or a predefined
+/// **value** for a command that offers a fixed set (e.g. `/theme` → the theme
+/// names). Picking a value from the list beats remembering and typing it — the
+/// "choose from a list" pattern, reusable by any closed-set command.
+pub(crate) struct MenuItem {
+    /// Text shown in the row (command name, or value).
+    pub label: String,
+    /// Dim hint after the label.
+    pub desc: String,
+    /// Input text set when this row is accepted with Tab (or run on Enter when
+    /// `submit`).
+    pub fill: String,
+    /// Enter **runs** `fill` when true; when false Enter just inserts `fill` and
+    /// keeps the palette open — a command expanding into its value picker.
+    pub submit: bool,
+}
+
+/// The predefined `(value, description)` choices a command offers, or `None` for
+/// a freeform / no-value command. **The single extension point** for the value
+/// picker: give a command a closed set of values here and it gains an inline
+/// picker for free (its rows run on Enter; unknown text still submits freeform).
+pub(crate) fn options_for(cmd: &str) -> Option<Vec<(String, String)>> {
+    match cmd {
+        "/theme" => Some(
+            crew_theme::ALL_THEMES
+                .iter()
+                .map(|t| (t.as_str().to_string(), t.describe().to_string()))
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+/// The palette rows for the current input. Once a value-picker command has been
+/// typed with a trailing space (`/theme …`), its value options are shown
+/// (filtered by any partial value); otherwise the matching command names are
+/// shown, and a value-picker command expands into its picker rather than running.
+pub(crate) fn menu_items(text: &str) -> Vec<MenuItem> {
+    if !text.starts_with('/') {
+        return Vec::new();
+    }
+    if let Some(sp) = text.find(' ') {
+        let cmd = &text[..sp];
+        let arg = text[sp + 1..].trim_start().to_lowercase();
+        let Some(opts) = options_for(cmd) else {
+            return Vec::new(); // freeform arg (e.g. /run cargo …) → no picker
+        };
+        return opts
+            .into_iter()
+            .filter(|(v, _)| v.to_lowercase().starts_with(&arg))
+            .map(|(v, desc)| MenuItem {
+                fill: format!("{cmd} {v}"),
+                label: v,
+                desc,
+                submit: true,
+            })
+            .collect();
+    }
+    matches(text)
+        .into_iter()
+        .map(|c| {
+            let expands = options_for(c.name).is_some();
+            MenuItem {
+                label: c.name.to_string(),
+                desc: c.desc.to_string(),
+                fill: if expands {
+                    format!("{} ", c.name)
+                } else {
+                    c.name.to_string()
+                },
+                submit: !expands,
+            }
+        })
+        .collect()
+}
+
 /// Known slash commands (kept in sync with `run_slash_command`).
 pub(crate) const COMMANDS: &[Cmd] = &[
     Cmd {
@@ -89,7 +165,7 @@ pub(crate) const COMMANDS: &[Cmd] = &[
     },
     Cmd {
         name: "/theme",
-        desc: "Switch theme (/theme [paper-light|paper-dark])",
+        desc: "Switch theme — pick from the list",
     },
     Cmd {
         name: "/notify",
@@ -184,6 +260,16 @@ pub(crate) fn suggest(text: &str, history: &[String]) -> Option<String> {
         return None;
     }
     if text.starts_with('/') {
+        // A value-picker command past its space ("/theme cr") ghosts the first
+        // matching value's remainder, so Tab completes it like a command name.
+        if let Some(sp) = text.find(' ') {
+            let (cmd, arg) = (&text[..sp], &text[sp + 1..]);
+            return options_for(cmd)?
+                .into_iter()
+                .map(|(v, _)| v)
+                .find(|v| v.starts_with(arg) && v != arg)
+                .map(|v| v[arg.len()..].to_string());
+        }
         return COMMANDS
             .iter()
             .map(|c| c.name)

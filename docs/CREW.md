@@ -100,7 +100,10 @@ The docked command bar supports:
   then subsequence matches (e.g. `/dmp` finds `/dump`) — and **scrolls** to the
   selection when the match list is long. When several commands share a prefix,
   the **shortest** is ghosted as the autosuggestion (e.g. `/clear` ghosts before
-  `/clearlog`, which is one keystroke further).
+  `/clearlog`, which is one keystroke further). Commands with a **fixed set of
+  values** (like `/theme`) expand into a **value picker**: select the command
+  (or type its trailing space) and the palette lists the choices to arrow through
+  and `Enter` — no need to remember or type the exact value.
 - **`/broadcast`, `/zoom`, `/sidebar`** — palette-discoverable toggles that mirror
   the `Cmd+S` / `Cmd+Z` / `Cmd+G` chords, for when the chord slips your mind.
 - **`/font <n>`** — sets the font size to an exact value (clamped 12–32), unlike
@@ -110,7 +113,9 @@ The docked command bar supports:
   outside the `/settings` pane take effect without a restart.
 - **`/theme [name]`** — switches the theme live and persists it (`paper-dark`,
   `paper-light`, `crt-green`, `crt-amber`, `crt-blue`); no argument reports the
-  current theme. `Ctrl+Shift+L` cycles through all of them. See [Themes](#themes).
+  current theme. Selecting `/theme` in the palette opens an arrow-selectable
+  **picker** of the themes, so you don't have to type the name. `Ctrl+Shift+L`
+  cycles through all of them. See [Themes](#themes).
 - **`/only`** — closes every pane except the focused one (a quick "focus mode");
   a no-op when only one pane is open.
 - **`/edit <file>`** — opens the file in your terminal editor (`$VISUAL`, else

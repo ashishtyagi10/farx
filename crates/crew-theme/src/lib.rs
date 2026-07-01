@@ -303,6 +303,17 @@ impl ThemeId {
         }
     }
 
+    /// A short human description, for the `/theme` value picker.
+    pub fn describe(self) -> &'static str {
+        match self {
+            ThemeId::PaperDark => "high-contrast newspaper (dark)",
+            ThemeId::PaperLight => "warm paper page (light)",
+            ThemeId::CrtGreen => "green phosphor CRT",
+            ThemeId::CrtAmber => "amber phosphor CRT",
+            ThemeId::CrtBlue => "blue phosphor CRT",
+        }
+    }
+
     pub fn from_name(s: &str) -> Option<ThemeId> {
         match s.trim() {
             "paper-dark" => Some(ThemeId::PaperDark),

@@ -27,7 +27,7 @@ impl InputBar {
             }
         }
 
-        let menu = crate::suggest::matches(&self.text);
+        let menu = crate::suggest::menu_items(&self.text);
         let menu_open = self.focused && !menu.is_empty();
 
         // Command-palette navigation (Up/Down) when it's open.
@@ -58,13 +58,14 @@ impl InputBar {
             }
         }
 
-        // Tab / Right accept: the highlighted command, else the ghost suffix.
+        // Tab / Right accept: fill the highlighted row (a command name, a
+        // "/cmd " that opens its value picker, or a picked value), else the ghost.
         if matches!(
             &key.logical_key,
             Key::Named(NamedKey::Tab) | Key::Named(NamedKey::ArrowRight)
         ) {
             if menu_open {
-                self.text = menu[self.menu_sel.min(menu.len() - 1)].name.to_string();
+                self.text = menu[self.menu_sel.min(menu.len() - 1)].fill.clone();
             } else if let Some(g) = self.ghost() {
                 // Accept exactly what's shown as ghost text (history, cd, or path).
                 self.text.push_str(&g);
@@ -73,13 +74,20 @@ impl InputBar {
             return None;
         }
 
-        // Enter on an open palette runs the highlighted command.
+        // Enter on an open palette: run the highlighted row when it's runnable
+        // (a command or a picked value), or expand a value-picker command into
+        // its list — filling "/cmd " and keeping the palette open to choose.
         if menu_open && matches!(&key.logical_key, Key::Named(NamedKey::Enter)) {
-            let name = menu[self.menu_sel.min(menu.len() - 1)].name.to_string();
-            self.history.push(name.clone());
-            self.text.clear();
+            let item = &menu[self.menu_sel.min(menu.len() - 1)];
+            let fill = item.fill.clone();
             self.menu_sel = 0;
-            return Some(name);
+            if !item.submit {
+                self.text = fill;
+                return None;
+            }
+            self.history.push(fill.clone());
+            self.text.clear();
+            return Some(fill);
         }
 
         let (ch, enter, backspace) = match &key.logical_key {

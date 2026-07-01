@@ -79,6 +79,56 @@ fn slash_completes_copy() {
 }
 
 #[test]
+fn theme_command_expands_into_a_value_picker() {
+    // Typing the command name: the /theme row fills "/theme " (a trailing space)
+    // and does NOT submit — selecting it opens the value list.
+    let theme = menu_items("/theme")
+        .into_iter()
+        .find(|m| m.label == "/theme")
+        .expect("/theme in palette");
+    assert_eq!(theme.fill, "/theme ");
+    assert!(!theme.submit, "picker command expands, doesn't run");
+}
+
+#[test]
+fn theme_space_lists_all_themes_as_runnable_values() {
+    let items = menu_items("/theme ");
+    let labels: Vec<&str> = items.iter().map(|m| m.label.as_str()).collect();
+    for name in [
+        "paper-dark",
+        "paper-light",
+        "crt-green",
+        "crt-amber",
+        "crt-blue",
+    ] {
+        assert!(labels.contains(&name), "{name} missing from picker");
+    }
+    // Each value fills the full command and submits on Enter.
+    let green = items.iter().find(|m| m.label == "crt-green").unwrap();
+    assert_eq!(green.fill, "/theme crt-green");
+    assert!(green.submit);
+}
+
+#[test]
+fn theme_partial_value_filters_and_ghosts() {
+    // "/theme cr" narrows to the CRT themes…
+    let labels: Vec<String> = menu_items("/theme cr")
+        .into_iter()
+        .map(|m| m.label)
+        .collect();
+    assert!(labels.iter().all(|l| l.starts_with("cr")));
+    assert!(labels.contains(&"crt-green".to_string()));
+    // …and ghost-completes the first match like a command.
+    assert_eq!(suggest("/theme crt-a", &[]).as_deref(), Some("mber"));
+}
+
+#[test]
+fn freeform_command_has_no_picker() {
+    // /run takes an arbitrary command, so past its space there's no value list.
+    assert!(menu_items("/run cargo build").is_empty());
+}
+
+#[test]
 fn agent_cli_aliases_removed_in_favor_of_run() {
     // The /claude, /codex, /opencode aliases were dropped — `/run <tool>` covers
     // them (and /crew still opens the multi-agent relay).
