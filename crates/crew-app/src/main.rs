@@ -3,6 +3,7 @@ mod anim;
 mod app;
 mod boxdraw;
 mod chat;
+mod chathdr;
 mod chatlayout;
 mod chatspawn;
 mod chords;

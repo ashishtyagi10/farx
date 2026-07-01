@@ -76,7 +76,8 @@ impl ChatPane {
     /// Scroll the message history by `delta` lines (positive = up/older),
     /// clamped to the available scrollback for the current width/height.
     pub fn scroll(&mut self, delta: i32, cols: u16, rows: u16) {
-        let msg_rows = rows.saturating_sub(1) as usize;
+        // The header (row 0) and the input row both sit outside the message area.
+        let msg_rows = rows.saturating_sub(2) as usize;
         let max =
             crate::chatlayout::wrapped_line_count(&self.messages, cols).saturating_sub(msg_rows);
         let next = self.scroll as i64 + delta as i64;
@@ -127,16 +128,40 @@ impl ChatPane {
         }
     }
 
-    /// Render the channel as CellView cells.
+    /// Render the channel as CellView cells: a status header on row 0, then the
+    /// message body + input composer below it. Tiny panes (no room for a header)
+    /// fall back to the plain body.
     pub fn cells(&self, cols: u16, rows: u16) -> Vec<CellView> {
-        layout_cells(
+        if rows < 3 {
+            return layout_cells(
+                &self.messages,
+                &self.input,
+                cols,
+                rows,
+                self.scroll,
+                self.connected,
+            );
+        }
+        let mut cells = crate::chathdr::header_cells(
+            cols,
+            &self.channel,
+            self.connected,
+            self.messages.len(),
+            self.awaiting,
+        );
+        let mut body = layout_cells(
             &self.messages,
             &self.input,
             cols,
-            rows,
+            rows - 1,
             self.scroll,
             self.connected,
-        )
+        );
+        for c in &mut body {
+            c.row += 1; // shift the body below the header row
+        }
+        cells.append(&mut body);
+        cells
     }
 
     /// Handle a winit key event. Returns [`ChatAction::Close`] when the user asks

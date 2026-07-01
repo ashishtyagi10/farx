@@ -1,0 +1,142 @@
+//! The crew pane's header row: a title on the left and a right-aligned live
+//! status — a connection dot, the message count, and an animated "thinking"
+//! spinner while a reply is pending. Rendered as row 0 of the pane, with the
+//! message body laid out below it.
+use crew_render::CellView;
+
+/// ASCII spinner frames for the "thinking" indicator (Nerd-Font-independent).
+const SPINNER: [char; 4] = ['|', '/', '-', '\\'];
+
+/// Append `s` at `(row, col..)` in `fg`; returns the next free column.
+fn push(
+    cells: &mut Vec<CellView>,
+    row: u16,
+    col: u16,
+    s: &str,
+    fg: (u8, u8, u8),
+    bold: bool,
+) -> u16 {
+    let bg = crew_theme::theme().page_bg;
+    for (i, ch) in s.chars().enumerate() {
+        cells.push(CellView {
+            col: col + i as u16,
+            row,
+            c: ch,
+            fg,
+            bg,
+            bold,
+            italic: false,
+        });
+    }
+    col + s.chars().count() as u16
+}
+
+/// The right-aligned status segments as `(text, colour)`, in left-to-right order.
+/// Joined with two-space gaps; a leading spinner appears only while `awaiting`.
+fn status_segments(
+    connected: bool,
+    msg_count: usize,
+    awaiting: bool,
+) -> Vec<(String, (u8, u8, u8))> {
+    let t = crew_theme::theme();
+    let mut segs = Vec::new();
+    if awaiting {
+        let f = (crate::anim::now_ms() / 120) as usize % SPINNER.len();
+        segs.push((format!("{} thinking", SPINNER[f]), crate::palette::accent()));
+    }
+    let plural = if msg_count == 1 { "" } else { "s" };
+    segs.push((format!("{msg_count} msg{plural}"), t.text_muted));
+    let (dot, dot_c) = if connected {
+        ('\u{25cf}', t.activity) // ● connected
+    } else {
+        ('\u{25cb}', t.dim) // ○ connecting
+    };
+    segs.push((dot.to_string(), dot_c));
+    segs
+}
+
+/// Build the single-row header for a `cols`-wide crew pane.
+pub(crate) fn header_cells(
+    cols: u16,
+    channel: &str,
+    connected: bool,
+    msg_count: usize,
+    awaiting: bool,
+) -> Vec<CellView> {
+    if cols == 0 {
+        return Vec::new();
+    }
+    let mut cells = Vec::new();
+
+    // Title, left-aligned (truncated by the right-side status if space is tight).
+    let title = if channel.is_empty() {
+        "crew".to_string()
+    } else {
+        format!("crew \u{00b7} {channel}") // crew · <channel>
+    };
+
+    // Right-aligned status, laid out from the right edge.
+    let segs = status_segments(connected, msg_count, awaiting);
+    let status_w: usize = segs.iter().map(|(s, _)| s.chars().count()).sum::<usize>()
+        + segs.len().saturating_sub(1) * 2;
+    let mut x = cols.saturating_sub(status_w as u16);
+    for (i, (s, c)) in segs.iter().enumerate() {
+        if i > 0 {
+            x += 2; // two-space gap between segments
+        }
+        if x < cols {
+            x = push(&mut cells, 0, x, s, *c, false);
+        }
+    }
+
+    // Title only up to where the status begins, so they never overlap.
+    let title_room = cols.saturating_sub(status_w as u16 + 1) as usize;
+    let title: String = title.chars().take(title_room).collect();
+    push(&mut cells, 0, 0, &title, crate::palette::accent(), true);
+
+    cells
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text(cells: &[CellView], row: u16) -> String {
+        let mut v: Vec<(u16, char)> = cells
+            .iter()
+            .filter(|c| c.row == row)
+            .map(|c| (c.col, c.c))
+            .collect();
+        v.sort_unstable();
+        v.into_iter().map(|(_, c)| c).collect()
+    }
+
+    #[test]
+    fn header_shows_title_channel_and_count() {
+        let cells = header_cells(60, "general", true, 3, false);
+        let line = text(&cells, 0);
+        assert!(line.contains("crew"), "title missing: {line}");
+        assert!(line.contains("general"), "channel missing: {line}");
+        assert!(line.contains("3 msgs"), "count missing: {line}");
+        assert!(line.contains('\u{25cf}'), "connected dot missing: {line}");
+    }
+
+    #[test]
+    fn singular_message_and_connecting_dot() {
+        let line = text(&header_cells(60, "", false, 1, false), 0);
+        assert!(line.contains("1 msg") && !line.contains("1 msgs"));
+        assert!(line.contains('\u{25cb}'), "connecting dot missing: {line}");
+    }
+
+    #[test]
+    fn awaiting_shows_thinking_spinner() {
+        let line = text(&header_cells(60, "c", true, 0, true), 0);
+        assert!(line.contains("thinking"), "spinner label missing: {line}");
+    }
+
+    #[test]
+    fn all_cells_stay_within_width() {
+        let cells = header_cells(20, "a-very-long-channel-name", true, 999, true);
+        assert!(cells.iter().all(|c| c.col < 20 && c.row == 0));
+    }
+}
