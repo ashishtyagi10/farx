@@ -95,12 +95,12 @@ config and plugins load.
 The docked command bar supports:
 
 - **Slash commands** — type `/` for a command palette (↑/↓ to pick, Tab/→ to
-  fill, Enter to run): `/shell`, `/crew`, `/claude`, `/codex`, `/opencode`, `/run <cmd>`, `/edit <file>`, `/settings`, `/find <text>`, `/name <text>`, `/clear`, `/only`, `/copy`, `/dump`, `/open`, `/font`, `/reload`, `/theme`, `/update`,
+  fill, Enter to run): `/shell`, `/crew`, `/run <cmd>`, `/edit <file>`, `/settings`, `/find <text>`, `/name <text>`, `/clear`, `/only`, `/copy`, `/dump`, `/open`, `/font`, `/reload`, `/theme`, `/update`,
   `/broadcast`, `/zoom`, `/sidebar`, `/keys`, `/far`, `/exit`. The palette is **fuzzy** — prefix matches rank first,
   then subsequence matches (e.g. `/dmp` finds `/dump`) — and **scrolls** to the
   selection when the match list is long. When several commands share a prefix,
-  the **shortest** is ghosted as the autosuggestion (e.g. `/co` → `/copy`, with
-  `/codex` one keystroke further at `/cod`).
+  the **shortest** is ghosted as the autosuggestion (e.g. `/clear` ghosts before
+  `/clearlog`, which is one keystroke further).
 - **`/broadcast`, `/zoom`, `/sidebar`** — palette-discoverable toggles that mirror
   the `Cmd+S` / `Cmd+Z` / `Cmd+G` chords, for when the chord slips your mind.
 - **`/font <n>`** — sets the font size to an exact value (clamped 12–32), unlike
@@ -113,17 +113,15 @@ The docked command bar supports:
   two. See [Themes](#themes).
 - **`/only`** — closes every pane except the focused one (a quick "focus mode");
   a no-op when only one pane is open.
-- **`/claude`, `/codex`, `/opencode`** — open a native AI coding-agent CLI in its
-  own tiled terminal pane. Each runs the tool and re-execs your shell on exit, so
-  a missing tool just prints "command not found" and leaves a usable shell behind.
-  (Distinct from `/crew`, which opens the multi-agent broker relay pane.)
 - **`/edit <file>`** — opens the file in your terminal editor (`$VISUAL`, else
   `$EDITOR`, else `vi`) in a new pane. Path arguments to `/edit`, `/open`, and
   `/dump` expand `~` and `$VAR`/`${VAR}` and resolve relative paths against the
   working directory. (`/open` instead hands the path to the OS default app.)
 - **`/run <cmd>`** — launches `cmd` in its own tiled pane (labeled by the
   command) that stays open after it finishes, so builds, tests, and long-running
-  jobs run alongside your shells instead of blocking one.
+  jobs run alongside your shells instead of blocking one. This is also how you
+  open a coding-agent CLI in a pane — `/run claude`, `/run codex`, `/run opencode`.
+  (Distinct from `/crew`, which opens the multi-agent broker relay pane.)
 - **`/copy`** — copies the focused terminal pane's **full scrollback** to the
   system clipboard (Cmd+C copies only the visible screen); the line count is
   flashed on the input bar.
@@ -141,9 +139,13 @@ The docked command bar supports:
   writes there (a relative path resolves against the working directory).
 - **`/far`** — opens a Far Manager-style **dual-pane file manager** as a pane in
   the grid (like `/shell`): two side-by-side directory listings with a Far
-  function-key bar. `Tab` switches the active panel, `↑`/`↓`/`PgUp`/`PgDn`/`Home`/
-  `End` move the cursor, `Enter` descends into a folder (or `..`) or opens a file
-  with the OS default, `Backspace` climbs to the parent, `Esc`/`F10` closes it.
+  function-key bar and a **command line** at the bottom. `Tab` switches the active
+  panel, `↑`/`↓`/`PgUp`/`PgDn`/`Home`/`End` move the cursor, `Enter` descends into
+  a folder (or `..`) or opens a file with the OS default, `Backspace` climbs to
+  the parent, `F5`/`F6` copy/move to the other panel, `F7` makes a folder, `F8`
+  trashes, `F10` closes. Type on the **command line** and press `Enter` to run a
+  command in the active panel's directory (in its own pane, like `/run`); `Esc`
+  clears a typed command (and closes the pane when it's empty).
 - **`/crew`** — opens a **multi-agent pane** where the installed CLI coding
   agents (claude, codex, opencode) message each other to work a task. See
   [Multi-agent relay](#multi-agent-relay-crew) below.
@@ -232,6 +234,22 @@ hung agent is killed and logged, and the broker moves on.
 **Observability.** Every hop is logged in the pane as `from → to` with the
 reply, so the whole conversation — including `[done]`, `[stopped]`, and
 `[error]` outcomes — is visible.
+
+**Models & rate-limits.** When no agent CLIs are installed, `/crew` runs its
+inbuilt API agents (planner/coder/reviewer) over an LLM: it prefers
+`OPENROUTER_API_KEY` (free models by default) and falls back to
+`ANTHROPIC_API_KEY`. To survive OpenRouter's free-tier throttling, the provider
+retries transient rate-limits (honoring `Retry-After`) and then rolls through a
+**fallback chain** of free models on *different* upstream providers — so one
+provider's limit doesn't stall the relay. Override the whole chain with a
+comma-separated list, tried in order:
+
+```sh
+export CREW_OPENROUTER_MODEL="deepseek/deepseek-chat-v3.1:free,qwen/qwen3-235b-a22b:free"
+```
+
+Free models still share a hard account-wide daily cap; for sustained heavy use,
+put a cheap **paid** slug (no daily cap) in the chain, or buy OpenRouter credits.
 
 **Isolation & threading.** Agents run in a broker **subprocess** (the
 `crew-broker-plugin` binary) over Crew's JSON-line plugin protocol, so all the
