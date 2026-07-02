@@ -45,6 +45,40 @@ fn parse_model_chain(env_val: Option<String>, default: &[&str]) -> Vec<String> {
     }
 }
 
+/// The provider backing the inbuilt agents.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ProviderKind {
+    Mock,
+    DashScope,
+    OpenRouter,
+    Anthropic,
+}
+
+/// Resolve which provider backs the inbuilt agents. The mock (tests) always
+/// wins; then an explicit `CREW_PROVIDER` (dashscope|openrouter|anthropic);
+/// then auto-discovery in preference order — DashScope (paid Qwen) before
+/// OpenRouter (free chains) before Anthropic.
+fn pick_provider(force: Option<&str>, has_key: impl Fn(&str) -> bool) -> Option<ProviderKind> {
+    if has_key("CREW_BROKER_MOCK_REPLY") {
+        return Some(ProviderKind::Mock);
+    }
+    match force.map(str::to_ascii_lowercase).as_deref() {
+        Some("dashscope") => return Some(ProviderKind::DashScope),
+        Some("openrouter") => return Some(ProviderKind::OpenRouter),
+        Some("anthropic") => return Some(ProviderKind::Anthropic),
+        _ => {}
+    }
+    if has_key("DASHSCOPE_API_KEY") {
+        Some(ProviderKind::DashScope)
+    } else if has_key("OPENROUTER_API_KEY") {
+        Some(ProviderKind::OpenRouter)
+    } else if has_key("ANTHROPIC_API_KEY") {
+        Some(ProviderKind::Anthropic)
+    } else {
+        None
+    }
+}
+
 pub struct Registry {
     agents: Vec<Box<dyn Adapter>>,
 }
@@ -55,14 +89,16 @@ impl Registry {
         Self { agents }
     }
 
-    /// Build the inbuilt agent roster (planner/coder/reviewer). Prefers OpenRouter
-    /// (`OPENROUTER_API_KEY`) — every role runs on the [`DEFAULT_OPENROUTER_CHAIN`]
-    /// (or a `CREW_OPENROUTER_MODEL` override), auto-falling-back model to model on
-    /// rate-limits — then Anthropic (`ANTHROPIC_API_KEY`, per-tier native models).
-    /// Empty when neither key is set, so the broker explains how to enable it
-    /// rather than routing to nothing.
+    /// Build the inbuilt agent roster (planner/coder/reviewer). `CREW_PROVIDER`
+    /// (dashscope|openrouter|anthropic) forces a provider; otherwise keys are
+    /// probed in preference order — DashScope (`DASHSCOPE_API_KEY`, paid Qwen
+    /// on the [`DEFAULT_DASHSCOPE_CHAIN`]), then OpenRouter
+    /// (`OPENROUTER_API_KEY`, the free [`DEFAULT_OPENROUTER_CHAIN`]), then
+    /// Anthropic (`ANTHROPIC_API_KEY`, per-tier native models). Empty when no
+    /// key is set (or the forced provider's key is missing), so the broker
+    /// explains how to enable it rather than routing to nothing.
     ///
-    /// `CREW_BROKER_MOCK_REPLY` overrides the provider with a fixed-reply mock
+    /// `CREW_BROKER_MOCK_REPLY` overrides everything with a fixed-reply mock
     /// (no network), so the relay can be driven deterministically offline and in
     /// end-to-end tests of the broker binary.
     pub fn discover() -> Self {
@@ -73,33 +109,24 @@ impl Registry {
     /// construct) applied on top of the provider's defaults, so different
     /// agents can run different models side by side.
     pub fn discover_with(overrides: &std::collections::HashMap<String, String>) -> Self {
-        if let Ok(reply) = std::env::var("CREW_BROKER_MOCK_REPLY") {
-            let provider = Arc::new(crew_hive::MockProvider { reply });
-            return Self::new(inbuilt_agents(
-                provider,
-                |t| t.model_id().to_string(),
-                overrides,
-            ));
-        }
-        if let Ok(provider) = crew_hive::OpenRouterProvider::from_env() {
-            let chain = parse_model_chain(
-                std::env::var("CREW_OPENROUTER_MODEL").ok(),
-                DEFAULT_OPENROUTER_CHAIN,
-            );
-            // Every role starts on the chain's first slug (the role's system prompt
-            // steers it); the provider rolls to later slugs when one is limited.
-            let primary = chain[0].clone();
-            let provider = provider.with_fallbacks(chain);
-            return Self::new(inbuilt_agents(
-                Arc::new(provider),
-                move |_| primary.clone(),
-                overrides,
-            ));
-        }
-        // Alibaba Cloud DashScope: the same OpenAI-compatible wire shape on a
-        // different endpoint, running the Qwen commercial models.
-        if let Ok(key) = std::env::var("DASHSCOPE_API_KEY") {
-            if !key.is_empty() {
+        let force = std::env::var("CREW_PROVIDER").ok();
+        let has = |k: &str| std::env::var(k).is_ok_and(|v| !v.is_empty());
+        match pick_provider(force.as_deref(), has) {
+            Some(ProviderKind::Mock) => {
+                let reply = std::env::var("CREW_BROKER_MOCK_REPLY").unwrap_or_default();
+                let provider = Arc::new(crew_hive::MockProvider { reply });
+                Self::new(inbuilt_agents(
+                    provider,
+                    |t| t.model_id().to_string(),
+                    overrides,
+                ))
+            }
+            // Alibaba Cloud DashScope: the same OpenAI-compatible wire shape on
+            // a different endpoint, running the Qwen commercial models.
+            Some(ProviderKind::DashScope) => {
+                let Ok(key) = std::env::var("DASHSCOPE_API_KEY") else {
+                    return Self::new(Vec::new()); // forced without a key
+                };
                 let chain = parse_model_chain(
                     std::env::var("CREW_DASHSCOPE_MODEL").ok(),
                     DEFAULT_DASHSCOPE_CHAIN,
@@ -110,21 +137,43 @@ impl Registry {
                 let provider = crew_hive::OpenRouterProvider::new(key)
                     .with_endpoint(url)
                     .with_fallbacks(chain);
-                return Self::new(inbuilt_agents(
+                Self::new(inbuilt_agents(
                     Arc::new(provider),
                     move |_| primary.clone(),
                     overrides,
-                ));
+                ))
             }
+            Some(ProviderKind::OpenRouter) => {
+                let Ok(provider) = crew_hive::OpenRouterProvider::from_env() else {
+                    return Self::new(Vec::new()); // forced without a key
+                };
+                let chain = parse_model_chain(
+                    std::env::var("CREW_OPENROUTER_MODEL").ok(),
+                    DEFAULT_OPENROUTER_CHAIN,
+                );
+                // Every role starts on the chain's first slug (the role's system
+                // prompt steers it); the provider rolls to later slugs when one
+                // is limited.
+                let primary = chain[0].clone();
+                let provider = provider.with_fallbacks(chain);
+                Self::new(inbuilt_agents(
+                    Arc::new(provider),
+                    move |_| primary.clone(),
+                    overrides,
+                ))
+            }
+            Some(ProviderKind::Anthropic) => {
+                let Ok(provider) = crew_hive::AnthropicProvider::from_env() else {
+                    return Self::new(Vec::new()); // forced without a key
+                };
+                Self::new(inbuilt_agents(
+                    Arc::new(provider),
+                    |t| t.model_id().to_string(),
+                    overrides,
+                ))
+            }
+            None => Self::new(Vec::new()),
         }
-        if let Ok(provider) = crew_hive::AnthropicProvider::from_env() {
-            return Self::new(inbuilt_agents(
-                Arc::new(provider),
-                |t| t.model_id().to_string(),
-                overrides,
-            ));
-        }
-        Self::new(Vec::new())
     }
 
     /// Registered agent names, in registration order.

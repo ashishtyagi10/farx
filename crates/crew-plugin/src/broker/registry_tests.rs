@@ -53,6 +53,58 @@ fn infos_carry_name_role_and_model() {
     assert_eq!(infos[0].model, ""); // Stub uses the default (unknown) model
 }
 
+fn keys(set: &'static [&'static str]) -> impl Fn(&str) -> bool {
+    move |k| set.contains(&k)
+}
+
+#[test]
+fn pick_prefers_dashscope_over_openrouter() {
+    let has = keys(&[
+        "DASHSCOPE_API_KEY",
+        "OPENROUTER_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]);
+    assert_eq!(pick_provider(None, has), Some(ProviderKind::DashScope));
+}
+
+#[test]
+fn pick_auto_order_openrouter_then_anthropic() {
+    let has = keys(&["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"]);
+    assert_eq!(pick_provider(None, has), Some(ProviderKind::OpenRouter));
+    let has = keys(&["ANTHROPIC_API_KEY"]);
+    assert_eq!(pick_provider(None, has), Some(ProviderKind::Anthropic));
+    assert_eq!(pick_provider(None, keys(&[])), None);
+}
+
+#[test]
+fn pick_forced_provider_beats_auto_order() {
+    let has = keys(&["DASHSCOPE_API_KEY", "OPENROUTER_API_KEY"]);
+    assert_eq!(
+        pick_provider(Some("openrouter"), has),
+        Some(ProviderKind::OpenRouter)
+    );
+    // Case-insensitive; unknown values fall back to auto.
+    let has = keys(&["DASHSCOPE_API_KEY", "OPENROUTER_API_KEY"]);
+    assert_eq!(
+        pick_provider(Some("Anthropic"), has),
+        Some(ProviderKind::Anthropic)
+    );
+    let has = keys(&["DASHSCOPE_API_KEY"]);
+    assert_eq!(
+        pick_provider(Some("bogus"), has),
+        Some(ProviderKind::DashScope)
+    );
+}
+
+#[test]
+fn pick_mock_beats_everything() {
+    let has = keys(&["CREW_BROKER_MOCK_REPLY", "DASHSCOPE_API_KEY"]);
+    assert_eq!(
+        pick_provider(Some("dashscope"), has),
+        Some(ProviderKind::Mock)
+    );
+}
+
 #[test]
 fn model_chain_defaults_when_unset() {
     let chain = parse_model_chain(None, DEFAULT_OPENROUTER_CHAIN);
