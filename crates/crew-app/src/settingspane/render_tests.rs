@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::CrewConfig;
+use crate::settingspane::FIELDS;
 
 fn pane() -> SettingsPane {
     SettingsPane::new(CrewConfig::default(), Vec::new())
@@ -23,10 +24,14 @@ fn row_text(cells: &[CellView], row: u16) -> String {
     s
 }
 
+fn dump(cells: &[CellView], rows: u16) -> String {
+    (0..rows).map(|r| row_text(cells, r) + "\n").collect()
+}
+
 #[test]
 fn every_field_renders_on_a_tall_pane() {
-    let cells = pane().cells(80, 24);
-    let all: String = (0..24).map(|r| row_text(&cells, r) + "\n").collect();
+    let cells = pane().cells(80, 30);
+    let all = dump(&cells, 30);
     for f in FIELDS.iter().take(FIELDS.len() - 2) {
         assert!(
             all.contains(label_of(*f)),
@@ -34,45 +39,44 @@ fn every_field_renders_on_a_tall_pane() {
             label_of(*f)
         );
     }
-    assert!(all.contains("[ Save ]") && all.contains("[ Cancel ]"));
+    assert!(all.contains("[ Save \u{2318}S ]"), "save button: {all}");
+    assert!(all.contains("[ Cancel esc ]"), "cancel button: {all}");
 }
 
 #[test]
-fn focused_row_carries_marker_and_cursor() {
-    let cells = pane().cells(80, 24);
-    let first = row_text(&cells, 1);
-    assert!(
-        first.trim_start().starts_with("\u{203a} Font family"),
-        "got: {first}"
-    );
-    assert!(first.contains('\u{2588}'), "cursor missing: {first}");
+fn cards_have_legends() {
+    let all = dump(&pane().cells(80, 30), 30);
+    for t in ["APPEARANCE", "WINDOW", "NOTIFICATIONS"] {
+        assert!(all.contains(t), "missing card '{t}' in:\n{all}");
+    }
+}
+
+#[test]
+fn focused_input_carries_cursor() {
+    // Focus starts on FontFamily; its box content row carries the cursor.
+    let all = dump(&pane().cells(80, 30), 30);
+    assert!(all.contains('\u{2588}'), "cursor missing:\n{all}");
 }
 
 #[test]
 fn short_pane_scrolls_to_keep_focus_visible() {
     let mut p = pane();
-    p.focus = 14; // NotifyPatterns, the last field row
-    let cells = p.cells(80, 10);
-    let all: String = (0..10).map(|r| row_text(&cells, r) + "\n").collect();
-    assert!(
-        all.contains("Notify patterns"),
-        "focused row visible: {all}"
-    );
-    assert!(all.contains('\u{2191}'), "up hint expected: {all}");
-    assert!(
-        !all.contains("Font family"),
-        "first row scrolled out: {all}"
-    );
+    p.focus = FIELDS
+        .iter()
+        .position(|&f| f == Field::NotifyPatterns)
+        .unwrap();
+    let cells = p.cells(80, 12);
+    let all = dump(&cells, 12);
+    assert!(all.contains("Patterns"), "focused field visible:\n{all}");
+    assert!(all.contains('\u{2191}'), "up hint expected:\n{all}");
 }
 
 #[test]
-fn scroll_offset_windows_the_focus() {
-    assert_eq!(scroll_offset(0, 15, 7), 0);
-    assert_eq!(scroll_offset(6, 15, 7), 0);
-    assert_eq!(scroll_offset(7, 15, 7), 1);
-    assert_eq!(scroll_offset(14, 15, 7), 8);
-    assert_eq!(scroll_offset(16, 15, 7), 8); // Save/Cancel keep the tail
-    assert_eq!(scroll_offset(3, 15, 20), 0); // everything fits
+fn narrow_pane_still_renders_all_cards() {
+    let all = dump(&pane().cells(48, 60), 60);
+    for t in ["APPEARANCE", "WINDOW", "NOTIFICATIONS"] {
+        assert!(all.contains(t), "missing card '{t}' in:\n{all}");
+    }
 }
 
 #[test]

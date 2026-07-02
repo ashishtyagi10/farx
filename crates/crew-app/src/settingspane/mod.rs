@@ -1,7 +1,8 @@
-//! Settings form pane: a scrollable label/value list covering **every
-//! user-configurable property** (appearance, window, notifications), with
-//! Tab/wheel navigation, a type-to-search font-family dropdown, cycling
-//! toggles/pickers, and Save/Cancel buttons.
+//! Settings form pane: a two-column bento of fieldset cards (Appearance /
+//! Window / Notifications) covering **every user-configurable property**,
+//! with boxed inputs, checkboxes, a notify-patterns text area, Tab/wheel
+//! navigation, a type-to-search font-family dropdown, and Save (Cmd+S /
+//! Alt+S) / Cancel (Esc).
 mod commit;
 mod form;
 mod keys;
