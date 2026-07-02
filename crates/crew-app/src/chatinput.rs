@@ -85,7 +85,7 @@ fn bar_cells(agents: &[AgentInfo], cols: u16, row: u16) -> Vec<CellView> {
         }
         x += 2;
     }
-    let hints = "Enter send \u{00b7} Esc close";
+    let hints = "Tab complete \u{00b7} /help \u{00b7} Enter send \u{00b7} Esc close";
     let hw = hints.chars().count() as u16;
     if cols > hw && cols - hw > x {
         for (hx, c) in (cols - hw..).zip(hints.chars()) {

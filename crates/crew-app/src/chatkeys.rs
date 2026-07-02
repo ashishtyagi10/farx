@@ -9,6 +9,8 @@ pub(crate) enum ChatInput {
     Char(char),
     Enter,
     Backspace,
+    /// Tab — complete the leading @agent / /construct token.
+    Complete,
     Ignore,
 }
 
@@ -25,6 +27,7 @@ pub(crate) fn chat_key(logical: &Key, pressed: bool) -> ChatInput {
     }
     match logical {
         Key::Named(NamedKey::Escape) => ChatInput::Close,
+        Key::Named(NamedKey::Tab) => ChatInput::Complete,
         Key::Named(NamedKey::Enter) => ChatInput::Enter,
         Key::Named(NamedKey::Backspace) => ChatInput::Backspace,
         Key::Named(NamedKey::Space) => ChatInput::Char(' '),
@@ -51,6 +54,14 @@ mod tests {
         assert_eq!(
             chat_key(&Key::Named(NamedKey::Escape), false),
             ChatInput::Ignore
+        );
+    }
+
+    #[test]
+    fn tab_requests_completion() {
+        assert_eq!(
+            chat_key(&Key::Named(NamedKey::Tab), true),
+            ChatInput::Complete
         );
     }
 

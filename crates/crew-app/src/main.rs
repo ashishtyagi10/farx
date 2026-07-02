@@ -5,6 +5,7 @@ mod boxdraw;
 mod chat;
 mod chatbody;
 mod chatcode;
+mod chatcomplete;
 mod chatempty;
 mod chatevents;
 mod chathdr;

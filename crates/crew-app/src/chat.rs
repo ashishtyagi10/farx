@@ -73,17 +73,6 @@ impl ChatPane {
         self.active.iter().map(|(a, _)| a.as_str()).collect()
     }
 
-    /// Rows consumed above the message body: the status header, plus the agent
-    /// roster row when agents are known and the pane is tall enough.
-    pub(crate) fn top_rows(&self, rows: u16) -> u16 {
-        match rows {
-            0..=2 => 0,
-            3 => 1,
-            _ if self.agents.is_empty() => 1,
-            _ => 2,
-        }
-    }
-
     /// Drain plugin events; return PollResult with changed flag and any host actions.
     pub fn poll(&mut self) -> PollResult {
         let events = self.plugin.try_recv();
@@ -174,6 +163,12 @@ impl ChatPane {
         let (ch, enter, backspace) = match chat_key(&key.logical_key, key.state.is_pressed()) {
             ChatInput::Close => return Some(ChatAction::Close),
             ChatInput::Ignore => return None,
+            ChatInput::Complete => {
+                if let Some(done) = crate::chatcomplete::complete(&self.input, &self.agents) {
+                    self.input = done;
+                }
+                return None;
+            }
             ChatInput::Char(c) => (Some(c), false, false),
             ChatInput::Enter => (None, true, false),
             ChatInput::Backspace => (None, false, true),

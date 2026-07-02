@@ -31,10 +31,11 @@ fn row_text(cells: &[CellView], row: u16) -> String {
 
 #[test]
 fn tall_pane_gets_bar_and_prompt() {
-    let cells = composer_cells("hi", &agents(&["planner", "coder"]), 60, 10);
+    let cells = composer_cells("hi", &agents(&["planner", "coder"]), 80, 10);
     let bar = row_text(&cells, 8);
     assert!(bar.contains("@planner"), "bar: {bar}");
     assert!(bar.contains("@coder"), "bar: {bar}");
+    assert!(bar.contains("Tab complete"), "bar: {bar}");
     assert!(bar.ends_with("Enter send \u{00b7} Esc close"), "bar: {bar}");
     assert!(row_text(&cells, 9).starts_with("\u{276f} hi"));
 }

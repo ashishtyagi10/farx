@@ -7,6 +7,19 @@ use crew_render::CellView;
 use crate::chat::ChatPane;
 use crate::chatlayout::layout_cells;
 
+impl ChatPane {
+    /// Rows consumed above the message body: the status header, plus the agent
+    /// roster row when agents are known and the pane is tall enough.
+    pub(crate) fn top_rows(&self, rows: u16) -> u16 {
+        match rows {
+            0..=2 => 0,
+            3 => 1,
+            _ if self.agents.is_empty() => 1,
+            _ => 2,
+        }
+    }
+}
+
 /// Render `pane` into a `cols` × `rows` grid.
 pub(crate) fn cells(pane: &ChatPane, cols: u16, rows: u16) -> Vec<CellView> {
     let top = pane.top_rows(rows);
