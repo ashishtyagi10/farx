@@ -18,6 +18,8 @@ pub struct Broker {
     /// Checked between hops; when it flips true (`/stop`), the thread ends
     /// with a Terminated hop instead of dialling the next agent.
     cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// When set, agents can call tools mid-relay (see [`super::toolcall`]).
+    pub(crate) tools: Option<std::sync::Arc<dyn super::toolcall::ToolRunner>>,
 }
 
 impl Broker {
@@ -28,6 +30,7 @@ impl Broker {
             timeout,
             token_budget: 0,
             cancel: None,
+            tools: None,
         }
     }
 
@@ -58,7 +61,7 @@ impl Broker {
         thread_id: &str,
         sink: &mut dyn FnMut(Hop),
     ) -> RunStats {
-        let task = body.to_string();
+        let task = super::toolcall::augment(body, self.tools.as_deref());
         let mut transcript: Vec<String> = Vec::new();
         let mut stats = RunStats::default();
         let mut last_body: Option<String> = None;
@@ -113,6 +116,8 @@ impl Broker {
             };
             stats.exchanges += 1;
             stats.approx_tokens += (prompt.len() + reply.len()) / 4;
+            // Resolve any `@tool` directives before routing (no-op without tools).
+            let reply = self.run_tools(agent, &prompt, reply, &mut stats, &env, sink);
             // If the agent forgot its control line and a hand-off is possible,
             // re-ask it once to add one (bounded to a single repair per thread).
             let reply = if !repaired && !peers.is_empty() && !has_directive(&reply) {

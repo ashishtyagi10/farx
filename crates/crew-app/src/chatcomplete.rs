@@ -5,8 +5,9 @@
 use crew_plugin::AgentInfo;
 
 /// Every broker construct the composer can complete.
-pub(crate) const CONSTRUCTS: [&str; 10] = [
-    "/help", "/agents", "/model", "/fan", "/loop", "/goal", "/skills", "/skill", "/stop", "/status",
+pub(crate) const CONSTRUCTS: [&str; 11] = [
+    "/help", "/agents", "/model", "/fan", "/loop", "/goal", "/skills", "/skill", "/mcp", "/stop",
+    "/status",
 ];
 
 /// Complete `input`'s leading token. Returns the new input when something

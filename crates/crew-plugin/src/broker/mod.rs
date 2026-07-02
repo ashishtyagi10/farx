@@ -28,6 +28,7 @@ mod run;
 mod session;
 mod skills;
 mod stdio;
+mod toolcall;
 
 pub use adapter::{Adapter, CliAdapter, Normalize};
 pub use agents::known_adapters;
@@ -36,6 +37,7 @@ pub use hop::{Hop, HopKind, RunStats};
 pub use registry::Registry;
 pub use route::{parse_routing, Routing};
 pub use stdio::run_broker_stdio;
+pub use toolcall::ToolRunner;
 
 /// Serialises tests that set `CREW_BROKER_MOCK_REPLY` (process-wide env): the
 /// guard holds a global lock and removes the variable again on drop.

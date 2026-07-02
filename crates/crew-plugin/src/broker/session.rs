@@ -36,6 +36,9 @@ pub(crate) struct Session {
     /// Session totals for `/status`: worker tasks started, ~tokens spent.
     pub turns: Arc<AtomicU64>,
     pub tokens: Arc<AtomicU64>,
+    /// The configured MCP servers, shared with worker snapshots so lazy
+    /// connections and the per-server tool cache live once per pane.
+    pub mcp: Arc<Mutex<crate::mcp::McpHost>>,
 }
 
 impl Default for Session {
@@ -46,6 +49,7 @@ impl Default for Session {
             busy: Arc::new(Mutex::new(None)),
             turns: Arc::new(AtomicU64::new(0)),
             tokens: Arc::new(AtomicU64::new(0)),
+            mcp: Arc::new(Mutex::new(crate::mcp::McpHost::from_config())),
         }
     }
 }
@@ -65,6 +69,7 @@ impl Session {
             busy: Arc::clone(&self.busy),
             turns: Arc::clone(&self.turns),
             tokens: Arc::clone(&self.tokens),
+            mcp: Arc::clone(&self.mcp),
         }
     }
 
@@ -83,12 +88,40 @@ impl Session {
         Registry::discover_with(&self.overrides)
     }
 
-    /// A relay broker over `reg` with the env knobs and this session's cancel
-    /// flag applied — every construct builds its broker here.
+    /// A relay broker over `reg` with the env knobs, this session's cancel
+    /// flag, and — when MCP servers are configured — its tools applied;
+    /// every construct builds its broker here.
     pub fn broker(&self, reg: Registry) -> Broker {
-        Broker::new(reg, max_hops(), call_timeout())
+        let b = Broker::new(reg, max_hops(), call_timeout())
             .with_budget(token_budget())
-            .with_cancel_flag(Arc::clone(&self.cancel))
+            .with_cancel_flag(Arc::clone(&self.cancel));
+        if self.lock_mcp().is_empty() {
+            return b;
+        }
+        b.with_tools(Arc::new(McpTools(Arc::clone(&self.mcp))))
+    }
+
+    /// The shared MCP host, poison-tolerant.
+    pub fn lock_mcp(&self) -> std::sync::MutexGuard<'_, crate::mcp::McpHost> {
+        self.mcp.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+/// Bridges the engine's [`super::toolcall::ToolRunner`] to the session's
+/// shared [`crate::mcp::McpHost`].
+struct McpTools(Arc<Mutex<crate::mcp::McpHost>>);
+
+impl super::toolcall::ToolRunner for McpTools {
+    fn hint(&self) -> String {
+        let tools = self.0.lock().unwrap_or_else(|e| e.into_inner()).tools();
+        super::toolcall::hint_for(&tools)
+    }
+
+    fn call(&self, server: &str, tool: &str, args: &str) -> Result<String, String> {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .call(server, tool, args)
     }
 }
 
