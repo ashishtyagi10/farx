@@ -16,6 +16,7 @@ pub(crate) const HELP: &str = "constructs:\n\
     /help — this list\n\
     /agents — the roster with each agent's model\n\
     /model <agent> <model|default> — pin an agent to a model (mix models freely)\n\
+    /fan <task> — every agent answers the same task in parallel\n\
     @<agent> <task> — choose who starts the relay";
 
 /// Handle a `/command` line; emits reply events through `emit`.
@@ -30,6 +31,7 @@ pub(crate) fn handle(
         "help" => emit(msg("crew", HELP)),
         "agents" => emit(msg("crew", agents_report(session))),
         "model" => model_cmd(session, rest, emit),
+        "fan" => fan_cmd(session, rest, emit),
         other => emit(msg(
             "crew",
             format!("unknown construct /{other} — try /help"),
@@ -78,6 +80,28 @@ fn model_cmd(
         agents: session.registry().infos(),
     })?;
     emit(msg("crew", note))
+}
+
+/// `/fan <task>` — every agent answers `task` concurrently.
+fn fan_cmd(
+    session: &mut Session,
+    task: &str,
+    emit: &mut dyn FnMut(PluginEvent) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let task = task.trim();
+    if task.is_empty() {
+        return emit(msg("crew", "usage: /fan <task>"));
+    }
+    let reg = session.registry();
+    if reg.is_empty() {
+        return emit(msg("crew", super::stdio::roster(&reg)));
+    }
+    let names = reg.names();
+    emit(msg(
+        "crew",
+        format!("fanning out to {} agents in parallel\u{2026}", names.len()),
+    ))?;
+    super::fan::fan_out(&reg, &names, task, super::stdio::call_timeout(), emit)
 }
 
 /// The roster, one agent per line: name, role hint, and the model it runs.

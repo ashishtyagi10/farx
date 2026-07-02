@@ -15,6 +15,7 @@ mod agents;
 mod apiadapter;
 mod commands;
 mod engine;
+mod fan;
 mod hop;
 mod normalize;
 mod registry;

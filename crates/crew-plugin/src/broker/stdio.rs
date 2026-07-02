@@ -14,14 +14,14 @@ use crate::{Broker, PluginCommand, PluginEvent, Registry};
 
 static THREAD_SEQ: AtomicU64 = AtomicU64::new(1);
 
-fn max_hops() -> u32 {
+pub(crate) fn max_hops() -> u32 {
     env_num("CREW_BROKER_MAX_HOPS").unwrap_or(6)
 }
-fn call_timeout() -> Duration {
+pub(crate) fn call_timeout() -> Duration {
     Duration::from_millis(env_num("CREW_BROKER_TIMEOUT_MS").unwrap_or(180_000))
 }
 /// Approximate per-thread token budget (0 = unlimited). `CREW_BROKER_TOKEN_BUDGET`.
-fn token_budget() -> usize {
+pub(crate) fn token_budget() -> usize {
     env_num("CREW_BROKER_TOKEN_BUDGET").unwrap_or(0)
 }
 fn env_num<T: std::str::FromStr>(key: &str) -> Option<T> {
