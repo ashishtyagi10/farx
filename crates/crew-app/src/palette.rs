@@ -1,7 +1,7 @@
 //! The app's themeable colour palette. Render code is a web of free functions
 //! that never see the config, so the one user-tunable colour — the **accent**
 //! (Crew green by default) — lives here behind a lock-free global set once at
-//! startup (and re-set by `/reload` / settings). `accent()` returns the built-in
+//! startup (and re-set by settings / theme switches). `accent()` returns the built-in
 //! default until `set_accent` is called, so tests and headless paths are
 //! unaffected.
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -20,7 +20,7 @@ fn unpack(v: u32) -> (u8, u8, u8) {
 /// Packed accent RGB, initialised to [`DEFAULT_ACCENT`].
 static ACCENT: AtomicU32 = AtomicU32::new((DEFAULT_ACCENT.1 as u32) << 8 | DEFAULT_ACCENT.2 as u32);
 
-/// Set the active accent colour (called from config at startup / on reload).
+/// Set the active accent colour (called from config at startup / on settings save).
 pub fn set_accent(rgb: (u8, u8, u8)) {
     ACCENT.store(pack(rgb), Ordering::Relaxed);
 }

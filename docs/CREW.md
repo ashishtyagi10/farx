@@ -95,7 +95,7 @@ config and plugins load.
 The docked command bar supports:
 
 - **Slash commands** — type `/` for a command palette (↑/↓ to pick, Tab/→ to
-  fill, Enter to run): `/shell`, `/crew`, `/run <cmd>`, `/edit <file>`, `/settings`, `/find <text>`, `/name <text>`, `/clear`, `/only`, `/copy`, `/dump`, `/open`, `/font`, `/reload`, `/theme`, `/update`,
+  fill, Enter to run): `/shell`, `/crew`, `/run <cmd>`, `/edit <file>`, `/settings`, `/find <text>`, `/name <text>`, `/clear`, `/only`, `/copy`, `/dump`, `/open`, `/font`, `/restart`, `/theme`, `/update`,
   `/broadcast`, `/zoom`, `/sidebar`, `/keys`, `/far`, `/exit`. The palette is **fuzzy** — prefix matches rank first,
   then subsequence matches (e.g. `/dmp` finds `/dump`) — and **scrolls** to the
   selection when the match list is long. When several commands share a prefix,
@@ -108,9 +108,10 @@ The docked command bar supports:
   the `Cmd+S` / `Cmd+Z` / `Cmd+G` chords, for when the chord slips your mind.
 - **`/font <n>`** — sets the font size to an exact value (clamped 12–32), unlike
   the `Cmd+=`/`Cmd+-` chords that step by one; no argument reports the current size.
-- **`/reload`** — re-reads `config.toml` from disk and applies it live (font,
-  sidebar width/visibility, theme) without rewriting the file, so edits made
-  outside the `/settings` pane take effect without a restart.
+- **`/restart`** — relaunches Crew as a fresh detached process and exits this
+  one: the way to apply a binary installed by `/update`, and the fresh process
+  re-reads `config.toml`, so edits made outside the `/settings` pane take
+  effect too.
 - **`/theme [name]`** — switches the theme live and persists it (`paper-dark`,
   `paper-light`, `crt-green`, `crt-amber`, `crt-blue`); no argument reports the
   current theme. Selecting `/theme` in the palette opens an arrow-selectable
@@ -474,7 +475,7 @@ the CRT ones. Every palette's colours are picked for measured WCAG contrast.
 **Switching:** `/theme <name>` (e.g. `/theme crt-green`), or cycle through every
 theme live with **`Ctrl+Shift+L`**. The choice persists to `config.toml`.
 
-**Config keys** (`$XDG_CONFIG/crew/config.toml`, applied on launch and `/reload`):
+**Config keys** (`$XDG_CONFIG/crew/config.toml`, applied on launch — `/restart` picks up external edits):
 
 | Key | Default | Meaning |
 |-----|---------|---------|

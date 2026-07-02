@@ -67,8 +67,9 @@ How you update depends on how you installed:
 - **In-app:** the **`/update`** command downloads the latest release binary for
   your platform over the running one. Progress streams into a dedicated **UPDATE
   card in the left nav** (checking → downloading → installed) — no separate shell
-  or checkout — and Crew **auto-restarts** into the new build when it's done. A
-  standalone `crew --self-update` CLI path remains as a headless fallback.
+  or checkout — then **`/restart`** relaunches Crew into the new build whenever
+  you're ready. A standalone `crew --self-update` CLI path remains as a headless
+  fallback.
 
 The prebuilt path only sees a version once its release assets are published.
 
@@ -132,7 +133,7 @@ Press **`/keys`** in the input bar for the full list in-app.
 
 The docked command bar supports slash commands (type `/` for a palette:
 `/shell`, `/crew`, `/swarm`, `/goal <text>`, `/batch <file>`, `/run <cmd>`, `/edit <file>`, `/settings`, `/find <text>`, `/name <text>`, `/clear`, `/only`, `/copy`, `/dump`, `/open`,
-`/clearall`, `/closeall`, `/pwd`, `/about`, `/font`, `/theme`, `/reload`, `/update`, `/broadcast`, `/zoom`, `/sidebar`, `/keys`, `/far`, `/exit`), fish-style autosuggest from history, `cd`
+`/clearall`, `/closeall`, `/pwd`, `/about`, `/font`, `/theme`, `/restart`, `/update`, `/broadcast`, `/zoom`, `/sidebar`, `/keys`, `/far`, `/exit`), fish-style autosuggest from history, `cd`
 completion with `$VAR` expansion, and `Up`/`Down` history recall persisted to
 `$XDG_CONFIG/crew/history`. Anything that isn't a slash command or `cd` is sent
 to the focused terminal.
@@ -241,8 +242,8 @@ and the whole notification block (master + per-event toggles, min-secs
 threshold, watched output patterns). Settings persist to
 `$XDG_CONFIG/crew/config.toml` and apply live on Save. The config file also
 accepts `accent = "#rrggbb"` to override Crew's accent; omit it (or give an
-invalid value) to use the active theme's default accent. It applies at launch
-and on `/reload`.
+invalid value) to use the active theme's default accent. It applies at launch —
+`/restart` picks up edits made outside the `/settings` pane.
 
 **Themes.** Crew ships five themes: two paper/e-ink looks — `paper-dark`
 (default — a high-contrast "newspaper" look) and `paper-light` (a warm paper

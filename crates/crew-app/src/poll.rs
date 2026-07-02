@@ -148,7 +148,7 @@ impl CrewApp {
             self.set_status(&msg);
         }
         // Drive the background self-update: animate its card and dismiss it when
-        // done. The new binary applies on the next launch — Crew does not restart.
+        // done. The new binary applies on `/restart` — Crew does not restart itself.
         if self.update.is_some() {
             let tick = self.poll_update(Instant::now());
             any_changed |= tick.redraw;

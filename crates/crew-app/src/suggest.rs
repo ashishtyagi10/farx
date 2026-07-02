@@ -160,8 +160,8 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         desc: "Set the font size (/font <n>)",
     },
     Cmd {
-        name: "/reload",
-        desc: "Reload config.toml from disk and apply it",
+        name: "/restart",
+        desc: "Restart Crew — relaunch detached, applying an installed /update",
     },
     Cmd {
         name: "/theme",
@@ -173,7 +173,7 @@ pub(crate) const COMMANDS: &[Cmd] = &[
     },
     Cmd {
         name: "/update",
-        desc: "Update Crew to the latest release (left-nav progress, auto-restart)",
+        desc: "Update Crew to the latest release (left-nav progress; /restart applies)",
     },
     Cmd {
         name: "/broadcast",

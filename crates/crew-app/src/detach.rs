@@ -31,9 +31,9 @@ pub fn wants_detach() -> bool {
     has_detach_flag(std::env::args().skip(1))
 }
 
-/// Spawn a detached copy of ourselves (new session, stdio → null) and return;
-/// `main` then exits the parent, freeing the terminal while the GUI runs on.
-pub fn relaunch_detached() -> anyhow::Result<()> {
+/// Spawn a detached copy of ourselves (new session, stdio → null) and return
+/// its pid — shared by the detached launch path and `/restart`.
+pub fn spawn_detached_copy() -> anyhow::Result<u32> {
     let exe = std::env::current_exe()?;
     let args = strip_detach_flags(std::env::args().skip(1));
     let mut cmd = Command::new(exe);
@@ -43,11 +43,14 @@ pub fn relaunch_detached() -> anyhow::Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     detach_session(&mut cmd);
-    let child = cmd.spawn()?;
-    println!(
-        "crew detached (pid {}) — safe to close this terminal",
-        child.id()
-    );
+    Ok(cmd.spawn()?.id())
+}
+
+/// Spawn a detached copy of ourselves and return; `main` then exits the
+/// parent, freeing the terminal while the GUI runs on.
+pub fn relaunch_detached() -> anyhow::Result<()> {
+    let pid = spawn_detached_copy()?;
+    println!("crew detached (pid {pid}) — safe to close this terminal");
     Ok(())
 }
 

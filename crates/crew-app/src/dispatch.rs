@@ -32,7 +32,9 @@ impl CrewApp {
             "edit" => self.edit_in_pane(""), // show usage hint
             "open" => self.open_target(""),  // open the last URL on screen
             "font" => self.set_font_cmd(""),
-            "reload" => self.reload_config(),
+            // Relaunch as a fresh detached process (picks up an installed
+            // `/update` and external config edits) and exit this one.
+            "restart" => return self.restart_crew(),
             "theme" => self.set_theme_cmd(""),
             "notify" => self.notify_command(""),
             "broadcast" => self.toggle_broadcast(),

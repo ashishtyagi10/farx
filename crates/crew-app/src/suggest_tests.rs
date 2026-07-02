@@ -44,10 +44,10 @@ fn slash_completes_font() {
 }
 
 #[test]
-fn slash_completes_reload() {
-    assert_eq!(suggest("/rel", &[]).as_deref(), Some("oad"));
-    let names: Vec<&str> = matches("/rel").iter().map(|c| c.name).collect();
-    assert!(names.contains(&"/reload"));
+fn slash_completes_restart() {
+    assert_eq!(suggest("/res", &[]).as_deref(), Some("tart"));
+    let names: Vec<&str> = matches("/res").iter().map(|c| c.name).collect();
+    assert!(names.contains(&"/restart"));
 }
 
 #[test]

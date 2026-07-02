@@ -21,7 +21,11 @@ pub(crate) fn update_cells(u: &UpdateState, cols: u16, rows: u16) -> Vec<CellVie
             "downloading".to_string(),
             format!("v{current} → v{v}"),
         ),
-        Stage::Done(v) => ('✓', format!("updated v{v}"), "restart to apply".to_string()),
+        Stage::Done(v) => (
+            '✓',
+            format!("updated v{v}"),
+            "/restart to apply".to_string(),
+        ),
         Stage::Note(msg) => ('·', msg.clone(), String::new()),
     };
     let max = cols.saturating_sub(1);

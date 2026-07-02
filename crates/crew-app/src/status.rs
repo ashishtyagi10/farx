@@ -56,7 +56,7 @@ impl CrewApp {
 
     /// Push the configured watch patterns onto every terminal pane's PTY scanner.
     /// Called after spawning a pane and whenever the patterns change (`/notify`,
-    /// `/reload`), so all live panes share the current watch list.
+    /// settings save), so all live panes share the current watch list.
     pub(crate) fn apply_notify_patterns(&mut self) {
         let patterns = self.config.notify_patterns.clone();
         for p in &mut self.panes {

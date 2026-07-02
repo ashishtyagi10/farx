@@ -1,8 +1,8 @@
 //! Background self-update with progress in the left-nav UPDATE card. `/update`
 //! starts a worker thread that checks GitHub, downloads the latest release over
 //! the running binary, and streams stage updates back to the UI — no separate
-//! shell pane. The new binary applies on the next launch; Crew does NOT restart
-//! itself, so an in-flight session is never interrupted.
+//! shell pane. The new binary applies on `/restart` (or the next launch); Crew
+//! does NOT restart itself, so an in-flight session is never interrupted.
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
@@ -70,8 +70,8 @@ impl UpdateState {
             UpdateMsg::Checking => Stage::Checking,
             UpdateMsg::Downloading(v) => Stage::Downloading(v),
             UpdateMsg::Installed(v) => {
-                // Installed over the running binary; it applies on the next launch.
-                // Linger the card briefly, then clear — no auto-restart.
+                // Installed over the running binary; it applies on `/restart` (or
+                // the next launch). Linger the card briefly, then clear.
                 self.deadline = Some(now + NOTE_TTL);
                 Stage::Done(v)
             }

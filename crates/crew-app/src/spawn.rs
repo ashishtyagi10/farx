@@ -249,8 +249,7 @@ impl CrewApp {
 
     /// Adopt `cfg` and apply it live (font family/size to the renderer, and a
     /// redraw to pick up nav width/visibility) *without* writing it back — used
-    /// by `apply_settings` (which then persists) and `/reload` (which must not
-    /// clobber the file just read from disk).
+    /// by `apply_settings`, which then persists.
     pub(crate) fn apply_config(&mut self, cfg: CrewConfig) {
         self.config = cfg;
         crew_theme::set_theme(self.config.theme_id());
@@ -310,19 +309,5 @@ impl CrewApp {
 }
 
 #[cfg(test)]
-mod theme_cmd_tests {
-    use crate::app::CrewApp;
-
-    #[test]
-    fn set_theme_cmd_switches_active_theme() {
-        crew_theme::set_theme(crew_theme::ThemeId::PaperDark);
-        let mut app = CrewApp::default();
-        app.set_theme_cmd("paper-light");
-        assert_eq!(crew_theme::current_id(), crew_theme::ThemeId::PaperLight);
-        assert_eq!(app.config.theme.as_deref(), Some("paper-light"));
-        // Unknown name leaves the active theme unchanged.
-        app.set_theme_cmd("chartreuse");
-        assert_eq!(crew_theme::current_id(), crew_theme::ThemeId::PaperLight);
-        crew_theme::set_theme(crew_theme::ThemeId::PaperDark);
-    }
-}
+#[path = "spawn_tests.rs"]
+mod tests;
