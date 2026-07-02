@@ -41,10 +41,10 @@ pub(crate) fn render(p: &FarPane, cols: u16, rows: u16) -> Vec<CellView> {
         Constraint::Length(1),
     ])
     .split(area);
-    let cols2 = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(split[0]);
-    panel(&mut buf, cols2[0], &p.left, p.active == Side::Left);
-    panel(&mut buf, cols2[1], &p.right, p.active == Side::Right);
+    let (larea, rarea) = split_panels(split[0]);
+    panel(&mut buf, larea, &p.left, p.active == Side::Left);
+    panel(&mut buf, rarea, &p.right, p.active == Side::Right);
+    merge_divider(&mut buf, split[0], rarea.x);
     let running = p.running.as_ref().map(|(cmd, _)| cmd.as_str());
     command_bar(&mut buf, split[1], &p.active_cwd(), &p.cmdline, running);
     // The make-folder prompt takes over the function-key row while it's open.
@@ -87,6 +87,35 @@ fn command_bar(
     Paragraph::new(Line::from(spans))
         .style(Style::new().bg(bg))
         .render(area, buf);
+}
+
+/// Halve `area` with a one-column overlap, so the panels share their middle
+/// border instead of drawing `││` (which reads as a wide gap on screen).
+fn split_panels(area: Rect) -> (Rect, Rect) {
+    let lw = area.width / 2 + 1;
+    (
+        Rect::new(area.x, area.y, lw, area.height),
+        Rect::new(area.x + lw - 1, area.y, area.width - lw + 1, area.height),
+    )
+}
+
+/// Join the shared border column into the panel frames: `┬` at the top, `┴`
+/// at the bottom, accent-coloured — the divider always touches the active
+/// panel, whichever side it is.
+fn merge_divider(buf: &mut Buffer, area: Rect, x: u16) {
+    for y in area.y..area.y + area.height {
+        let sym = if y == area.y {
+            "\u{252c}" // ┬
+        } else if y == area.y + area.height - 1 {
+            "\u{2534}" // ┴
+        } else {
+            "\u{2502}" // │
+        };
+        if let Some(cell) = buf.cell_mut((x, y)) {
+            cell.set_symbol(sym);
+            cell.set_fg(accent_color());
+        }
+    }
 }
 
 /// Render one directory panel: a rounded box (path as legend) with the listing.

@@ -42,6 +42,29 @@ fn renders_two_panels_and_function_bar() {
 }
 
 #[test]
+fn panels_share_a_single_divider() {
+    let cells = render(&fixture_pane("divider"), 80, 24);
+    let t = text(&cells);
+    // One shared border column between the panels, joined into the frame.
+    assert!(t.contains('┬'), "top junction missing:\n{t}");
+    assert!(t.contains('┴'), "bottom junction missing:\n{t}");
+    assert!(!t.contains("╮╭"), "unmerged panel corners:\n{t}");
+    // No two vertical borders in adjacent columns anywhere (the old `││` gap).
+    let mut vbars: Vec<(u16, u16)> = cells
+        .iter()
+        .filter(|c| c.c == '│')
+        .map(|c| (c.row, c.col))
+        .collect();
+    vbars.sort_unstable();
+    assert!(
+        !vbars
+            .windows(2)
+            .any(|w| w[0].0 == w[1].0 && w[0].1 + 1 == w[1].1),
+        "adjacent vertical borders survive:\n{t}"
+    );
+}
+
+#[test]
 fn function_bar_highlights_actions_far_style() {
     let cells = render(&fixture_pane("fbar"), 80, 24);
     let bar_row = cells.iter().map(|c| c.row).max().unwrap();
