@@ -1,10 +1,10 @@
 //! Key reduction for the settings form: Tab navigation, text editing, the
-//! font-family combobox, and Save/Cancel activation.
+//! font-family combobox, cycling toggles/pickers, and Save/Cancel activation.
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, NamedKey};
 
-use super::{Field, SettingsAction, SettingsPane, DEFAULT_FAMILY_LABEL, FIELDS};
-use crate::config::CrewConfig;
+use super::commit::{build_config, commit_family, commit_field, escape, move_focus};
+use super::{Field, SettingsAction, SettingsPane};
 
 /// Handle one key; return an action when Save/Cancel is triggered.
 pub(crate) fn reduce(p: &mut SettingsPane, key: &KeyEvent, shift: bool) -> Option<SettingsAction> {
@@ -22,16 +22,112 @@ pub(crate) fn reduce(p: &mut SettingsPane, key: &KeyEvent, shift: bool) -> Optio
     }
     match p.focused_field() {
         Field::FontFamily => family_key(p, key),
-        Field::FontSize => number_key(p, key, true),
-        Field::NavWidth => number_key(p, key, false),
-        Field::ShowNav => toggle_key(p, key),
-        Field::Accent => accent_key(p, key),
         Field::Save => button_key(p, key, true),
         Field::Cancel => button_key(p, key, false),
+        f if buf_of(p, f).is_some() => edit_key(p, key),
+        _ => cycle_key(p, key),
     }
 }
 
-fn family_key(p: &mut SettingsPane, key: &KeyEvent) -> Option<SettingsAction> {
+/// The edit buffer behind a text/number field, if it has one.
+pub(crate) fn buf_of(p: &mut SettingsPane, f: Field) -> Option<&mut String> {
+    match f {
+        Field::FontSize => Some(&mut p.size_buf),
+        Field::NavWidth => Some(&mut p.nav_buf),
+        Field::Accent => Some(&mut p.accent_buf),
+        Field::PaperGrain => Some(&mut p.grain_buf),
+        Field::NotifyMinSecs => Some(&mut p.minsecs_buf),
+        Field::NotifyPatterns => Some(&mut p.patterns_buf),
+        _ => None,
+    }
+}
+
+/// Whether `c` may be typed into the field's buffer (currently `buf`).
+fn allowed(f: Field, buf: &str, c: char) -> bool {
+    match f {
+        Field::FontSize | Field::NavWidth | Field::NotifyMinSecs => c.is_ascii_digit(),
+        Field::PaperGrain => c.is_ascii_digit() || (c == '.' && !buf.contains('.')),
+        Field::Accent => (c == '#' || c.is_ascii_hexdigit()) && buf.len() < 7,
+        Field::NotifyPatterns => !c.is_control(),
+        _ => false,
+    }
+}
+
+/// Shared editor for every buffered field: Enter commits and advances,
+/// Backspace deletes, and permitted characters append.
+fn edit_key(p: &mut SettingsPane, key: &KeyEvent) -> Option<SettingsAction> {
+    let f = p.focused_field();
+    match &key.logical_key {
+        Key::Named(NamedKey::Enter) => {
+            commit_field(p);
+            move_focus(p, false);
+        }
+        Key::Named(NamedKey::Backspace) => {
+            if let Some(buf) = buf_of(p, f) {
+                buf.pop();
+            }
+        }
+        Key::Named(NamedKey::Space) => push_char(p, f, ' '),
+        Key::Character(s) => {
+            if let Some(c) = s.chars().next() {
+                push_char(p, f, c);
+            }
+        }
+        _ => {}
+    }
+    None
+}
+
+fn push_char(p: &mut SettingsPane, f: Field, c: char) {
+    let ok = buf_of(p, f).is_some_and(|b| allowed(f, b, c));
+    if ok {
+        if let Some(buf) = buf_of(p, f) {
+            buf.push(c);
+        }
+    }
+}
+
+/// Toggles and pickers: Space / ← / → cycle the value (Left steps backward on
+/// the theme), Enter advances to the next field.
+fn cycle_key(p: &mut SettingsPane, key: &KeyEvent) -> Option<SettingsAction> {
+    let back = matches!(&key.logical_key, Key::Named(NamedKey::ArrowLeft));
+    match &key.logical_key {
+        Key::Named(NamedKey::Enter) => move_focus(p, false),
+        Key::Named(NamedKey::Space)
+        | Key::Named(NamedKey::ArrowLeft)
+        | Key::Named(NamedKey::ArrowRight) => cycle_value(p, back),
+        _ => {}
+    }
+    None
+}
+
+/// Flip the focused toggle, or step the theme picker through `ALL_THEMES`.
+fn cycle_value(p: &mut SettingsPane, back: bool) {
+    let field = p.focused_field();
+    let d = &mut p.draft;
+    match field {
+        Field::ShowNav => d.show_nav = !d.show_nav,
+        Field::PaperTexture => d.paper_texture = !d.paper_texture,
+        Field::Maximized => d.maximized = !d.maximized,
+        Field::Notify => d.notify = !d.notify,
+        Field::NotifyAgentDone => d.notify_agent_done = !d.notify_agent_done,
+        Field::NotifyBell => d.notify_bell = !d.notify_bell,
+        Field::NotifyExit => d.notify_exit = !d.notify_exit,
+        Field::Theme => {
+            let all = crew_theme::ALL_THEMES;
+            let cur = all.iter().position(|&t| t == d.theme_id()).unwrap_or(0);
+            let next = if back {
+                (cur + all.len() - 1) % all.len()
+            } else {
+                (cur + 1) % all.len()
+            };
+            d.theme = Some(all[next].as_str().to_string());
+        }
+        _ => {}
+    }
+}
+
+pub(crate) fn family_key(p: &mut SettingsPane, key: &KeyEvent) -> Option<SettingsAction> {
     match &key.logical_key {
         Key::Named(NamedKey::Enter) => {
             commit_family(p);
@@ -61,61 +157,6 @@ fn family_key(p: &mut SettingsPane, key: &KeyEvent) -> Option<SettingsAction> {
     None
 }
 
-fn number_key(p: &mut SettingsPane, key: &KeyEvent, is_size: bool) -> Option<SettingsAction> {
-    match &key.logical_key {
-        Key::Named(NamedKey::Enter) => {
-            commit_field(p);
-            move_focus(p, false);
-        }
-        Key::Named(NamedKey::Backspace) => {
-            buf_mut(p, is_size).pop();
-        }
-        Key::Character(s) => {
-            if let Some(c) = s.chars().next() {
-                if c.is_ascii_digit() {
-                    buf_mut(p, is_size).push(c);
-                }
-            }
-        }
-        _ => {}
-    }
-    None
-}
-
-/// Edit the accent hex field: accept `#` and hex digits, Backspace, Enter to
-/// commit and advance. Capped at 7 chars (`#rrggbb`).
-fn accent_key(p: &mut SettingsPane, key: &KeyEvent) -> Option<SettingsAction> {
-    match &key.logical_key {
-        Key::Named(NamedKey::Enter) => {
-            commit_field(p);
-            move_focus(p, false);
-        }
-        Key::Named(NamedKey::Backspace) => {
-            p.accent_buf.pop();
-        }
-        Key::Character(s) => {
-            if let Some(c) = s.chars().next() {
-                if (c == '#' || c.is_ascii_hexdigit()) && p.accent_buf.len() < 7 {
-                    p.accent_buf.push(c);
-                }
-            }
-        }
-        _ => {}
-    }
-    None
-}
-
-fn toggle_key(p: &mut SettingsPane, key: &KeyEvent) -> Option<SettingsAction> {
-    match &key.logical_key {
-        Key::Named(NamedKey::Enter) => move_focus(p, false),
-        Key::Named(NamedKey::Space)
-        | Key::Named(NamedKey::ArrowLeft)
-        | Key::Named(NamedKey::ArrowRight) => p.draft.show_nav = !p.draft.show_nav,
-        _ => {}
-    }
-    None
-}
-
 fn button_key(p: &mut SettingsPane, key: &KeyEvent, is_save: bool) -> Option<SettingsAction> {
     match &key.logical_key {
         Key::Named(NamedKey::Enter) | Key::Named(NamedKey::Space) if is_save => {
@@ -131,96 +172,4 @@ fn push_family(p: &mut SettingsPane, c: char) {
     p.family_query.push(c);
     p.family_open = true;
     p.family_sel = 0;
-}
-
-fn buf_mut(p: &mut SettingsPane, is_size: bool) -> &mut String {
-    if is_size {
-        &mut p.size_buf
-    } else {
-        &mut p.nav_buf
-    }
-}
-
-/// Commit the selected family from the filtered list into the draft.
-pub(crate) fn commit_family(p: &mut SettingsPane) {
-    let list = p.filtered();
-    if let Some(name) = list.get(p.family_sel) {
-        if name == DEFAULT_FAMILY_LABEL {
-            p.draft.font_family = None;
-            p.family_query = DEFAULT_FAMILY_LABEL.to_string();
-        } else {
-            p.draft.font_family = Some(name.clone());
-            p.family_query = name.clone();
-        }
-    }
-    p.family_open = false;
-}
-
-/// Parse and clamp the currently-focused editable field into the draft.
-pub(crate) fn commit_field(p: &mut SettingsPane) {
-    match p.focused_field() {
-        Field::FontSize => {
-            let v = p.size_buf.parse::<f32>().unwrap_or(p.draft.font_size);
-            p.draft.font_size = v.clamp(12.0, 32.0);
-            p.size_buf = format!("{}", p.draft.font_size as i32);
-        }
-        Field::NavWidth => {
-            let v = p.nav_buf.parse::<f32>().unwrap_or(p.draft.nav_width);
-            p.draft.nav_width = v.clamp(160.0, 320.0);
-            p.nav_buf = format!("{}", p.draft.nav_width as i32);
-        }
-        Field::FontFamily => commit_family(p),
-        Field::Accent => {
-            let raw = p.accent_buf.trim();
-            if raw.is_empty() {
-                // Cleared → fall back to the built-in accent.
-                p.draft.accent = None;
-                p.accent_buf.clear();
-            } else if let Some((r, g, b)) = crate::palette::parse_hex(raw) {
-                // Store the canonical `#rrggbb` form.
-                let hex = format!("#{r:02x}{g:02x}{b:02x}");
-                p.draft.accent = Some(hex.clone());
-                p.accent_buf = hex;
-            } else {
-                // Invalid hex → keep the previous value, restore the buffer.
-                p.accent_buf = p.draft.accent.clone().unwrap_or_default();
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Move focus to the next/previous field, closing the dropdown and refreshing
-/// the display buffers from the draft.
-pub(crate) fn move_focus(p: &mut SettingsPane, back: bool) {
-    let n = FIELDS.len();
-    p.focus = if back {
-        (p.focus + n - 1) % n
-    } else {
-        (p.focus + 1) % n
-    };
-    p.family_open = false;
-    p.family_sel = 0;
-    p.size_buf = format!("{}", p.draft.font_size as i32);
-    p.nav_buf = format!("{}", p.draft.nav_width as i32);
-    p.accent_buf = p.draft.accent.clone().unwrap_or_default();
-    p.family_query = p
-        .draft
-        .font_family
-        .clone()
-        .unwrap_or_else(|| DEFAULT_FAMILY_LABEL.to_string());
-}
-
-pub(crate) fn build_config(p: &SettingsPane) -> CrewConfig {
-    p.draft.clone().clamped()
-}
-
-/// Escape closes the font dropdown if it's open, otherwise cancels the form.
-pub(crate) fn escape(p: &mut SettingsPane) -> Option<SettingsAction> {
-    if p.family_open {
-        p.family_open = false;
-        None
-    } else {
-        Some(SettingsAction::Cancel)
-    }
 }

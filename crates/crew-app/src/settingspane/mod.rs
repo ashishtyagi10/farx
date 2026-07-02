@@ -1,5 +1,8 @@
-//! Settings form pane: a two-column layout with Tab navigation, a type-to-search
-//! font-family dropdown, editable numeric fields, and Save/Cancel buttons.
+//! Settings form pane: a scrollable label/value list covering **every
+//! user-configurable property** (appearance, window, notifications), with
+//! Tab/wheel navigation, a type-to-search font-family dropdown, cycling
+//! toggles/pickers, and Save/Cancel buttons.
+mod commit;
 mod keys;
 mod render;
 
@@ -18,17 +21,37 @@ pub(crate) enum Field {
     FontSize,
     NavWidth,
     ShowNav,
+    Theme,
     Accent,
+    PaperTexture,
+    PaperGrain,
+    Maximized,
+    Notify,
+    NotifyAgentDone,
+    NotifyBell,
+    NotifyExit,
+    NotifyMinSecs,
+    NotifyPatterns,
     Save,
     Cancel,
 }
 
-pub(crate) const FIELDS: [Field; 7] = [
+pub(crate) const FIELDS: [Field; 17] = [
     Field::FontFamily,
     Field::FontSize,
     Field::NavWidth,
     Field::ShowNav,
+    Field::Theme,
     Field::Accent,
+    Field::PaperTexture,
+    Field::PaperGrain,
+    Field::Maximized,
+    Field::Notify,
+    Field::NotifyAgentDone,
+    Field::NotifyBell,
+    Field::NotifyExit,
+    Field::NotifyMinSecs,
+    Field::NotifyPatterns,
     Field::Save,
     Field::Cancel,
 ];
@@ -52,6 +75,12 @@ pub struct SettingsPane {
     pub(crate) nav_buf: String,
     /// Editable accent hex (e.g. `#00ffa0`); empty means "use the built-in".
     pub(crate) accent_buf: String,
+    /// Paper-grain amplitude (`0.0`–`2.0`, one decimal).
+    pub(crate) grain_buf: String,
+    /// Minimum command runtime (seconds) before a "finished" notification.
+    pub(crate) minsecs_buf: String,
+    /// Watched output substrings, comma-separated.
+    pub(crate) patterns_buf: String,
 }
 
 impl SettingsPane {
@@ -63,6 +92,9 @@ impl SettingsPane {
         let size_buf = format!("{}", cfg.font_size as i32);
         let nav_buf = format!("{}", cfg.nav_width as i32);
         let accent_buf = cfg.accent.clone().unwrap_or_default();
+        let grain_buf = format!("{:.1}", cfg.paper_grain);
+        let minsecs_buf = format!("{}", cfg.notify_min_secs);
+        let patterns_buf = cfg.notify_patterns.join(", ");
         Self {
             draft: cfg,
             families,
@@ -73,6 +105,9 @@ impl SettingsPane {
             size_buf,
             nav_buf,
             accent_buf,
+            grain_buf,
+            minsecs_buf,
+            patterns_buf,
         }
     }
 
@@ -100,8 +135,8 @@ impl SettingsPane {
             if (up && self.focus == 0) || (!up && self.focus == FIELDS.len() - 1) {
                 break;
             }
-            keys::commit_field(self);
-            keys::move_focus(self, up);
+            commit::commit_field(self);
+            commit::move_focus(self, up);
         }
     }
 

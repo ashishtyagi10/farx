@@ -226,11 +226,14 @@ trips. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 
 ## Settings
 
-`/settings` opens a form for font family, font size, and the sidebar. Settings
-persist to `$XDG_CONFIG/crew/config.toml` and apply live on Save. The config
-file also accepts `accent = "#rrggbb"` to override Crew's accent; omit it (or
-give an invalid value) to use the active theme's default accent. It applies at
-launch and on `/reload`.
+`/settings` opens a scrollable form covering every configurable property: font
+family/size, sidebar, theme, accent, paper texture + grain, launch-maximized,
+and the whole notification block (master + per-event toggles, min-secs
+threshold, watched output patterns). Settings persist to
+`$XDG_CONFIG/crew/config.toml` and apply live on Save. The config file also
+accepts `accent = "#rrggbb"` to override Crew's accent; omit it (or give an
+invalid value) to use the active theme's default accent. It applies at launch
+and on `/reload`.
 
 **Themes.** Crew ships five themes: two paper/e-ink looks — `paper-dark`
 (default — a high-contrast "newspaper" look) and `paper-light` (a warm paper

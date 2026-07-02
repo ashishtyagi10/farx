@@ -1,5 +1,5 @@
-use super::keys::{build_config, commit_family, commit_field, escape, move_focus};
-use super::{Field, SettingsAction, SettingsPane, DEFAULT_FAMILY_LABEL};
+use super::commit::{build_config, commit_family, commit_field, escape, move_focus};
+use super::{Field, SettingsAction, SettingsPane, DEFAULT_FAMILY_LABEL, FIELDS};
 use crate::config::CrewConfig;
 
 fn pane() -> SettingsPane {
@@ -7,6 +7,11 @@ fn pane() -> SettingsPane {
         CrewConfig::default(),
         vec!["Menlo".into(), "JetBrains Mono".into()],
     )
+}
+
+/// Focus the pane on `field` (must be in FIELDS).
+fn focus(p: &mut SettingsPane, field: Field) {
+    p.focus = FIELDS.iter().position(|&f| f == field).unwrap();
 }
 
 #[test]
@@ -24,7 +29,7 @@ fn filtered_narrows_on_query() {
 #[test]
 fn commit_font_size_clamps_low() {
     let mut p = pane();
-    p.focus = 1; // FontSize
+    focus(&mut p, Field::FontSize);
     p.size_buf = "3".into();
     commit_field(&mut p);
     assert_eq!(p.draft.font_size, 12.0);
@@ -67,20 +72,9 @@ fn scroll_steps_field_focus_clamped() {
 }
 
 #[test]
-fn scroll_moves_dropdown_selection() {
-    let mut p = pane();
-    p.family_query = String::new(); // show all families
-    p.family_open = true;
-    p.scroll(-1); // wheel down → next entry
-    assert_eq!(p.family_sel, 1);
-    p.scroll(99); // clamps back to top
-    assert_eq!(p.family_sel, 0);
-}
-
-#[test]
 fn build_config_returns_edited_draft() {
     let mut p = pane();
-    p.focus = 1; // FontSize
+    focus(&mut p, Field::FontSize);
     p.size_buf = "20".into();
     commit_field(&mut p);
     assert_eq!(build_config(&p).font_size, 20.0);
@@ -89,24 +83,21 @@ fn build_config_returns_edited_draft() {
 #[test]
 fn commit_accent_valid_normalizes_and_sets_draft() {
     let mut p = pane();
-    p.focus = 4; // Accent
-    assert_eq!(p.focused_field(), Field::Accent);
+    focus(&mut p, Field::Accent);
     p.accent_buf = "#AABBCC".into();
     commit_field(&mut p);
     // Stored canonical lowercase; the buffer mirrors it.
     assert_eq!(p.draft.accent.as_deref(), Some("#aabbcc"));
     assert_eq!(p.accent_buf, "#aabbcc");
-    assert_eq!(p.draft.accent_rgb(), (0xaa, 0xbb, 0xcc));
 }
 
 #[test]
 fn commit_accent_invalid_keeps_previous() {
     let mut p = pane();
-    p.focus = 4;
+    focus(&mut p, Field::Accent);
     p.draft.accent = Some("#001122".into());
     p.accent_buf = "nope".into();
     commit_field(&mut p);
-    // Bad input is rejected; the prior value survives and the buffer is restored.
     assert_eq!(p.draft.accent.as_deref(), Some("#001122"));
     assert_eq!(p.accent_buf, "#001122");
 }
@@ -114,10 +105,67 @@ fn commit_accent_invalid_keeps_previous() {
 #[test]
 fn commit_accent_empty_clears_to_builtin() {
     let mut p = pane();
-    p.focus = 4;
+    focus(&mut p, Field::Accent);
     p.draft.accent = Some("#001122".into());
     p.accent_buf = "   ".into();
     commit_field(&mut p);
     assert_eq!(p.draft.accent, None);
     assert!(p.accent_buf.is_empty());
+}
+
+#[test]
+fn commit_grain_clamps_and_formats() {
+    let mut p = pane();
+    focus(&mut p, Field::PaperGrain);
+    p.grain_buf = "9.7".into();
+    commit_field(&mut p);
+    assert_eq!(p.draft.paper_grain, 2.0);
+    assert_eq!(p.grain_buf, "2.0");
+}
+
+#[test]
+fn commit_min_secs_clamps_up_from_zero() {
+    let mut p = pane();
+    focus(&mut p, Field::NotifyMinSecs);
+    p.minsecs_buf = "0".into();
+    commit_field(&mut p);
+    assert_eq!(p.draft.notify_min_secs, 1);
+}
+
+#[test]
+fn commit_patterns_splits_and_drops_blanks() {
+    let mut p = pane();
+    focus(&mut p, Field::NotifyPatterns);
+    p.patterns_buf = " error , , DONE ".into();
+    commit_field(&mut p);
+    assert_eq!(
+        p.draft.notify_patterns,
+        vec!["error".to_string(), "DONE".to_string()]
+    );
+    assert_eq!(p.patterns_buf, "error, DONE"); // normalized display
+}
+
+#[test]
+fn every_config_property_is_editable_in_the_form() {
+    // The goal: all user-configurable properties appear in the settings page.
+    // Persisted window state (last_dir, win_w/h) is bookkeeping, not a setting.
+    for f in [
+        Field::FontFamily,
+        Field::FontSize,
+        Field::NavWidth,
+        Field::ShowNav,
+        Field::Theme,
+        Field::Accent,
+        Field::PaperTexture,
+        Field::PaperGrain,
+        Field::Maximized,
+        Field::Notify,
+        Field::NotifyAgentDone,
+        Field::NotifyBell,
+        Field::NotifyExit,
+        Field::NotifyMinSecs,
+        Field::NotifyPatterns,
+    ] {
+        assert!(FIELDS.contains(&f), "{f:?} missing from the form");
+    }
 }

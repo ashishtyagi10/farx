@@ -411,10 +411,18 @@ activity dot) fills the remaining height. Click a PANES row to focus that pane
 
 ## Settings
 
-`/settings` opens a form (two columns on a wide pane, one when narrow):
+`/settings` opens a scrollable form covering **every configurable property**
+(one row per field; Tab/wheel move focus, the list scrolls to keep it visible):
 
 - **Font family** — type-to-search over installed monospace families.
 - **Font size**, **Nav width**, **Show nav**.
+- **Theme** — ←/→/Space cycle through the five presets.
+- **Accent (#hex)** — override the theme accent; clear to use the default.
+- **Paper texture** (on/off) and **Paper grain** (0–2 amplitude).
+- **Launch maximized**.
+- **Notifications** — the master switch plus per-event toggles (**cmd done**,
+  **bell**, **pane exit**), the **min secs** threshold, and the comma-separated
+  **patterns** watched in pane output.
 
 Settings persist to `$XDG_CONFIG/crew/config.toml` and apply live on Save.
 
