@@ -23,7 +23,6 @@
 //! Scale & control:
 //! - [`batch`] — flat parallel-job graph: [`batch_graph`], [`Job`]
 //! - [`govern`] — cost ceiling: [`Budget`], [`budget_governor`]
-//! - [`view`] — swarm-view layout: constellation/heatmap + `fleet_view` + `render_cells`
 //!
 //! Remote / sidecar (out-of-process & external engines):
 //! - [`wire`] — JSON wire protocol + [`Transport`]: [`RemoteTask`], [`RemoteReply`]
@@ -48,7 +47,6 @@ pub mod provider;
 pub mod remoteagent;
 pub mod sched;
 pub mod telemetry;
-pub mod view;
 pub mod wire;
 pub mod worker;
 

@@ -2,7 +2,7 @@
 
 Crew is a from-scratch, native **GPU terminal** (Rust · `winit` + `wgpu` + `glyphon`)
 that doubles as a **swarm orchestrator**: give it a goal and it decomposes the work
-and runs a pool of agents toward it, rendered as a live constellation/heatmap.
+and runs a pool of agents toward it, rendered as a live per-task status list.
 
 The workspace is five crates: `crew-app` (the application), `crew-render` (GPU
 pipeline), `crew-term` (PTY + terminal grid), `crew-plugin` (subprocess agent
@@ -92,10 +92,10 @@ fully unit/integration-tested; bring-your-own-LLM per agent.
    │           (LangGraph/sidecar)│              └───────────┬─────────────┘
    └───────────────┬──────────────┘                          ▼
                    │ read deps / write result    ┌─────────────────────────┐
-                   ▼                              │ view: fleet_view        │
-        ┌──────────────────────┐                 │  Constellation │Heatmap │
-        │ Blackboard           │◄── gather deps ─┤  (mode by count)        │
-        │  TaskResults +        │   merge upward  │  render_cells→glyph grid│
+                   ▼                              │ crew-app swarm/view     │
+        ┌──────────────────────┐                 │  task list: glyph+title │
+        │ Blackboard           │◄── gather deps ─┤  +last output line      │
+        │  TaskResults +        │   merge upward  │  under a fleet HUD row  │
         │  artifacts (Arc<RwLock>)                └─────────────┬───────────┘
         └──────────────────────┘                               │
                                                                 ▼  to crew-app SwarmPane
@@ -113,7 +113,7 @@ fully unit/integration-tested; bring-your-own-LLM per agent.
 - **crew-hive** is the engine: a goal is decomposed by the planner into a task
   graph, executed by a tokio scheduler over a bounded pool of agents (stub, native
   LLM, or remote/sidecar), with results merging through the blackboard and
-  telemetry streaming over the event bus into the constellation/heatmap view.
+  telemetry streaming over the event bus into the pane's task-list view.
 
 See the design spec at
 [`docs/superpowers/specs/2026-06-27-crew-agent-swarm-design.md`](superpowers/specs/2026-06-27-crew-agent-swarm-design.md)

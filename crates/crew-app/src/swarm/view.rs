@@ -1,66 +1,118 @@
-//! Fleet → CellViews renderer: maps a `crew_hive::Fleet` to a flat list of
-//! `crew_render::CellView`s suitable for the GPU pane, plus a HUD row 0.
-use crew_hive::view::{fleet_view, render_cells, Rgb};
-use crew_hive::{Fleet, TaskGraph};
+//! Fleet → CellViews renderer: a legible task list over live fleet telemetry.
+//! Row 0 is a HUD of fleet totals; each row below is one task — state glyph,
+//! title, and (while running or after failing) the agent's last output line —
+//! so a swarm pane shows *what* is happening, not just how much.
+use std::collections::HashMap;
+
+use crew_hive::{Fleet, TaskGraph, TaskId, TaskState};
 use crew_render::CellView;
+
+/// Glyph, colour, and bold flag for a task state.
+fn state_style(state: TaskState) -> (char, (u8, u8, u8), bool) {
+    let t = crew_theme::theme();
+    match state {
+        TaskState::Pending | TaskState::Ready => ('\u{25cb}', t.text_muted, false), // ○
+        TaskState::Running => ('\u{25cf}', crate::palette::accent(), true),         // ●
+        TaskState::Done => ('\u{2713}', t.ansi[2], false),                          // ✓
+        TaskState::Failed => ('\u{2717}', t.ansi[9], true),                         // ✗
+        TaskState::Cancelled => ('\u{2013}', t.text_muted, false),                  // –
+    }
+}
+
+/// Append `s` at `(row, col..)` in `fg`, clipped to `cols`; returns the next column.
+fn push(
+    cells: &mut Vec<CellView>,
+    row: u16,
+    col: u16,
+    cols: u16,
+    s: &str,
+    fg: (u8, u8, u8),
+    bold: bool,
+) -> u16 {
+    let bg = crew_theme::theme().page_bg;
+    let mut x = col;
+    for ch in s.chars() {
+        if x >= cols {
+            break;
+        }
+        cells.push(CellView {
+            col: x,
+            row,
+            c: ch,
+            fg,
+            bg,
+            bold,
+            italic: false,
+        });
+        x += 1;
+    }
+    x
+}
 
 /// Map a `Fleet` to a `Vec<CellView>` for the given terminal grid.
 ///
-/// Row 0 is a HUD showing live/done/failed/cost totals. Constellation or
-/// heatmap glyphs occupy rows 1‥rows-1 (shifted down by 1).
+/// Row 0 is a HUD showing live/done/failed/cost totals. Rows 1‥rows-1 list the
+/// graph's tasks in order, one per row, with a trailing `… +N more` overflow
+/// row when the pane is too short for them all.
 ///
 /// Returns an empty vec when `cols == 0 || rows == 0`.
 pub fn swarm_cells(graph: &TaskGraph, fleet: &Fleet, cols: u16, rows: u16) -> Vec<CellView> {
     if cols == 0 || rows == 0 {
         return vec![];
     }
-
-    // Reserve row 0 for the HUD; content gets the remaining rows.
-    let content_rows = rows.saturating_sub(1);
-    let view = fleet_view(graph, fleet, cols as usize);
-    let glyphs = render_cells(&view, cols, content_rows);
-
-    let theme = crew_theme::theme();
-    let mut cells: Vec<CellView> = glyphs
-        .into_iter()
-        .map(|g| {
-            let Rgb(r, gv, b) = g.color;
-            CellView {
-                col: g.col,
-                row: g.row.saturating_add(1), // shift below HUD
-                c: g.ch,
-                fg: (r, gv, b),
-                bg: theme.page_bg,
-                bold: false,
-                italic: false,
-            }
-        })
-        .collect();
+    let t = crew_theme::theme();
+    let mut cells = Vec::new();
 
     // HUD row: live/done/failed + cost in dollars.
-    let t = fleet.totals();
+    let totals = fleet.totals();
     let hud = format!(
         " live:{} done:{} failed:{} cost:${:.4}",
-        t.live,
-        t.done,
-        t.failed,
-        t.micros_usd as f64 / 1_000_000.0,
+        totals.live,
+        totals.done,
+        totals.failed,
+        totals.micros_usd as f64 / 1_000_000.0,
     );
-    for (col, ch) in hud.chars().enumerate() {
-        if col as u16 >= cols {
-            break;
-        }
-        cells.push(CellView {
-            col: col as u16,
-            row: 0,
-            c: ch,
-            fg: theme.ink,
-            bg: theme.page_bg,
-            bold: false,
-            italic: false,
-        });
-    }
+    push(&mut cells, 0, 0, cols, &hud, t.ink, false);
 
+    // Task rows below the HUD. A task with no spawned agent yet is Pending.
+    let by_task: HashMap<TaskId, _> = fleet.agents().map(|a| (a.task, a)).collect();
+    let avail = rows.saturating_sub(1) as usize;
+    let tasks = graph.tasks();
+    // Keep one row for the overflow note when the list doesn't fit.
+    let shown = if tasks.len() > avail {
+        avail.saturating_sub(1)
+    } else {
+        tasks.len()
+    };
+    for (i, spec) in tasks.iter().take(shown).enumerate() {
+        let row = (i + 1) as u16;
+        let agent = by_task.get(&spec.id);
+        let state = agent.map_or(TaskState::Pending, |a| a.state);
+        let (glyph, color, bold) = state_style(state);
+        let mut x = push(&mut cells, row, 1, cols, &glyph.to_string(), color, bold);
+        x = push(&mut cells, row, x + 1, cols, &spec.title, color, bold);
+        // The live tail: what the agent last printed (or the failure reason).
+        let tail = agent
+            .filter(|_| matches!(state, TaskState::Running | TaskState::Failed))
+            .map(|a| a.last_line.as_str())
+            .unwrap_or_default();
+        if !tail.is_empty() {
+            x = push(&mut cells, row, x, cols, " \u{2014} ", t.text_muted, false);
+            push(&mut cells, row, x, cols, tail, t.text_muted, false);
+        }
+    }
+    if tasks.len() > shown && avail > 0 {
+        let note = format!("\u{2026} +{} more", tasks.len() - shown);
+        push(
+            &mut cells,
+            (shown + 1) as u16,
+            1,
+            cols,
+            &note,
+            t.text_muted,
+            false,
+        );
+    }
     cells
 }
 

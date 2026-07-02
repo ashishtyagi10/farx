@@ -8,7 +8,7 @@ near-square grid, drawn cell-by-cell on the GPU with `winit` + `wgpu` +
 It also ships a built-in **swarm orchestration engine** (`crew-hive`): give it a
 goal and it decomposes the work into a task graph and runs a pool of agents
 toward it — single-goal decomposition or parallel-job batches, bring-your-own-LLM
-per agent, with a live constellation/heatmap view. See
+per agent, with a live task-list view. See
 [Swarm orchestration](#swarm-orchestration-crew-hive) and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -212,8 +212,9 @@ full orchestration **engine**, the `crew-hive` crate — the substrate for runni
   with per-agent `ModelTier` cost tiering (haiku / sonnet / opus).
 - **Two modes, one engine** — single-goal decomposition *and* flat parallel-job
   batches (`batch_graph`); a `budget_governor` enforces a hard cost ceiling.
-- **Swarm view** — a constellation/heatmap layout over live fleet telemetry
-  (color = state, mode auto-switches to a heatmap past ~150 agents).
+- **Swarm view** — a live task list over fleet telemetry: one row per task with
+  a state glyph (○ pending · ● running · ✓ done · ✗ failed), its title, and the
+  agent's last output line while it works.
 
 The engine is wired into the app through two commands, each opening a live
 **swarm pane** that renders the task list + a fleet HUD (live / done / failed

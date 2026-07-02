@@ -175,6 +175,60 @@ fn swarm_cells_content_offset_by_hud() {
 }
 
 #[test]
+fn swarm_cells_lists_task_titles_with_state_glyphs() {
+    use super::view::swarm_cells;
+
+    let graph = two_task_graph();
+    let mut fleet = Fleet::new();
+    fleet.apply(&HiveEvent::AgentSpawned {
+        agent: AgentId(0),
+        task: TaskId(0),
+    });
+    fleet.apply(&HiveEvent::OutputChunk {
+        agent: AgentId(0),
+        text: "compiling widgets".into(),
+    });
+
+    let cells = swarm_cells(&graph, &fleet, 60, 10);
+    // Rebuild the row as text, padding columns with no cell as spaces.
+    let row_text = |row: u16| {
+        let mut line = vec![' '; 60];
+        for c in cells.iter().filter(|c| c.row == row) {
+            line[c.col as usize] = c.c;
+        }
+        line.into_iter().collect::<String>()
+    };
+    // Row 1: running task ● with its title and live output tail.
+    let r1 = row_text(1);
+    assert!(r1.contains("\u{25cf} alpha"), "got: {r1}");
+    assert!(r1.contains("compiling widgets"), "got: {r1}");
+    // Row 2: unspawned task renders as pending ○.
+    let r2 = row_text(2);
+    assert!(r2.contains("\u{25cb} beta"), "got: {r2}");
+}
+
+#[test]
+fn swarm_cells_overflow_notes_hidden_tasks() {
+    use super::view::swarm_cells;
+
+    let graph = two_task_graph();
+    let fleet = Fleet::new();
+    // 2 rows total → 1 content row → 0 task rows + the "+2 more" note.
+    let cells = swarm_cells(&graph, &fleet, 40, 2);
+    let text: String = {
+        let mut v: Vec<_> = cells
+            .iter()
+            .filter(|c| c.row == 1)
+            .map(|c| (c.col, c.c))
+            .collect();
+        v.sort_unstable();
+        v.into_iter().map(|(_, c)| c).collect()
+    };
+    assert!(text.contains("+2 more"), "got: {text}");
+    assert!(cells.iter().all(|c| c.row < 2), "no cell may overflow rows");
+}
+
+#[test]
 fn swarm_cells_empty_for_zero_dims() {
     use super::view::swarm_cells;
 

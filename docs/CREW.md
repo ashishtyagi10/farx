@@ -386,12 +386,12 @@ dependency-free graph the same scheduler runs.
 accumulates cost via a `Fleet`, and trips the scheduler's cancel flag once a
 `Budget`'s micro-USD ceiling is crossed — a hard spend cap across the run.
 
-**Swarm view** (`view`, `telemetry`). The `EventBus` (`bus`) is a non-blocking
-broadcast of `HiveEvent`s (state, tokens, cost, output); a `Fleet` aggregates them
-per-agent. `fleet_view` lays the fleet out as a **constellation** (nodes placed by
-dependency depth, edges = deps, color = state) or a dense **heatmap** (auto-engaged
-past ~150 agents), and `render_cells` turns either into a glyph grid the GPU pane
-draws.
+**Swarm view** (`telemetry` + crew-app's `swarm/view`). The `EventBus` (`bus`) is
+a non-blocking broadcast of `HiveEvent`s (state, tokens, cost, output); a `Fleet`
+aggregates them per-agent. The pane renders the fleet as a **task list** — one row
+per task with a state glyph (○ pending · ● running · ✓ done · ✗ failed), its
+title, and the agent's last output line while it runs or after it fails — under a
+`live / done / failed / cost` HUD row.
 
 **Remote spill & sidecar bridge** (`wire`, `worker`, `remoteagent`). A
 newline-delimited JSON protocol (`RemoteTask`/`RemoteReply`) over a `Transport`
