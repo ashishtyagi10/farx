@@ -77,7 +77,12 @@ impl CrewApp {
             "z" => self.toggle_zoom(),
             "a" => self.focus_next_active(),
             "c" => self.copy_screen(),
-            "s" => self.toggle_broadcast(),
+            // Cmd+S saves a focused settings form; otherwise toggles broadcast.
+            "s" => {
+                if !self.save_focused_settings() {
+                    self.toggle_broadcast()
+                }
+            }
             "v" => self.paste(),
             // Font zoom: Cmd+= / Cmd+- grow/shrink, Cmd+0 resets to default.
             "=" | "+" => self.set_font(self.config.font_size + 1.0),

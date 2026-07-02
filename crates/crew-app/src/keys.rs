@@ -1,6 +1,6 @@
 //! Keyboard event dispatch for CrewApp.
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::{Key, NamedKey};
+use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
 
 use crate::app::CrewApp;
 use crate::pane::PaneContent;
@@ -99,6 +99,17 @@ impl CrewApp {
             return;
         }
 
+        // Alt+S saves a focused settings form (physical key: macOS Option+S
+        // produces 'ß' as the logical key). Other panes see Alt+S as normal.
+        if event.state.is_pressed()
+            && mstate.alt_key()
+            && matches!(event.physical_key, PhysicalKey::Code(KeyCode::KeyS))
+            && self.save_focused_settings()
+        {
+            self.redraw();
+            return;
+        }
+
         // When the input bar is focused, all non-super keys go to it.
         if self.input.focused {
             if event.state.is_pressed()
@@ -176,5 +187,22 @@ impl CrewApp {
             self.close_pane(focused);
         }
         self.redraw();
+    }
+
+    /// Cmd+S / Alt+S: save-and-close when the focused pane is a settings
+    /// form. Returns `false` when it isn't (the chord keeps its old meaning).
+    pub(crate) fn save_focused_settings(&mut self) -> bool {
+        let focused = self.focused;
+        let Some(pane) = self.panes.get_mut(focused) else {
+            return false;
+        };
+        let PaneContent::Settings(s) = &mut pane.content else {
+            return false;
+        };
+        if let SettingsAction::Apply(cfg) = s.save() {
+            self.apply_settings(cfg);
+        }
+        self.close_pane(focused);
+        true
     }
 }

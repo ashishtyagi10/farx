@@ -146,6 +146,17 @@ fn commit_patterns_splits_lines_and_drops_blanks() {
 }
 
 #[test]
+fn save_commits_the_focused_edit_and_applies() {
+    let mut p = pane();
+    focus(&mut p, Field::FontSize);
+    p.size_buf = "20".into();
+    let SettingsAction::Apply(cfg) = p.save() else {
+        panic!("save must apply");
+    };
+    assert_eq!(cfg.font_size, 20.0);
+}
+
+#[test]
 fn every_config_property_is_editable_in_the_form() {
     // The goal: all user-configurable properties appear in the settings page.
     // Persisted window state (last_dir, win_w/h) is bookkeeping, not a setting.

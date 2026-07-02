@@ -121,6 +121,12 @@ impl SettingsPane {
         keys::reduce(self, key, shift)
     }
 
+    /// Cmd+S / Alt+S: commit the focused field and save the whole form.
+    pub fn save(&mut self) -> SettingsAction {
+        commit::commit_field(self);
+        SettingsAction::Apply(commit::build_config(self))
+    }
+
     /// Mouse-wheel / page scroll: move the open font dropdown's selection, or
     /// otherwise step field focus (committing each field on the way). Positive
     /// `lines` moves toward the top.
