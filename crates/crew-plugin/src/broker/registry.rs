@@ -1,83 +1,8 @@
 //! The agent registry: maps a name to its adapter. [`Registry::discover`]
-//! probes every known agent at runtime and keeps only the installed ones, so
-//! the broker never routes to a CLI that isn't there.
-use std::sync::Arc;
-
+//! resolves the provider-backed inbuilt roster plus any manifest plugin
+//! agents (see [`super::discover`]), keeping only usable ones, so the broker
+//! never routes to an agent that isn't there.
 use super::adapter::Adapter;
-use super::apiadapter::inbuilt_agents;
-
-/// Default OpenRouter fallback chain for the inbuilt agents — free slugs across
-/// *different* upstream providers, so a provider-specific throttle on one model
-/// rolls to the next instead of failing the relay. Quality isn't the goal here.
-/// OpenRouter rotates its free models; override the whole chain with a
-/// comma-separated `CREW_OPENROUTER_MODEL=slug1,slug2,…` (a retired slug is
-/// skipped automatically when it errors).
-const DEFAULT_OPENROUTER_CHAIN: &[&str] = &[
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "deepseek/deepseek-chat-v3.1:free",
-    "qwen/qwen3-235b-a22b:free",
-    "meta-llama/llama-4-scout:free",
-];
-
-/// Default Qwen chain for Alibaba Cloud DashScope (`DASHSCOPE_API_KEY`): the
-/// most capable commercial alias first, rolling to cheaper tiers on limits.
-/// Override with a comma-separated `CREW_DASHSCOPE_MODEL=slug1,slug2,…`.
-const DEFAULT_DASHSCOPE_CHAIN: &[&str] = &["qwen-max", "qwen-plus", "qwen-turbo"];
-
-/// DashScope's OpenAI-compatible chat endpoint (international). Point
-/// `CREW_DASHSCOPE_BASE_URL` at the China-region host if your key lives there.
-const DASHSCOPE_ENDPOINT: &str =
-    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
-
-/// Parse `CREW_OPENROUTER_MODEL` (a comma-separated model chain) into an ordered
-/// list, falling back to `default` when unset or empty.
-fn parse_model_chain(env_val: Option<String>, default: &[&str]) -> Vec<String> {
-    let parsed: Vec<String> = env_val
-        .unwrap_or_default()
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-    if parsed.is_empty() {
-        default.iter().map(|s| s.to_string()).collect()
-    } else {
-        parsed
-    }
-}
-
-/// The provider backing the inbuilt agents.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum ProviderKind {
-    Mock,
-    DashScope,
-    OpenRouter,
-    Anthropic,
-}
-
-/// Resolve which provider backs the inbuilt agents. The mock (tests) always
-/// wins; then an explicit `CREW_PROVIDER` (dashscope|openrouter|anthropic);
-/// then auto-discovery in preference order — DashScope (paid Qwen) before
-/// OpenRouter (free chains) before Anthropic.
-fn pick_provider(force: Option<&str>, has_key: impl Fn(&str) -> bool) -> Option<ProviderKind> {
-    if has_key("CREW_BROKER_MOCK_REPLY") {
-        return Some(ProviderKind::Mock);
-    }
-    match force.map(str::to_ascii_lowercase).as_deref() {
-        Some("dashscope") => return Some(ProviderKind::DashScope),
-        Some("openrouter") => return Some(ProviderKind::OpenRouter),
-        Some("anthropic") => return Some(ProviderKind::Anthropic),
-        _ => {}
-    }
-    if has_key("DASHSCOPE_API_KEY") {
-        Some(ProviderKind::DashScope)
-    } else if has_key("OPENROUTER_API_KEY") {
-        Some(ProviderKind::OpenRouter)
-    } else if has_key("ANTHROPIC_API_KEY") {
-        Some(ProviderKind::Anthropic)
-    } else {
-        None
-    }
-}
 
 pub struct Registry {
     agents: Vec<Box<dyn Adapter>>,
@@ -89,18 +14,14 @@ impl Registry {
         Self { agents }
     }
 
-    /// Build the inbuilt agent roster (planner/coder/reviewer). `CREW_PROVIDER`
-    /// (dashscope|openrouter|anthropic) forces a provider; otherwise keys are
-    /// probed in preference order — DashScope (`DASHSCOPE_API_KEY`, paid Qwen
-    /// on the [`DEFAULT_DASHSCOPE_CHAIN`]), then OpenRouter
-    /// (`OPENROUTER_API_KEY`, the free [`DEFAULT_OPENROUTER_CHAIN`]), then
-    /// Anthropic (`ANTHROPIC_API_KEY`, per-tier native models). Empty when no
-    /// key is set (or the forced provider's key is missing), so the broker
-    /// explains how to enable it rather than routing to nothing.
-    ///
-    /// `CREW_BROKER_MOCK_REPLY` overrides everything with a fixed-reply mock
-    /// (no network), so the relay can be driven deterministically offline and in
-    /// end-to-end tests of the broker binary.
+    /// Build the roster: the inbuilt API agents (planner/coder/reviewer) on
+    /// the discovered provider — `CREW_PROVIDER` forces one; otherwise keys
+    /// are probed DashScope → OpenRouter → Anthropic — plus every installed
+    /// manifest plugin agent from `~/.config/crew/agents/` and
+    /// `./.crew/agents/`. With no key and no plugin agents the roster is
+    /// empty, so the broker explains how to enable it rather than routing to
+    /// nothing. `CREW_BROKER_MOCK_REPLY` overrides everything with a
+    /// fixed-reply mock (no network, no plugins) for deterministic tests.
     pub fn discover() -> Self {
         Self::discover_with(&std::collections::HashMap::new())
     }
@@ -109,71 +30,7 @@ impl Registry {
     /// construct) applied on top of the provider's defaults, so different
     /// agents can run different models side by side.
     pub fn discover_with(overrides: &std::collections::HashMap<String, String>) -> Self {
-        let force = std::env::var("CREW_PROVIDER").ok();
-        let has = |k: &str| std::env::var(k).is_ok_and(|v| !v.is_empty());
-        match pick_provider(force.as_deref(), has) {
-            Some(ProviderKind::Mock) => {
-                let reply = std::env::var("CREW_BROKER_MOCK_REPLY").unwrap_or_default();
-                let provider = Arc::new(crew_hive::MockProvider { reply });
-                Self::new(inbuilt_agents(
-                    provider,
-                    |t| t.model_id().to_string(),
-                    overrides,
-                ))
-            }
-            // Alibaba Cloud DashScope: the same OpenAI-compatible wire shape on
-            // a different endpoint, running the Qwen commercial models.
-            Some(ProviderKind::DashScope) => {
-                let Ok(key) = std::env::var("DASHSCOPE_API_KEY") else {
-                    return Self::new(Vec::new()); // forced without a key
-                };
-                let chain = parse_model_chain(
-                    std::env::var("CREW_DASHSCOPE_MODEL").ok(),
-                    DEFAULT_DASHSCOPE_CHAIN,
-                );
-                let url = std::env::var("CREW_DASHSCOPE_BASE_URL")
-                    .unwrap_or_else(|_| DASHSCOPE_ENDPOINT.to_string());
-                let primary = chain[0].clone();
-                let provider = crew_hive::OpenRouterProvider::new(key)
-                    .with_endpoint(url)
-                    .with_fallbacks(chain);
-                Self::new(inbuilt_agents(
-                    Arc::new(provider),
-                    move |_| primary.clone(),
-                    overrides,
-                ))
-            }
-            Some(ProviderKind::OpenRouter) => {
-                let Ok(provider) = crew_hive::OpenRouterProvider::from_env() else {
-                    return Self::new(Vec::new()); // forced without a key
-                };
-                let chain = parse_model_chain(
-                    std::env::var("CREW_OPENROUTER_MODEL").ok(),
-                    DEFAULT_OPENROUTER_CHAIN,
-                );
-                // Every role starts on the chain's first slug (the role's system
-                // prompt steers it); the provider rolls to later slugs when one
-                // is limited.
-                let primary = chain[0].clone();
-                let provider = provider.with_fallbacks(chain);
-                Self::new(inbuilt_agents(
-                    Arc::new(provider),
-                    move |_| primary.clone(),
-                    overrides,
-                ))
-            }
-            Some(ProviderKind::Anthropic) => {
-                let Ok(provider) = crew_hive::AnthropicProvider::from_env() else {
-                    return Self::new(Vec::new()); // forced without a key
-                };
-                Self::new(inbuilt_agents(
-                    Arc::new(provider),
-                    |t| t.model_id().to_string(),
-                    overrides,
-                ))
-            }
-            None => Self::new(Vec::new()),
-        }
+        Self::new(super::discover::roster_with(overrides))
     }
 
     /// Registered agent names, in registration order.
@@ -188,7 +45,7 @@ impl Registry {
             .iter()
             .map(|a| crate::AgentInfo {
                 name: a.name().to_string(),
-                role: super::agents::role_for(a.name()).to_string(),
+                role: a.role().to_string(),
                 model: a.model().to_string(),
             })
             .collect()
@@ -213,12 +70,12 @@ impl Registry {
     /// Peer descriptions (name + capability hint) for everyone except `name` —
     /// the prompt's peer list, so an agent hands off to the right one.
     pub fn roster_excluding(&self, name: &str) -> Vec<String> {
-        self.names()
-            .into_iter()
-            .filter(|n| !n.eq_ignore_ascii_case(name))
-            .map(|n| match super::agents::role_for(&n) {
-                "" => n,
-                role => format!("{n} ({role})"),
+        self.agents
+            .iter()
+            .filter(|a| !a.name().eq_ignore_ascii_case(name))
+            .map(|a| match a.role() {
+                "" => a.name().to_string(),
+                role => format!("{} ({role})", a.name()),
             })
             .collect()
     }

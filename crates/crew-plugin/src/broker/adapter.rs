@@ -34,6 +34,12 @@ pub trait Adapter: Send + Sync {
     fn model(&self) -> &str {
         ""
     }
+    /// A short capability hint for the roster and peer lists. Defaults to the
+    /// static mapping for the known agent names; manifest plugin agents carry
+    /// their own.
+    fn role(&self) -> &str {
+        super::agents::role_for(self.name())
+    }
     /// Whether this agent's CLI is installed and usable on this machine.
     fn probe(&self) -> bool;
     /// Send `body` to the agent and return its normalized reply, or an error
