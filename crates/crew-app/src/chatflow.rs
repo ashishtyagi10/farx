@@ -20,6 +20,32 @@ pub(crate) struct ActiveAgent {
 /// Milliseconds per spinner frame.
 const FRAME_MS: u128 = 120;
 
+impl crate::chat::ChatPane {
+    /// The live status label: the thinking agent's name (one active) or a
+    /// `N working` count (parallel fan), with the oldest elapsed seconds.
+    pub(crate) fn active_status(&self) -> Option<(String, u64)> {
+        let secs = self
+            .active
+            .iter()
+            .map(|a| a.since.elapsed().as_secs())
+            .max()?;
+        match &self.active[..] {
+            [one] => Some((one.name.clone(), secs)),
+            many => Some((format!("{} working", many.len()), secs)),
+        }
+    }
+
+    /// Names of every agent currently thinking (roster highlights them all).
+    pub(crate) fn active_names(&self) -> Vec<&str> {
+        self.active.iter().map(|a| a.name.as_str()).collect()
+    }
+
+    /// The live activity entries, for the pane's interaction row.
+    pub(crate) fn active_agents(&self) -> &[ActiveAgent] {
+        &self.active
+    }
+}
+
 /// Append `s` at `(row, col..)` in `fg`, clipped to `cols`; returns the next column.
 fn push(
     cells: &mut Vec<CellView>,
