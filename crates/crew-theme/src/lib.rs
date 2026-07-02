@@ -53,205 +53,208 @@ pub struct Theme {
 /// keeps muted-but-readable colours so error/diff colour cues survive.
 /// The default.
 pub static PAPER_DARK: Theme = Theme {
-    page_bg: (10, 10, 10),
-    ink: (236, 236, 236),
-    text_muted: (175, 175, 175),
-    term_fg: (236, 236, 236),
-    term_bg: (10, 10, 10),
-    border_normal: (85, 85, 85),
-    border_focused: (205, 205, 205),
+    page_bg: (8, 8, 8),
+    ink: (247, 247, 247),
+    text_muted: (196, 196, 196),
+    term_fg: (247, 247, 247),
+    term_bg: (8, 8, 8),
+    border_normal: (100, 100, 100),
+    border_focused: (235, 235, 235),
     border_thickness: 2.5,
-    legend_off: (120, 120, 120),
-    accent_default: (230, 230, 230),
-    status_fg: (210, 180, 120),
-    broadcast: (181, 138, 168),
-    activity: (125, 154, 184),
-    bell: (210, 180, 120),
-    dim: (110, 110, 110),
-    placeholder: (95, 95, 95),
-    hint_fg: (120, 120, 120),
-    find_hl_bg: (60, 55, 20),
+    legend_off: (140, 140, 140),
+    accent_default: (240, 240, 240),
+    status_fg: (235, 195, 120),
+    broadcast: (200, 150, 190),
+    activity: (140, 175, 210),
+    bell: (235, 195, 120),
+    dim: (125, 125, 125),
+    placeholder: (112, 112, 112),
+    hint_fg: (135, 135, 135),
+    find_hl_bg: (70, 62, 20),
     ansi: [
-        (90, 90, 90),    // 0  black -> neutral grey (visible on near-black)
-        (210, 120, 105), // 1  red
-        (160, 185, 110), // 2  green
-        (215, 180, 110), // 3  yellow
-        (130, 165, 200), // 4  blue
-        (190, 145, 180), // 5  magenta
-        (135, 190, 185), // 6  cyan
-        (220, 220, 220), // 7  white -> neutral light grey
-        (130, 130, 130), // 8  bright black
-        (225, 140, 120), // 9  bright red
-        (180, 200, 130), // 10 bright green
-        (230, 200, 135), // 11 bright yellow
-        (150, 185, 215), // 12 bright blue
-        (210, 165, 200), // 13 bright magenta
-        (155, 205, 200), // 14 bright cyan
-        (240, 240, 240), // 15 bright white
+        (95, 95, 95),    // 0  black -> neutral grey (visible on near-black)
+        (235, 105, 90),  // 1  red
+        (140, 220, 110), // 2  green
+        (235, 200, 90),  // 3  yellow
+        (120, 180, 235), // 4  blue
+        (215, 140, 215), // 5  magenta
+        (110, 220, 215), // 6  cyan
+        (225, 225, 225), // 7  white -> neutral light grey
+        (140, 140, 140), // 8  bright black
+        (255, 130, 110), // 9  bright red
+        (170, 240, 130), // 10 bright green
+        (255, 220, 110), // 11 bright yellow
+        (145, 200, 255), // 12 bright blue
+        (235, 165, 235), // 13 bright magenta
+        (135, 245, 235), // 14 bright cyan
+        (250, 250, 250), // 15 bright white
     ],
 };
 
 /// Warm paper "day" page — soft off-white with ink-toned output.
 pub static PAPER_LIGHT: Theme = Theme {
-    page_bg: (244, 241, 234),
-    // Ink and every text shade run ~18% darker than a flat paper palette so
-    // type reads crisp on the bright page rather than washed-out.
-    ink: (35, 33, 30),
-    text_muted: (74, 69, 62),
-    term_fg: (35, 33, 30),
-    term_bg: (244, 241, 234),
-    border_normal: (201, 194, 178),
-    border_focused: (140, 132, 117),
+    page_bg: (246, 243, 236),
+    // Ink and every text shade run deep enough that type reads crisp on the
+    // bright page (ink ≥ 16:1, muted ≥ 11:1) rather than washed-out.
+    ink: (22, 20, 18),
+    text_muted: (55, 51, 45),
+    term_fg: (22, 20, 18),
+    term_bg: (246, 243, 236),
+    border_normal: (175, 166, 148),
+    border_focused: (105, 97, 83),
     border_thickness: 3.0,
-    legend_off: (115, 109, 97),
-    accent_default: (128, 88, 52),
-    status_fg: (123, 90, 33),
-    broadcast: (123, 57, 98),
-    activity: (49, 82, 115),
-    bell: (131, 98, 33),
-    dim: (115, 108, 97),
-    placeholder: (131, 125, 113),
-    hint_fg: (131, 125, 113),
-    find_hl_bg: (232, 220, 168),
+    legend_off: (100, 94, 83),
+    accent_default: (110, 72, 38),
+    status_fg: (107, 78, 26),
+    broadcast: (110, 45, 88),
+    activity: (40, 72, 108),
+    bell: (115, 84, 20),
+    dim: (105, 99, 88),
+    placeholder: (118, 112, 101),
+    hint_fg: (112, 106, 95),
+    find_hl_bg: (235, 220, 150),
     ansi: [
-        (35, 33, 30),   // 0  black
-        (128, 48, 38),  // 1  red (brick)
-        (76, 88, 48),   // 2  green (sage)
-        (126, 101, 38), // 3  yellow (ochre)
-        (52, 74, 98),   // 4  blue (faded indigo)
-        (102, 62, 90),  // 5  magenta (mauve)
-        (52, 91, 88),   // 6  cyan (teal)
-        (75, 71, 62),   // 7  white (warm gray)
-        (98, 93, 81),   // 8  bright black
-        (146, 67, 54),  // 9  bright red
-        (100, 110, 67), // 10 bright green
-        (134, 109, 52), // 11 bright yellow
-        (72, 95, 121),  // 12 bright blue
-        (123, 82, 111), // 13 bright magenta
-        (72, 115, 110), // 14 bright cyan
-        (49, 46, 41),   // 15 bright white (boldest ink)
+        (28, 26, 23),   // 0  black
+        (152, 36, 28),  // 1  red (brick)
+        (58, 92, 30),   // 2  green (sage)
+        (140, 96, 20),  // 3  yellow (ochre)
+        (36, 74, 116),  // 4  blue (faded indigo)
+        (110, 44, 96),  // 5  magenta (mauve)
+        (18, 96, 92),   // 6  cyan (teal)
+        (70, 66, 58),   // 7  white (warm gray)
+        (92, 87, 76),   // 8  bright black
+        (176, 48, 36),  // 9  bright red
+        (74, 110, 40),  // 10 bright green
+        (158, 108, 24), // 11 bright yellow
+        (48, 92, 140),  // 12 bright blue
+        (128, 58, 112), // 13 bright magenta
+        (24, 114, 108), // 14 bright cyan
+        (30, 28, 25),   // 15 bright white (boldest ink)
     ],
 };
 
-/// Old-school **CRT green phosphor** (P1): bright green on near-black, with a
-/// monochrome-green ANSI palette (brightness tiers, faint hue tilts) for that
-/// single-gun terminal look. The paper-grain pass reads as a subtle glow.
+/// **Neon green phosphor** (P1, electrified): hot Tron-grid green on a
+/// near-black tube, with a monochrome-green ANSI palette (brightness tiers,
+/// faint hue tilts) for that single-gun terminal look. The paper-grain pass
+/// reads as a subtle glow.
 pub static CRT_GREEN: Theme = Theme {
-    page_bg: (6, 16, 8),
-    ink: (80, 255, 100),
-    text_muted: (70, 200, 90),
-    term_fg: (80, 255, 100),
-    term_bg: (6, 16, 8),
-    border_normal: (40, 110, 55),
-    border_focused: (90, 220, 120),
+    page_bg: (3, 10, 5),
+    ink: (0, 255, 102),
+    text_muted: (0, 204, 82),
+    term_fg: (0, 255, 102),
+    term_bg: (3, 10, 5),
+    border_normal: (0, 115, 55),
+    border_focused: (0, 255, 140),
     border_thickness: 2.5,
-    legend_off: (60, 150, 75),
-    accent_default: (120, 255, 150),
-    status_fg: (180, 230, 90),
-    broadcast: (140, 200, 120),
-    activity: (90, 210, 130),
-    bell: (180, 230, 100),
-    dim: (55, 120, 65),
-    placeholder: (60, 130, 70),
-    hint_fg: (70, 150, 85),
-    find_hl_bg: (20, 60, 25),
+    legend_off: (0, 160, 70),
+    accent_default: (64, 255, 160),
+    status_fg: (190, 255, 80),
+    broadcast: (150, 255, 150),
+    activity: (0, 230, 120),
+    bell: (200, 255, 90),
+    dim: (0, 110, 55),
+    placeholder: (0, 135, 60),
+    hint_fg: (0, 150, 66),
+    find_hl_bg: (10, 70, 30),
     ansi: [
-        (25, 50, 30),    // 0  black
-        (110, 200, 90),  // 1  red
-        (70, 215, 90),   // 2  green
-        (150, 220, 90),  // 3  yellow
-        (70, 200, 150),  // 4  blue
-        (130, 205, 130), // 5  magenta
-        (80, 220, 175),  // 6  cyan
-        (150, 235, 165), // 7  white
-        (60, 120, 75),   // 8  bright black
-        (140, 230, 110), // 9  bright red
-        (100, 255, 120), // 10 bright green
-        (180, 245, 110), // 11 bright yellow
-        (100, 230, 180), // 12 bright blue
-        (160, 235, 160), // 13 bright magenta
-        (110, 250, 205), // 14 bright cyan
-        (180, 255, 190), // 15 bright white
+        (10, 45, 20),    // 0  black
+        (170, 255, 70),  // 1  red
+        (0, 255, 102),   // 2  green
+        (200, 255, 80),  // 3  yellow
+        (0, 230, 170),   // 4  blue
+        (130, 255, 150), // 5  magenta
+        (0, 255, 200),   // 6  cyan
+        (170, 255, 190), // 7  white
+        (0, 140, 70),    // 8  bright black
+        (200, 255, 100), // 9  bright red
+        (80, 255, 130),  // 10 bright green
+        (230, 255, 110), // 11 bright yellow
+        (60, 255, 200),  // 12 bright blue
+        (170, 255, 180), // 13 bright magenta
+        (100, 255, 230), // 14 bright cyan
+        (210, 255, 220), // 15 bright white
     ],
 };
 
-/// **CRT amber phosphor** (P3): the warm-amber variation of the green tube.
+/// **Neon amber phosphor** (P3, electrified): saturated Tron-orange amber on a
+/// near-black tube — the warm counterpart of the green grid.
 pub static CRT_AMBER: Theme = Theme {
-    page_bg: (18, 12, 4),
-    ink: (255, 176, 70),
-    text_muted: (215, 145, 55),
-    term_fg: (255, 176, 70),
-    term_bg: (18, 12, 4),
-    border_normal: (120, 78, 30),
-    border_focused: (225, 150, 65),
+    page_bg: (14, 8, 2),
+    ink: (255, 184, 0),
+    text_muted: (226, 148, 0),
+    term_fg: (255, 184, 0),
+    term_bg: (14, 8, 2),
+    border_normal: (145, 90, 20),
+    border_focused: (255, 170, 40),
     border_thickness: 2.5,
-    legend_off: (160, 105, 40),
-    accent_default: (255, 185, 80),
-    status_fg: (230, 175, 70),
-    broadcast: (210, 150, 90),
-    activity: (225, 160, 70),
-    bell: (240, 170, 60),
-    dim: (120, 82, 35),
-    placeholder: (135, 92, 40),
-    hint_fg: (155, 105, 45),
-    find_hl_bg: (60, 40, 12),
+    legend_off: (180, 115, 20),
+    accent_default: (255, 210, 60),
+    status_fg: (255, 200, 70),
+    broadcast: (255, 170, 110),
+    activity: (255, 170, 50),
+    bell: (255, 190, 40),
+    dim: (130, 85, 25),
+    placeholder: (155, 100, 25),
+    hint_fg: (172, 110, 25),
+    find_hl_bg: (75, 48, 10),
     ansi: [
-        (55, 38, 15),    // 0  black
-        (230, 130, 70),  // 1  red
-        (200, 175, 60),  // 2  green
-        (235, 190, 70),  // 3  yellow
-        (200, 150, 110), // 4  blue
-        (225, 150, 110), // 5  magenta
-        (205, 175, 120), // 6  cyan
-        (235, 190, 130), // 7  white
-        (120, 85, 40),   // 8  bright black
-        (255, 150, 90),  // 9  bright red
-        (225, 205, 80),  // 10 bright green
-        (255, 205, 85),  // 11 bright yellow
-        (225, 180, 140), // 12 bright blue
-        (245, 175, 135), // 13 bright magenta
-        (230, 200, 150), // 14 bright cyan
-        (255, 215, 160), // 15 bright white
+        (60, 35, 10),    // 0  black
+        (255, 120, 40),  // 1  red
+        (240, 200, 40),  // 2  green
+        (255, 200, 30),  // 3  yellow
+        (255, 160, 90),  // 4  blue
+        (255, 140, 90),  // 5  magenta
+        (250, 190, 110), // 6  cyan
+        (255, 205, 120), // 7  white
+        (150, 95, 35),   // 8  bright black
+        (255, 140, 60),  // 9  bright red
+        (255, 220, 60),  // 10 bright green
+        (255, 215, 70),  // 11 bright yellow
+        (255, 180, 110), // 12 bright blue
+        (255, 160, 110), // 13 bright magenta
+        (255, 210, 140), // 14 bright cyan
+        (255, 225, 160), // 15 bright white
     ],
 };
 
-/// **CRT blue phosphor**: a cool cyan-blue tube, the third phosphor variation.
+/// **Neon blue phosphor** (electrified): Tron light-cycle cyan on a
+/// near-black tube — electric edge-glow blues, the coolest of the three grids.
 pub static CRT_BLUE: Theme = Theme {
-    page_bg: (5, 12, 20),
-    ink: (120, 210, 255),
-    text_muted: (95, 170, 215),
-    term_fg: (120, 210, 255),
-    term_bg: (5, 12, 20),
-    border_normal: (40, 85, 120),
-    border_focused: (100, 180, 225),
+    page_bg: (2, 8, 18),
+    ink: (0, 229, 255),
+    text_muted: (0, 182, 214),
+    term_fg: (0, 229, 255),
+    term_bg: (2, 8, 18),
+    border_normal: (0, 100, 140),
+    border_focused: (0, 215, 255),
     border_thickness: 2.5,
-    legend_off: (70, 130, 170),
-    accent_default: (120, 205, 255),
-    status_fg: (150, 200, 240),
-    broadcast: (150, 170, 220),
-    activity: (110, 190, 235),
-    bell: (170, 200, 245),
-    dim: (55, 100, 135),
-    placeholder: (65, 110, 145),
-    hint_fg: (75, 130, 170),
-    find_hl_bg: (18, 40, 60),
+    legend_off: (0, 145, 180),
+    accent_default: (120, 255, 255),
+    status_fg: (150, 230, 255),
+    broadcast: (170, 180, 255),
+    activity: (0, 200, 240),
+    bell: (170, 220, 255),
+    dim: (0, 105, 140),
+    placeholder: (0, 122, 155),
+    hint_fg: (0, 138, 172),
+    find_hl_bg: (10, 45, 75),
     ansi: [
-        (30, 50, 70),    // 0  black
-        (150, 160, 220), // 1  red
-        (90, 210, 210),  // 2  green
-        (160, 205, 200), // 3  yellow
-        (90, 160, 240),  // 4  blue
-        (150, 165, 235), // 5  magenta
-        (90, 215, 240),  // 6  cyan
-        (160, 205, 240), // 7  white
-        (70, 110, 150),  // 8  bright black
-        (170, 180, 245), // 9  bright red
-        (110, 235, 235), // 10 bright green
-        (180, 225, 220), // 11 bright yellow
-        (110, 180, 255), // 12 bright blue
-        (175, 185, 250), // 13 bright magenta
-        (120, 240, 255), // 14 bright cyan
-        (185, 225, 255), // 15 bright white
+        (20, 50, 75),    // 0  black
+        (150, 170, 255), // 1  red
+        (0, 255, 220),   // 2  green
+        (140, 220, 255), // 3  yellow
+        (60, 160, 255),  // 4  blue
+        (150, 150, 255), // 5  magenta
+        (0, 240, 255),   // 6  cyan
+        (170, 225, 255), // 7  white
+        (0, 120, 170),   // 8  bright black
+        (180, 190, 255), // 9  bright red
+        (60, 255, 235),  // 10 bright green
+        (170, 235, 255), // 11 bright yellow
+        (90, 190, 255),  // 12 bright blue
+        (180, 170, 255), // 13 bright magenta
+        (110, 250, 255), // 14 bright cyan
+        (200, 240, 255), // 15 bright white
     ],
 };
 
@@ -308,9 +311,9 @@ impl ThemeId {
         match self {
             ThemeId::PaperDark => "high-contrast newspaper (dark)",
             ThemeId::PaperLight => "warm paper page (light)",
-            ThemeId::CrtGreen => "green phosphor CRT",
-            ThemeId::CrtAmber => "amber phosphor CRT",
-            ThemeId::CrtBlue => "blue phosphor CRT",
+            ThemeId::CrtGreen => "neon green phosphor CRT",
+            ThemeId::CrtAmber => "neon amber phosphor CRT",
+            ThemeId::CrtBlue => "neon blue phosphor CRT (Tron)",
         }
     }
 
@@ -491,18 +494,18 @@ mod tests {
             let tbg = t.term_bg;
 
             assert!(
-                cr(t.ink, bg) >= 7.0,
-                "{name}: ink vs page_bg = {:.3} (need >= 7.0)",
+                cr(t.ink, bg) >= 10.0,
+                "{name}: ink vs page_bg = {:.3} (need >= 10.0)",
                 cr(t.ink, bg)
             );
             assert!(
-                cr(t.term_fg, tbg) >= 7.0,
-                "{name}: term_fg vs term_bg = {:.3} (need >= 7.0)",
+                cr(t.term_fg, tbg) >= 10.0,
+                "{name}: term_fg vs term_bg = {:.3} (need >= 10.0)",
                 cr(t.term_fg, tbg)
             );
             assert!(
-                cr(t.text_muted, bg) >= 4.5,
-                "{name}: text_muted vs page_bg = {:.3} (need >= 4.5)",
+                cr(t.text_muted, bg) >= 7.0,
+                "{name}: text_muted vs page_bg = {:.3} (need >= 7.0)",
                 cr(t.text_muted, bg)
             );
             assert!(
