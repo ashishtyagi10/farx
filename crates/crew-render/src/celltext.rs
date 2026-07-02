@@ -7,6 +7,8 @@ use crate::cellgrid::CellView;
 pub(crate) struct FontParams {
     pub font_size: f32,
     pub line_height: f32,
+    /// The fixed cell advance every glyph is snapped to (see [`cell_metrics`]).
+    pub cell_w: f32,
     /// Chosen family name; `None`/empty falls back to the system monospace.
     pub family: Option<String>,
 }
@@ -19,34 +21,35 @@ pub(crate) fn family_from(opt: &Option<String>) -> Family<'_> {
     }
 }
 
-/// Sorted, de-duplicated names of all installed monospace font families.
+/// Whether a family name reads as a coding/terminal face. Variable and
+/// otherwise mis-flagged fonts (JetBrains Mono among them) often lack the
+/// `monospaced` bit in their tables, so the picker would hide them; the name
+/// heuristic keeps them listed.
+pub(crate) fn sounds_monospace(name: &str) -> bool {
+    let l = name.to_lowercase();
+    [
+        "mono", "consol", "courier", "menlo", "monaco", "code", "fixed", "term",
+    ]
+    .iter()
+    .any(|h| l.contains(h))
+}
+
+/// Sorted, de-duplicated names of all installed monospace font families:
+/// every face flagged monospaced, plus families whose name says so.
 pub(crate) fn monospace_families(font_system: &FontSystem) -> Vec<String> {
     let mut names: Vec<String> = font_system
         .db()
         .faces()
-        .filter(|f| f.monospaced)
-        .flat_map(|f| f.families.iter().map(|(name, _)| name.clone()))
+        .flat_map(|f| {
+            let mono = f.monospaced;
+            f.families.iter().map(move |(name, _)| (name.clone(), mono))
+        })
+        .filter(|(name, mono)| *mono || sounds_monospace(name))
+        .map(|(name, _)| name)
         .collect();
     names.sort();
     names.dedup();
     names
-}
-
-/// Shape "M" and return its advance as the cell width for `family`.
-pub(crate) fn probe_cell_width(
-    buffer: &mut Buffer,
-    font_system: &mut FontSystem,
-    font_size: f32,
-    family: Family,
-) -> f32 {
-    let attrs = Attrs::new().family(family);
-    buffer.set_text(font_system, "M", &attrs, Shaping::Advanced, None);
-    for run in buffer.layout_runs() {
-        if let Some(g) = run.glyphs.first() {
-            return g.w;
-        }
-    }
-    font_size * 0.6
 }
 
 /// Build a new `Buffer` for one pane's cells at the given cols/rows.
@@ -66,6 +69,10 @@ pub(crate) fn build_pane_buffer(
     );
     buffer.set_wrap(font_system, Wrap::None);
     buffer.set_size(font_system, Some(w), Some(h));
+    // Snap every glyph advance to the fixed cell box, so the grid — and every
+    // box-drawing border in it — stays identical whatever family is chosen
+    // (fallback glyphs included).
+    buffer.set_monospace_width(font_system, Some(params.cell_w));
 
     fill_rich_text(&mut buffer, font_system, cells, cols, rows, &params.family);
     buffer
@@ -155,19 +162,13 @@ pub(crate) fn fill_rich_text(
     buffer.set_rich_text(font_system, spans, &default_attrs, Shaping::Advanced, None);
 }
 
-/// Compute monospace cell dimensions for the given font size without a GPU.
-/// Returns `(cell_w, cell_h)` where `cell_h = font_size * 1.25`.
-pub(crate) fn cell_metrics(
-    fs: &mut FontSystem,
-    font_size: f32,
-    family: &Option<String>,
-) -> (f32, f32) {
-    let cell_h = font_size * 1.25;
-    let mut probe_buf = Buffer::new(fs, Metrics::new(font_size, cell_h));
-    probe_buf.set_wrap(fs, Wrap::None);
-    probe_buf.set_size(fs, Some(4096.0), Some(4096.0));
-    let cell_w = probe_cell_width(&mut probe_buf, fs, font_size, family_from(family));
-    (cell_w, cell_h)
+/// The fixed cell box for a font size: `(cell_w, cell_h)` =
+/// `(0.6, 1.25) × font_size`. Deliberately independent of the font family —
+/// glyphs are snapped to this advance at layout time (see
+/// [`build_pane_buffer`]) — so switching fonts never moves a pane, a border,
+/// or the grid.
+pub(crate) fn cell_metrics(font_size: f32) -> (f32, f32) {
+    (font_size * 0.6, font_size * 1.25)
 }
 
 #[cfg(test)]

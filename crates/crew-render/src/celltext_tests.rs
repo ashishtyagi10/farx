@@ -4,15 +4,15 @@ fn params(family: Option<String>) -> FontParams {
     FontParams {
         font_size: 14.0,
         line_height: 17.5,
+        cell_w: 14.0 * 0.6,
         family,
     }
 }
 
 #[test]
 fn cell_metrics_larger_font_gives_larger_dimensions() {
-    let mut fs = FontSystem::new();
-    let small = cell_metrics(&mut fs, 12.0, &None);
-    let large = cell_metrics(&mut fs, 24.0, &None);
+    let small = cell_metrics(12.0);
+    let large = cell_metrics(24.0);
     assert!(large.0 > small.0, "cell_w should grow with font size");
     assert!(large.1 > small.1, "cell_h should grow with font size");
     assert_eq!(large.1, 24.0 * 1.25, "cell_h is 1.25× font size");
@@ -20,8 +20,24 @@ fn cell_metrics_larger_font_gives_larger_dimensions() {
 
 #[test]
 fn cell_metrics_height_is_125_percent() {
-    let mut fs = FontSystem::new();
-    assert_eq!(cell_metrics(&mut fs, 16.0, &None).1, 20.0);
+    assert_eq!(cell_metrics(16.0).1, 20.0);
+}
+
+#[test]
+fn cell_metrics_are_family_independent() {
+    // The whole point of the fixed box: the same size gives the same cell no
+    // matter which family the user picks.
+    assert_eq!(cell_metrics(14.0), (14.0 * 0.6, 14.0 * 1.25));
+}
+
+#[test]
+fn sounds_monospace_catches_coding_fonts_only() {
+    for name in ["JetBrains Mono", "Fira Code", "Consolas", "Menlo", "Monaco"] {
+        assert!(sounds_monospace(name), "{name} should read as monospace");
+    }
+    for name in ["Helvetica", "Times New Roman", "Arial"] {
+        assert!(!sounds_monospace(name), "{name} should not");
+    }
 }
 
 #[test]

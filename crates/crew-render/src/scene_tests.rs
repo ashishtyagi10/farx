@@ -19,6 +19,7 @@ fn params() -> FontParams {
     FontParams {
         font_size: 14.0,
         line_height: 17.5,
+        cell_w: 14.0 * 0.6,
         family: None,
     }
 }

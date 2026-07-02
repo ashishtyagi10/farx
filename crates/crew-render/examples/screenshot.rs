@@ -64,30 +64,21 @@ fn main() {
 
     let (cell_w, cell_h) = cell_grid.cell_size();
 
+    // Output directory: $CREW_SHOT_DIR, or target/screenshots (created).
+    let out_dir =
+        std::env::var("CREW_SHOT_DIR").unwrap_or_else(|_| "target/screenshots".to_string());
+    std::fs::create_dir_all(&out_dir).expect("create screenshot dir");
+
     // render every theme
-    for (theme_id, out_path) in [
-        (
-            ThemeId::PaperLight,
-            "/private/tmp/claude-501/-Users-atyagi-code-crew/7f6ecec7-c641-4cc2-a923-a17dea6afba0/scratchpad/crew-paper-light.png",
-        ),
-        (
-            ThemeId::PaperDark,
-            "/private/tmp/claude-501/-Users-atyagi-code-crew/7f6ecec7-c641-4cc2-a923-a17dea6afba0/scratchpad/crew-paper-dark.png",
-        ),
-        (
-            ThemeId::CrtGreen,
-            "/private/tmp/claude-501/-Users-atyagi-code-crew/7f6ecec7-c641-4cc2-a923-a17dea6afba0/scratchpad/crt-green.png",
-        ),
-        (
-            ThemeId::CrtAmber,
-            "/private/tmp/claude-501/-Users-atyagi-code-crew/7f6ecec7-c641-4cc2-a923-a17dea6afba0/scratchpad/crt-amber.png",
-        ),
-        (
-            ThemeId::CrtBlue,
-            "/private/tmp/claude-501/-Users-atyagi-code-crew/7f6ecec7-c641-4cc2-a923-a17dea6afba0/scratchpad/crt-blue.png",
-        ),
+    for (theme_id, out_name) in [
+        (ThemeId::PaperLight, "crew-paper-light.png"),
+        (ThemeId::PaperDark, "crew-paper-dark.png"),
+        (ThemeId::CrtGreen, "crt-green.png"),
+        (ThemeId::CrtAmber, "crt-amber.png"),
+        (ThemeId::CrtBlue, "crt-blue.png"),
     ] {
         crew_theme::set_theme(theme_id);
+        let out_path = format!("{out_dir}/{out_name}");
 
         // Build the scene AFTER set_theme: `place_str` bakes `CellView.bg` from the
         // active theme's page_bg, so cells must be constructed per-theme for the
@@ -108,8 +99,7 @@ fn main() {
         ];
         paper_bg.update_uniform(&queue, bg_f32, W as f32, H as f32, 1.0, 1.0);
 
-        let mut enc =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         {
             let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -193,14 +183,8 @@ fn main() {
         }
 
         // Write PNG.
-        image::save_buffer(
-            out_path,
-            &pixels,
-            W,
-            H,
-            image::ColorType::Rgba8,
-        )
-        .unwrap_or_else(|e| panic!("failed to write {out_path}: {e}"));
+        image::save_buffer(&out_path, &pixels, W, H, image::ColorType::Rgba8)
+            .unwrap_or_else(|e| panic!("failed to write {out_path}: {e}"));
 
         println!("wrote {out_path}  ({W}×{H})");
     }
@@ -219,10 +203,8 @@ fn main() {
         1.0_f32,
     ];
 
-    const SCRATCHPAD: &str = "/private/tmp/claude-501/-Users-atyagi-code-crew/7f6ecec7-c641-4cc2-a923-a17dea6afba0/scratchpad";
-
     for grain_mul in [0.0_f32, 0.6, 1.0, 1.6] {
-        let out_path = format!("{SCRATCHPAD}/grain-{grain_mul:.1}.png");
+        let out_path = format!("{out_dir}/grain-{grain_mul:.1}.png");
 
         paper_bg.update_uniform(&queue, bg_f32, W as f32, H as f32, 1.0, grain_mul);
 
@@ -314,11 +296,8 @@ fn main() {
 
     // --- welcome screen: one full-canvas pane per theme ---
     for (theme_id, out_path) in [
-        (
-            ThemeId::PaperLight,
-            format!("{SCRATCHPAD}/welcome-light.png"),
-        ),
-        (ThemeId::PaperDark, format!("{SCRATCHPAD}/welcome-dark.png")),
+        (ThemeId::PaperLight, format!("{out_dir}/welcome-light.png")),
+        (ThemeId::PaperDark, format!("{out_dir}/welcome-dark.png")),
     ] {
         crew_theme::set_theme(theme_id);
 

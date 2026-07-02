@@ -53,7 +53,7 @@ impl CellGrid {
         format: wgpu::TextureFormat,
         font_size: f32,
     ) -> Self {
-        let mut font_system = FontSystem::new();
+        let font_system = FontSystem::new();
         let swash = SwashCache::new();
         let cache = Cache::new(device);
         let viewport = Viewport::new(device, &cache);
@@ -65,7 +65,7 @@ impl CellGrid {
         let overlay_renderer = mk_renderer(&mut atlas);
 
         let font_family: Option<String> = None;
-        let (cell_w, cell_h) = cell_metrics(&mut font_system, font_size, &font_family);
+        let (cell_w, cell_h) = cell_metrics(font_size);
         let line_height = font_size * 1.25;
         let quad_layer = QuadLayer::new(device, format);
         let overlay_quad_layer = QuadLayer::new(device, format);
@@ -93,21 +93,18 @@ impl CellGrid {
 
     /// Update cell metrics when the font size changes at runtime.
     pub fn set_font_size(&mut self, font_size: f32) {
-        let (cell_w, cell_h) = cell_metrics(&mut self.font_system, font_size, &self.font_family);
+        let (cell_w, cell_h) = cell_metrics(font_size);
         self.font_size = font_size;
         self.line_height = font_size * 1.25;
         self.cell_w = cell_w;
         self.cell_h = cell_h;
     }
 
-    /// Switch the font family at runtime (`None`/empty → system monospace) and
-    /// recompute cell metrics for the new face.
+    /// Switch the font family at runtime (`None`/empty → system monospace).
+    /// The cell box is fixed per font size — glyphs snap to it at layout time —
+    /// so no metrics change and the grid never moves.
     pub fn set_font_family(&mut self, family: Option<String>) {
         self.font_family = family.filter(|n| !n.is_empty());
-        let (cell_w, cell_h) =
-            cell_metrics(&mut self.font_system, self.font_size, &self.font_family);
-        self.cell_w = cell_w;
-        self.cell_h = cell_h;
     }
 
     /// Sorted, de-duplicated names of all installed monospace font families.
@@ -128,6 +125,7 @@ impl CellGrid {
         let params = FontParams {
             font_size: self.font_size,
             line_height: self.line_height,
+            cell_w: self.cell_w,
             family: self.font_family.clone(),
         };
         let (cw, ch) = (self.cell_w, self.cell_h);
