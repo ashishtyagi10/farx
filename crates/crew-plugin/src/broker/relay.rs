@@ -125,6 +125,29 @@ pub(crate) fn msg(sender: &str, text: impl Into<String>) -> PluginEvent {
     }
 }
 
+/// Parse a leading multi-target selector — `@planner+coder <task>` — into the
+/// canonical agent names and the task body. `None` unless the selector names
+/// two or more agents joined by `+` and every one of them is registered
+/// (a typo falls through to the normal single-target path, which reports it).
+pub(crate) fn multi_targets(task: &str, reg: &Registry) -> Option<(Vec<String>, String)> {
+    let rest = task.strip_prefix('@')?;
+    let (selector, body) = rest.split_once(char::is_whitespace)?;
+    if !selector.contains('+') {
+        return None;
+    }
+    let mut names = Vec::new();
+    for part in selector.split('+').filter(|p| !p.is_empty()) {
+        let canonical = reg
+            .names()
+            .into_iter()
+            .find(|n| n.eq_ignore_ascii_case(part))?;
+        if !names.contains(&canonical) {
+            names.push(canonical);
+        }
+    }
+    (names.len() >= 2).then(|| (names, body.trim().to_string()))
+}
+
 /// Split an optional leading `@agent` selector off the task. Falls back to the
 /// first discovered agent when no valid selector is present.
 pub(crate) fn split_target(task: &str, reg: &Registry) -> (String, String) {

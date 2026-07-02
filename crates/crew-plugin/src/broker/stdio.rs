@@ -8,7 +8,7 @@ use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use super::relay::{msg, relay_turn, split_target};
+use super::relay::{msg, multi_targets, relay_turn, split_target};
 use super::session::Session;
 use crate::{Broker, PluginCommand, PluginEvent, Registry};
 
@@ -106,6 +106,19 @@ fn relay(input: &str, out: &mut impl Write, session: &Session) -> anyhow::Result
     let task = input.trim();
     if task.is_empty() {
         return Ok(());
+    }
+    // `@a+b <task>` fans out to that subset in parallel instead of relaying.
+    if let Some((names, body)) = multi_targets(task, &reg) {
+        emit(
+            out,
+            &msg(
+                "crew",
+                format!("fanning out to {} in parallel\u{2026}", names.join("+")),
+            ),
+        )?;
+        return super::fan::fan_out(&reg, &names, &body, call_timeout(), &mut |ev| {
+            emit(out, &ev)
+        });
     }
     let (start, body) = split_target(task, &reg);
     let tid = format!("t{}", THREAD_SEQ.fetch_add(1, Ordering::Relaxed));

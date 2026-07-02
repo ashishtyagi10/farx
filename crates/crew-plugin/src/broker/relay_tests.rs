@@ -117,3 +117,35 @@ fn turn_summary_without_segments_still_reports_cost() {
     assert!(s.starts_with("turn done"), "{s}");
     assert!(s.contains("~0 tok"), "{s}");
 }
+
+#[test]
+fn multi_targets_parses_plus_joined_agents() {
+    let r = reg(&["planner", "coder", "reviewer"]);
+    let (names, body) = multi_targets("@planner+coder review this", &r).unwrap();
+    assert_eq!(names, vec!["planner".to_string(), "coder".to_string()]);
+    assert_eq!(body, "review this");
+    // Case-insensitive + de-duplicated.
+    let (names, _) = multi_targets("@Coder+coder+REVIEWER x", &r).unwrap();
+    assert_eq!(names, vec!["coder".to_string(), "reviewer".to_string()]);
+}
+
+#[test]
+fn multi_targets_rejects_singles_typos_and_plain_tasks() {
+    let r = reg(&["planner", "coder"]);
+    assert!(
+        multi_targets("@planner do it", &r).is_none(),
+        "no + selector"
+    );
+    assert!(
+        multi_targets("@planner+ghost do it", &r).is_none(),
+        "typo member"
+    );
+    assert!(
+        multi_targets("do it @planner+coder", &r).is_none(),
+        "not leading"
+    );
+    assert!(
+        multi_targets("@planner+coder", &r).is_none(),
+        "no task body"
+    );
+}
