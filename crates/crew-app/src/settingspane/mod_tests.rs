@@ -133,16 +133,16 @@ fn commit_min_secs_clamps_up_from_zero() {
 }
 
 #[test]
-fn commit_patterns_splits_and_drops_blanks() {
+fn commit_patterns_splits_lines_and_drops_blanks() {
     let mut p = pane();
     focus(&mut p, Field::NotifyPatterns);
-    p.patterns_buf = " error , , DONE ".into();
+    p.patterns_buf = " error \n\n DONE ".into();
     commit_field(&mut p);
     assert_eq!(
         p.draft.notify_patterns,
         vec!["error".to_string(), "DONE".to_string()]
     );
-    assert_eq!(p.patterns_buf, "error, DONE"); // normalized display
+    assert_eq!(p.patterns_buf, "error\nDONE"); // normalized display
 }
 
 #[test]

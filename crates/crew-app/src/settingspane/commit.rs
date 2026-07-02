@@ -46,7 +46,7 @@ pub(crate) fn commit_field(p: &mut SettingsPane) {
         Field::NotifyPatterns => {
             p.draft.notify_patterns = p
                 .patterns_buf
-                .split(',')
+                .split('\n')
                 .map(str::trim)
                 .filter(|s| !s.is_empty())
                 .map(str::to_string)
@@ -77,7 +77,7 @@ pub(crate) fn refresh_bufs(p: &mut SettingsPane) {
     p.accent_buf = p.draft.accent.clone().unwrap_or_default();
     p.grain_buf = format!("{:.1}", p.draft.paper_grain);
     p.minsecs_buf = format!("{}", p.draft.notify_min_secs);
-    p.patterns_buf = p.draft.notify_patterns.join(", ");
+    p.patterns_buf = p.draft.notify_patterns.join("\n");
     p.family_query = p
         .draft
         .font_family

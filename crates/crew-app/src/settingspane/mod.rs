@@ -79,7 +79,7 @@ pub struct SettingsPane {
     pub(crate) grain_buf: String,
     /// Minimum command runtime (seconds) before a "finished" notification.
     pub(crate) minsecs_buf: String,
-    /// Watched output substrings, comma-separated.
+    /// Watched output substrings, one per line (text area).
     pub(crate) patterns_buf: String,
 }
 
@@ -94,7 +94,7 @@ impl SettingsPane {
         let accent_buf = cfg.accent.clone().unwrap_or_default();
         let grain_buf = format!("{:.1}", cfg.paper_grain);
         let minsecs_buf = format!("{}", cfg.notify_min_secs);
-        let patterns_buf = cfg.notify_patterns.join(", ");
+        let patterns_buf = cfg.notify_patterns.join("\n");
         Self {
             draft: cfg,
             families,

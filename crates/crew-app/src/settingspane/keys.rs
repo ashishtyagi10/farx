@@ -58,6 +58,12 @@ fn allowed(f: Field, buf: &str, c: char) -> bool {
 fn edit_key(p: &mut SettingsPane, key: &KeyEvent) -> Option<SettingsAction> {
     let f = p.focused_field();
     match &key.logical_key {
+        Key::Named(NamedKey::Enter) if f == Field::NotifyPatterns => {
+            // The patterns field is a text area: Enter starts a new pattern.
+            if let Some(buf) = buf_of(p, f) {
+                buf.push('\n');
+            }
+        }
         Key::Named(NamedKey::Enter) => {
             commit_field(p);
             move_focus(p, false);
