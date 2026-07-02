@@ -28,10 +28,29 @@ pub struct PaneScene {
 
 const BORDER_RADIUS: f32 = 10.0;
 
+/// [`build_scene`] for both passes at once: `(base, overlay)`, where base is
+/// `(quads, buffers, borders)` and overlay is `(quads, buffers)`.
+type ScenePass = (Vec<Quad>, Vec<PaneBuffer>, Vec<Border>);
+
+pub(crate) fn build_both(
+    panes: &[PaneScene],
+    cell_w: f32,
+    cell_h: f32,
+    font_system: &mut glyphon::FontSystem,
+    params: &FontParams,
+    srgb: bool,
+) -> (ScenePass, (Vec<Quad>, Vec<PaneBuffer>)) {
+    let base = build_scene(panes, cell_w, cell_h, font_system, params, false, srgb);
+    let (oq, ob, _) = build_scene(panes, cell_w, cell_h, font_system, params, true, srgb);
+    (base, (oq, ob))
+}
+
 /// Build all quads (cell backgrounds) and one Buffer per pane, plus rounded borders.
 /// Returns `(quads, pane_buffers, borders)`. Only panes whose `overlay` flag
 /// equals `want_overlay` are built, so the caller can render base panes and
-/// overlay popups as two separate passes.
+/// overlay popups as two separate passes. `srgb` names the target format so
+/// theme colours are converted once at this boundary (see [`crate::color`]).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_scene(
     panes: &[PaneScene],
     cell_w: f32,
@@ -39,6 +58,7 @@ pub(crate) fn build_scene(
     font_system: &mut glyphon::FontSystem,
     params: &FontParams,
     want_overlay: bool,
+    srgb: bool,
 ) -> (Vec<Quad>, Vec<PaneBuffer>, Vec<Border>) {
     let mut quads: Vec<Quad> = Vec::new();
     let mut buffers: Vec<PaneBuffer> = Vec::new();
@@ -63,12 +83,7 @@ pub(crate) fn build_scene(
                 y: pane.y,
                 w: pane.w,
                 h: pane.h,
-                color: [
-                    bg.0 as f32 / 255.0,
-                    bg.1 as f32 / 255.0,
-                    bg.2 as f32 / 255.0,
-                    1.0,
-                ],
+                color: crate::color::target_rgba(bg, 1.0, srgb),
             });
         }
 
@@ -80,12 +95,7 @@ pub(crate) fn build_scene(
                     y: pane.y + f32::from(cell.row) * cell_h,
                     w: cell_w,
                     h: cell_h,
-                    color: [
-                        cell.bg.0 as f32 / 255.0,
-                        cell.bg.1 as f32 / 255.0,
-                        cell.bg.2 as f32 / 255.0,
-                        1.0,
-                    ],
+                    color: crate::color::target_rgba(cell.bg, 1.0, srgb),
                 });
             }
         }
@@ -93,12 +103,12 @@ pub(crate) fn build_scene(
         // Rounded-corner border for this pane (unless it draws its own).
         if pane.bordered {
             let t = crew_theme::theme();
-            let (r, g, b) = if pane.focused {
+            let rgb = if pane.focused {
                 t.border_focused
             } else {
                 t.border_normal
             };
-            let color = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0];
+            let color = crate::color::target_rgba(rgb, 1.0, srgb);
             borders.push(Border {
                 x: pane.x,
                 y: pane.y,

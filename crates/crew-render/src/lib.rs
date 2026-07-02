@@ -1,6 +1,7 @@
 //! crew-render: winit window + wgpu surface + glyphon text.
 mod cellgrid;
 mod celltext;
+pub mod color;
 mod gpu;
 mod paperbg;
 mod quads;

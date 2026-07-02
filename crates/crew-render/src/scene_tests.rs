@@ -45,7 +45,8 @@ fn bg_quads_only_for_non_default_cells() {
         false,
         false,
     )];
-    let (quads, buffers, borders) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), false);
+    let (quads, buffers, borders) =
+        build_scene(&panes, 8.0, 16.0, &mut fs, &params(), false, false);
     assert_eq!(quads.len(), 1, "only the non-default-bg cell gets a quad");
     assert_eq!(buffers.len(), 1);
     assert!(borders.is_empty());
@@ -63,6 +64,7 @@ fn bordered_pane_emits_a_border() {
         &mut fs,
         &params(),
         false,
+        false,
     );
     assert_eq!(borders.len(), 1);
 }
@@ -75,11 +77,11 @@ fn want_overlay_partitions_panes() {
         pane(vec![cell(0, 0, 'y', (4, 5, 6))], false, true),
     ];
     // Base pass: only the non-overlay pane (bordered → one border).
-    let (q, b, bd) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), false);
+    let (q, b, bd) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), false, false);
     assert_eq!((q.len(), b.len(), bd.len()), (1, 1, 1));
     // Overlay pass: only the overlay pane (bordered:false → no border). Two
     // quads: the full-rect black backdrop plus the one non-default-bg cell.
-    let (q2, b2, bd2) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), true);
+    let (q2, b2, bd2) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), true, false);
     assert_eq!((q2.len(), b2.len(), bd2.len()), (2, 1, 0));
 }
 
@@ -88,7 +90,7 @@ fn overlay_pane_gets_an_opaque_page_bg_backdrop() {
     let mut fs = FontSystem::new();
     // An overlay pane with only default-bg cells still gets a backdrop.
     let panes = vec![pane(vec![cell(0, 0, 'y', default_bg())], false, true)];
-    let (quads, _b, _bd) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), true);
+    let (quads, _b, _bd) = build_scene(&panes, 8.0, 16.0, &mut fs, &params(), true, false);
     assert_eq!(quads.len(), 1, "the backdrop quad, no per-cell quad");
     let q = &quads[0];
     assert_eq!((q.x, q.y, q.w, q.h), (0.0, 0.0, 80.0, 40.0)); // spans the pane
@@ -105,13 +107,14 @@ fn focused_border_is_brighter_than_unfocused() {
     let mut fs = FontSystem::new();
     let mut p = pane(vec![], true, false);
     p.focused = true;
-    let (_q, _b, focused) = build_scene(&[p], 8.0, 16.0, &mut fs, &params(), false);
+    let (_q, _b, focused) = build_scene(&[p], 8.0, 16.0, &mut fs, &params(), false, false);
     let (_q2, _b2, normal) = build_scene(
         &[pane(vec![], true, false)],
         8.0,
         16.0,
         &mut fs,
         &params(),
+        false,
         false,
     );
     let t = crew_theme::theme();

@@ -3,7 +3,7 @@ use glyphon::{Cache, FontSystem, Resolution, SwashCache, TextAtlas, TextRenderer
 use crate::celltext::{cell_metrics, monospace_families, FontParams};
 use crate::quads::QuadLayer;
 use crate::roundborder::RoundBorderLayer;
-use crate::scene::{build_scene, PaneBuffer, PaneScene};
+use crate::scene::{build_both, PaneBuffer, PaneScene};
 use crate::textprep::prepare_renderer;
 
 /// The active theme's default background (the page colour). Cells at this bg
@@ -44,6 +44,8 @@ pub struct CellGrid {
     font_size: f32,
     line_height: f32,
     font_family: Option<String>,
+    /// Whether the render target is sRGB (colours must be fed linear).
+    srgb: bool,
 }
 
 impl CellGrid {
@@ -88,6 +90,7 @@ impl CellGrid {
             font_size,
             line_height,
             font_family,
+            srgb: format.is_srgb(),
         }
     }
 
@@ -129,10 +132,8 @@ impl CellGrid {
             family: self.font_family.clone(),
         };
         let (cw, ch) = (self.cell_w, self.cell_h);
-        let (quads, buffers, borders) =
-            build_scene(panes, cw, ch, &mut self.font_system, &params, false);
-        let (oquads, obuffers, _) =
-            build_scene(panes, cw, ch, &mut self.font_system, &params, true);
+        let ((quads, buffers, borders), (oquads, obuffers)) =
+            build_both(panes, cw, ch, &mut self.font_system, &params, self.srgb);
         self.quad_layer.set_quads(device, &quads);
         self.overlay_quad_layer.set_quads(device, &oquads);
         self.round_border_layer.set_borders(device, &borders);

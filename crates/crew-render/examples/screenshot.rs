@@ -91,12 +91,7 @@ fn main() {
 
         // Encode frame.
         let bg = crew_theme::theme().page_bg;
-        let bg_f32 = [
-            bg.0 as f32 / 255.0,
-            bg.1 as f32 / 255.0,
-            bg.2 as f32 / 255.0,
-            1.0_f32,
-        ];
+        let bg_f32 = crew_render::color::target_rgba(bg, 1.0, FORMAT.is_srgb());
         paper_bg.update_uniform(&queue, bg_f32, W as f32, H as f32, 1.0, 1.0);
 
         let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -110,9 +105,9 @@ fn main() {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: bg.0 as f64 / 255.0,
-                            g: bg.1 as f64 / 255.0,
-                            b: bg.2 as f64 / 255.0,
+                            r: bg_f32[0] as f64,
+                            g: bg_f32[1] as f64,
+                            b: bg_f32[2] as f64,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -196,12 +191,7 @@ fn main() {
     cell_grid.prepare(&device, &queue, W, H);
 
     let bg = crew_theme::theme().page_bg;
-    let bg_f32 = [
-        bg.0 as f32 / 255.0,
-        bg.1 as f32 / 255.0,
-        bg.2 as f32 / 255.0,
-        1.0_f32,
-    ];
+    let bg_f32 = crew_render::color::target_rgba(bg, 1.0, FORMAT.is_srgb());
 
     for grain_mul in [0.0_f32, 0.6, 1.0, 1.6] {
         let out_path = format!("{out_dir}/grain-{grain_mul:.1}.png");
@@ -219,9 +209,9 @@ fn main() {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: bg.0 as f64 / 255.0,
-                            g: bg.1 as f64 / 255.0,
-                            b: bg.2 as f64 / 255.0,
+                            r: bg_f32[0] as f64,
+                            g: bg_f32[1] as f64,
+                            b: bg_f32[2] as f64,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -309,12 +299,7 @@ fn main() {
         cell_grid.prepare(&device, &queue, W, H);
 
         let bg = crew_theme::theme().page_bg;
-        let bg_f32 = [
-            bg.0 as f32 / 255.0,
-            bg.1 as f32 / 255.0,
-            bg.2 as f32 / 255.0,
-            1.0_f32,
-        ];
+        let bg_f32 = crew_render::color::target_rgba(bg, 1.0, FORMAT.is_srgb());
         paper_bg.update_uniform(&queue, bg_f32, W as f32, H as f32, 1.0, 1.0);
 
         let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -327,9 +312,9 @@ fn main() {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: bg.0 as f64 / 255.0,
-                            g: bg.1 as f64 / 255.0,
-                            b: bg.2 as f64 / 255.0,
+                            r: bg_f32[0] as f64,
+                            g: bg_f32[1] as f64,
+                            b: bg_f32[2] as f64,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,

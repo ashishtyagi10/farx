@@ -45,8 +45,10 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
     // gives the bright "paper" page its grain (an absolute term would be
     // imperceptible there), and a small absolute term gives the near-black
     // "newspaper" page visible texture (a purely multiplicative grain vanishes
-    // on it). Tuned so both land at a similar subtle ~8-level spread.
-    let rgb = clamp(base * (1.0 + n * 0.05) + vec3<f32>(n * 0.008),
+    // on it). The absolute amplitude is tuned for a LINEAR page colour headed
+    // to an sRGB target, where near-black values gain ~13x on encode — 0.0015
+    // linear reads as a subtle ~±3-level spread on the near-black page.
+    let rgb = clamp(base * (1.0 + n * 0.05) + vec3<f32>(n * 0.0015),
                     vec3<f32>(0.0), vec3<f32>(1.0));
     return vec4<f32>(rgb, 1.0);
 }

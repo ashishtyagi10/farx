@@ -103,12 +103,7 @@ impl Renderer {
 
         {
             let bg = crew_theme::theme().page_bg;
-            let bg_f32 = [
-                bg.0 as f32 / 255.0,
-                bg.1 as f32 / 255.0,
-                bg.2 as f32 / 255.0,
-                1.0_f32,
-            ];
+            let bg_f32 = crate::color::target_rgba(bg, 1.0, self.gpu.format.is_srgb());
 
             if self.paper_texture {
                 self.paper_bg.update_uniform(
@@ -129,9 +124,9 @@ impl Renderer {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: bg.0 as f64 / 255.0,
-                            g: bg.1 as f64 / 255.0,
-                            b: bg.2 as f64 / 255.0,
+                            r: bg_f32[0] as f64,
+                            g: bg_f32[1] as f64,
+                            b: bg_f32[2] as f64,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,

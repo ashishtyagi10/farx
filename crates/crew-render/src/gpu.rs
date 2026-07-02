@@ -27,7 +27,15 @@ impl Gpu {
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))?;
 
         let caps = surface.get_capabilities(&adapter);
-        let format = caps.formats[0];
+        // Prefer an sRGB surface so theme colours (converted to linear at the
+        // GPU boundary — see `color`) encode back to exactly what the theme
+        // author picked. Falls back to whatever the platform offers.
+        let format = caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.is_srgb())
+            .unwrap_or(caps.formats[0]);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
