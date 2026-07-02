@@ -162,10 +162,19 @@ caps each thread (default 6), an optional token budget caps spend, and every
 agent call has a timeout — a hung agent is killed and logged, never blocking the
 UI.
 
+The pane speaks a small **construct language**: `/fan <task>` sends one task to
+every agent **in parallel** (replies stream back fastest-first), `@a+b <task>`
+fans out to a subset, `/loop <n> <task>` iterates on the crew's own answer,
+`/goal <text>` keeps working until a judge agent rules the goal met, `/model
+<agent> <model>` pins agents to **different models side by side**, `/status`
+reports live totals, and `/stop` cancels the running construct — with Tab
+completion for `@agents` and `/constructs` in the composer.
+
 The pane itself reads like a multi-agent console: a header with a live status
-(`| coder · 12s` while an agent thinks, a running `~N tok` meter, connection
-dot), an **agent roster row** — one colored chip per agent with its model badge,
-the active agent highlighted — and **message cards** (`▍sender · 2m ago · 4.2s`)
+(`| coder · 12s` while an agent thinks, `| 3 working · 8s` during a parallel
+fan, a running `~N tok` meter, connection dot), an **agent roster row** — one
+colored chip per agent with its model badge, every active agent highlighted —
+and **message cards** (`▍sender · 2m ago · 4.2s`)
 that colour each agent consistently and show hand-offs as `from → to`. Every
 turn ends with a timeline log line: `turn done — planner 4.2s → coder 8.1s ·
 2 exchange(s) · ~950 tok (approx)`. Fenced ```code``` in replies renders as a

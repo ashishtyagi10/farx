@@ -265,6 +265,30 @@ proportional scrollbar, and messages arriving out of view raise a `↓ N new`
 pill that clears at the live bottom. A fresh pane greets with the detected
 crew (names, roles) and an example `@agent` prompt.
 
+**Constructs.** Inside the pane, lines starting with `/` drive the broker
+itself (Tab completes both `@agents` and `/constructs`):
+
+- **`/help`** — list the constructs; **`/agents`** — the roster with each
+  agent's role and model; **`/status`** — what's running, session turn/token
+  totals, and the model pins.
+- **`/model <agent> <model|default>`** — pin an agent to a model for the
+  session. Pins apply per agent, so **planner, coder, and reviewer can run
+  three different models side by side**; every change re-emits the roster so
+  the pane's model badges update live.
+- **`/fan <task>`** — every agent answers the same task **in parallel** (one
+  thread per call); replies stream back fastest-first with per-agent latency,
+  and the turn closes with combined stats. **`@a+b <task>`** fans out to just
+  that subset.
+- **`/loop <n> <task>`** — n relay rounds (≤10), each round handed the
+  previous round's answer to improve on.
+- **`/goal <text>`** — relay rounds until a judge agent (the reviewer when it
+  isn't the worker) rules `MET:`/`NOT MET:` on the goal; NOT-MET reasons feed
+  the next round. Caps at 5 rounds.
+- **`/stop`** — cancel the running construct at its next checkpoint (between
+  hops/rounds). Long work runs on a worker thread, so `/stop`, quick
+  constructs, and `/status` answer immediately while a task is in flight; a
+  second task is politely rejected until the first ends.
+
 **Models & rate-limits.** When no agent CLIs are installed, `/crew` runs its
 inbuilt API agents (planner/coder/reviewer) over an LLM: it prefers
 `OPENROUTER_API_KEY` (free models by default), then `DASHSCOPE_API_KEY`
