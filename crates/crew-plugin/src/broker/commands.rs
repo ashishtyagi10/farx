@@ -15,6 +15,7 @@ pub(crate) fn is_command(text: &str) -> bool {
 pub(crate) const HELP: &str = "constructs:\n\
     /help — this list\n\
     /agents — the roster with each agent's model\n\
+    /model <agent> <model|default> — pin an agent to a model (mix models freely)\n\
     @<agent> <task> — choose who starts the relay";
 
 /// Handle a `/command` line; emits reply events through `emit`.
@@ -24,15 +25,59 @@ pub(crate) fn handle(
     emit: &mut dyn FnMut(PluginEvent) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let line = text.trim().trim_start_matches('/');
-    let (cmd, _rest) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
+    let (cmd, rest) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
     match cmd {
         "help" => emit(msg("crew", HELP)),
         "agents" => emit(msg("crew", agents_report(session))),
+        "model" => model_cmd(session, rest, emit),
         other => emit(msg(
             "crew",
             format!("unknown construct /{other} — try /help"),
         )),
     }
+}
+
+/// `/model` — list each agent's model; `/model <agent> <model>` — pin the
+/// agent to that model for this session; `default` clears the pin. Re-emits
+/// the roster so the pane's model badges update live.
+fn model_cmd(
+    session: &mut Session,
+    rest: &str,
+    emit: &mut dyn FnMut(PluginEvent) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let mut parts = rest.split_whitespace();
+    let (agent, model) = (parts.next(), parts.next());
+    let Some(agent) = agent else {
+        return emit(msg("crew", agents_report(session)));
+    };
+    let reg = session.registry();
+    let Some(name) = reg
+        .names()
+        .into_iter()
+        .find(|n| n.eq_ignore_ascii_case(agent))
+    else {
+        return emit(msg(
+            "crew",
+            format!(
+                "unknown agent \u{201c}{agent}\u{201d} — agents: {}",
+                reg.names().join(", ")
+            ),
+        ));
+    };
+    let Some(model) = model else {
+        return emit(msg("crew", format!("usage: /model {name} <model|default>")));
+    };
+    let note = if model.eq_ignore_ascii_case("default") {
+        session.overrides.remove(&name);
+        format!("{name} back on the provider default model")
+    } else {
+        session.overrides.insert(name.clone(), model.to_string());
+        format!("{name} now runs {model}")
+    };
+    emit(PluginEvent::Roster {
+        agents: session.registry().infos(),
+    })?;
+    emit(msg("crew", note))
 }
 
 /// The roster, one agent per line: name, role hint, and the model it runs.
@@ -57,57 +102,5 @@ fn agents_report(session: &Session) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn run(text: &str) -> Vec<PluginEvent> {
-        let mut session = Session::new();
-        let mut out = Vec::new();
-        handle(&mut session, text, &mut |ev| {
-            out.push(ev);
-            Ok(())
-        })
-        .unwrap();
-        out
-    }
-
-    fn text_of(ev: &PluginEvent) -> &str {
-        match ev {
-            PluginEvent::Message { text, .. } => text,
-            _ => "",
-        }
-    }
-
-    #[test]
-    fn detects_commands() {
-        assert!(is_command("/help"));
-        assert!(is_command("  /agents"));
-        assert!(!is_command("do the thing"));
-        assert!(!is_command("@planner go"));
-    }
-
-    #[test]
-    fn help_lists_constructs() {
-        let evs = run("/help");
-        assert_eq!(evs.len(), 1);
-        let t = text_of(&evs[0]);
-        assert!(t.contains("/agents"), "{t}");
-    }
-
-    #[test]
-    fn unknown_command_points_at_help() {
-        let evs = run("/frobnicate now");
-        let t = text_of(&evs[0]);
-        assert!(t.contains("unknown construct /frobnicate"), "{t}");
-        assert!(t.contains("/help"), "{t}");
-    }
-
-    #[test]
-    fn agents_reports_roster_or_keys_hint() {
-        // In tests no API key is guaranteed; either a roster line or the
-        // no-agents hint is acceptable — both are a Message.
-        let evs = run("/agents");
-        assert_eq!(evs.len(), 1);
-        assert!(!text_of(&evs[0]).is_empty());
-    }
-}
+#[path = "commands_tests.rs"]
+mod tests;

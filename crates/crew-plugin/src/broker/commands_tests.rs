@@ -1,0 +1,107 @@
+use super::*;
+
+fn run(text: &str) -> Vec<PluginEvent> {
+    let mut session = Session::new();
+    let mut out = Vec::new();
+    handle(&mut session, text, &mut |ev| {
+        out.push(ev);
+        Ok(())
+    })
+    .unwrap();
+    out
+}
+
+fn text_of(ev: &PluginEvent) -> &str {
+    match ev {
+        PluginEvent::Message { text, .. } => text,
+        _ => "",
+    }
+}
+
+#[test]
+fn detects_commands() {
+    assert!(is_command("/help"));
+    assert!(is_command("  /agents"));
+    assert!(!is_command("do the thing"));
+    assert!(!is_command("@planner go"));
+}
+
+#[test]
+fn help_lists_constructs() {
+    let evs = run("/help");
+    assert_eq!(evs.len(), 1);
+    let t = text_of(&evs[0]);
+    assert!(t.contains("/agents"), "{t}");
+}
+
+#[test]
+fn unknown_command_points_at_help() {
+    let evs = run("/frobnicate now");
+    let t = text_of(&evs[0]);
+    assert!(t.contains("unknown construct /frobnicate"), "{t}");
+    assert!(t.contains("/help"), "{t}");
+}
+
+#[test]
+fn agents_reports_roster_or_keys_hint() {
+    // In tests no API key is guaranteed; either a roster line or the
+    // no-agents hint is acceptable — both are a Message.
+    let evs = run("/agents");
+    assert_eq!(evs.len(), 1);
+    assert!(!text_of(&evs[0]).is_empty());
+}
+
+/// Serialises tests that set `CREW_BROKER_MOCK_REPLY` (process-wide env).
+fn mock_env() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    std::env::set_var("CREW_BROKER_MOCK_REPLY", "ok\n@done");
+    g
+}
+
+#[test]
+fn model_pins_an_agent_and_reemits_the_roster() {
+    let _g = mock_env();
+    let mut session = Session::new();
+    let mut evs = Vec::new();
+    handle(&mut session, "/model coder qwen-turbo", &mut |ev| {
+        evs.push(ev);
+        Ok(())
+    })
+    .unwrap();
+    std::env::remove_var("CREW_BROKER_MOCK_REPLY");
+    assert_eq!(session.overrides.get("coder").unwrap(), "qwen-turbo");
+    // A fresh Roster event precedes the confirmation message.
+    match &evs[0] {
+        PluginEvent::Roster { agents } => {
+            let coder = agents.iter().find(|a| a.name == "coder").unwrap();
+            assert_eq!(coder.model, "qwen-turbo");
+        }
+        ev => panic!("expected Roster first, got {ev:?}"),
+    }
+    assert!(text_of(&evs[1]).contains("coder now runs qwen-turbo"));
+}
+
+#[test]
+fn model_default_clears_the_pin() {
+    let _g = mock_env();
+    let mut session = Session::new();
+    session.overrides.insert("coder".into(), "x".into());
+    let mut evs = Vec::new();
+    handle(&mut session, "/model coder default", &mut |ev| {
+        evs.push(ev);
+        Ok(())
+    })
+    .unwrap();
+    std::env::remove_var("CREW_BROKER_MOCK_REPLY");
+    assert!(session.overrides.is_empty());
+    assert!(text_of(&evs[1]).contains("provider default"));
+}
+
+#[test]
+fn model_unknown_agent_lists_the_roster() {
+    let _g = mock_env();
+    let evs = run("/model ghost qwen-max");
+    std::env::remove_var("CREW_BROKER_MOCK_REPLY");
+    assert!(text_of(&evs[0]).contains("unknown agent"), "{evs:?}");
+}
